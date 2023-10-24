@@ -38,11 +38,16 @@
     if (result) return result; \
   })
 
-#define try_ret(x, ret) \
-  if (x) return ret
+#define try_ret(x, ret, msg) \
+  ({                         \
+    if (x) {                 \
+      bpf_printk(msg);       \
+      return ret;            \
+    }                        \
+  })
 
-#define try_shot(x) try_ret(x, TC_ACT_SHOT)
-#define try_ok(x) try_ret(x, TC_ACT_OK)
+#define try_shot(x, msg) try_ret(x, TC_ACT_SHOT, msg)
+#define try_ok(x) try_ret(x, TC_ACT_OK, msg)
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define max(x, y) ((x) < (y) ? (y) : (x))
