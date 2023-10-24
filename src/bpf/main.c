@@ -14,24 +14,38 @@
 #include "util.h"
 
 static int egress_handle_ip(struct __sk_buff* skb) {
-  check_decl_unspec(struct iphdr, ipv4, ETH_END, skb);
+  check_decl_shot(struct iphdr, ipv4, ETH_END, skb);
   if (ipv4->protocol != IPPROTO_UDP) return TC_ACT_OK;
   // TODO: match IP address
 
-  check_decl_unspec(struct udphdr, udp, IPV4_END, skb);
+  check_decl_shot(struct udphdr, udp, IPV4_END, skb);
   // TODO: match UDP port
 
-  __be16 old_tot_len = ipv4->tot_len;
-  __be16 new_tot_len = bpf_htons(bpf_ntohs(old_tot_len) + TCP_UDP_HEADER_DIFF);
+  __be16 old_len = ipv4->tot_len;
+  __be16 new_len = bpf_htons(bpf_ntohs(old_len) + TCP_UDP_HEADER_DIFF);
   __be16 old_udp_len = udp->len;
-  __be16 new_udp_len = bpf_htons(bpf_ntohs(old_udp_len) + TCP_UDP_HEADER_DIFF);
-  ipv4->tot_len = new_tot_len;
-  udp->len = new_udp_len;
-  udp->check = 0;
+  ipv4->tot_len = new_len;
+  ipv4->protocol = IPPROTO_TCP;
 
-  if (bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, old_tot_len, new_tot_len, 2))
-    return TC_ACT_UNSPEC;
+  try_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, old_len, new_len, 2));
+  try_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, bpf_htons(IPPROTO_UDP),
+                               bpf_htons(IPPROTO_TCP), 2));
   bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0);
+
+  __u8 buf[TCP_UDP_HEADER_DIFF] = {0};
+  __u16 data_len = bpf_ntohs(old_udp_len) - sizeof(struct udphdr);
+  __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
+  if (copy_len > 0) {
+    // HACK: make verifier happy
+    // Probably related:
+    // https://lore.kernel.org/bpf/f464186c-0353-9f9e-0271-e70a30e2fcdb@linux.dev/T/
+    if (copy_len < 2) copy_len = 1;
+    try_shot(bpf_skb_load_bytes(skb, IPV4_UDP_END, buf, copy_len));
+    try_shot(bpf_skb_store_bytes(skb, IPV4_TCP_END, buf, copy_len, 0));
+  }
+
+  check_decl_shot(struct tcphdr, tcp, IPV4_END, skb);
+  bpf_printk("%d", tcp->source);
 
   // TODO
 
@@ -63,4 +77,4 @@ int ingress_handler(struct __sk_buff* skb) {
   return TC_ACT_OK;
 }
 
-char _license[] SEC("license") = "GPLv2";
+char _license[] SEC("license") = "GPL";
