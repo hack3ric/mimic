@@ -13,7 +13,7 @@
 #include "offset.h"
 #include "util.h"
 
-static int egress_handle_ip(struct __sk_buff* skb) {
+static int egress_handle_ipv4(struct __sk_buff* skb) {
   check_decl_shot(struct iphdr, ipv4, ETH_END, skb);
   if (ipv4->protocol != IPPROTO_UDP) return TC_ACT_OK;
   // TODO: match IP address
@@ -30,10 +30,9 @@ static int egress_handle_ip(struct __sk_buff* skb) {
   __u16 udp_csum = bpf_ntohs(udp->check);
   __u16 tcp_csum = udp_csum ? udp_csum : 0xffff;
 
-  try_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, old_len, new_len, 2), "s1");
+  try_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, old_len, new_len, 2));
   try_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, bpf_htons(IPPROTO_UDP),
-                               bpf_htons(IPPROTO_TCP), 2),
-           "s2");
+                               bpf_htons(IPPROTO_TCP), 2));
   bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0);
 
   __u8 buf[TCP_UDP_HEADER_DIFF] = {0};
@@ -44,8 +43,8 @@ static int egress_handle_ip(struct __sk_buff* skb) {
     // Probably related:
     // https://lore.kernel.org/bpf/f464186c-0353-9f9e-0271-e70a30e2fcdb@linux.dev/T/
     if (copy_len < 2) copy_len = 1;
-    try_shot(bpf_skb_load_bytes(skb, IPV4_UDP_END, buf, copy_len), "S3");
-    try_shot(bpf_skb_store_bytes(skb, IPV4_TCP_END, buf, copy_len, 0), "S4");
+    try_shot(bpf_skb_load_bytes(skb, IPV4_UDP_END, buf, copy_len));
+    try_shot(bpf_skb_store_bytes(skb, IPV4_TCP_END, buf, copy_len, 0));
   }
 
   check_decl_shot(struct tcphdr, tcp, IPV4_END, skb);
@@ -80,7 +79,7 @@ int egress_handler(struct __sk_buff* skb) {
   check_decl_ok(struct ethhdr, eth, 0, skb);
   switch (bpf_ntohs(eth->h_proto)) {
     case ETH_P_IP:
-      try(egress_handle_ip(skb));
+      try(egress_handle_ipv4(skb));
       break;
     case ETH_P_IPV6:
       break;
