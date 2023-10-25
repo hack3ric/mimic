@@ -15,11 +15,11 @@
 
 static int egress_handle_ipv4(struct __sk_buff* skb) {
   check_decl_shot(struct iphdr, ipv4, ETH_END, skb);
-  if (ipv4->protocol != IPPROTO_UDP) return TC_ACT_OK;
+  try_ok(ipv4->protocol != IPPROTO_UDP);
   // TODO: match IP address
 
   check_decl_shot(struct udphdr, udp, IPV4_END, skb);
-  // TODO: match UDP port
+  // TODO: match port
 
   __be16 old_len = ipv4->tot_len;
   __be16 new_len = bpf_htons(bpf_ntohs(old_len) + TCP_UDP_HEADER_DIFF);
@@ -47,7 +47,7 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
   try_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, old_len, new_len, 2));
   try_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, bpf_htons(IPPROTO_UDP),
                                bpf_htons(IPPROTO_TCP), 2));
-  bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0);
+  try_shot(bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0));
 
   __u8 buf[TCP_UDP_HEADER_DIFF] = {0};
   __u16 data_len = udp_len - sizeof(struct udphdr);
@@ -57,8 +57,9 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
     // Probably related:
     // https://lore.kernel.org/bpf/f464186c-0353-9f9e-0271-e70a30e2fcdb@linux.dev/T/
     if (copy_len < 2) copy_len = 1;
+
     try_shot(bpf_skb_load_bytes(skb, IPV4_UDP_END, buf, copy_len));
-    try_shot(bpf_skb_store_bytes(skb, IPV4_TCP_END, buf, copy_len, 0));
+    try_shot(bpf_skb_store_bytes(skb, skb->len - copy_len, buf, copy_len, 0));
   }
 
   check_decl_shot(struct tcphdr, tcp, IPV4_END, skb);
@@ -100,7 +101,6 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
 
   if (!udp_csum) update_csum_data(skb, &tcp_csum, IPV4_TCP_END);
   tcp->check = bpf_htons(tcp_csum);
-  bpf_printk("csum: 0x%x", tcp_csum);
 
   return TC_ACT_OK;
 }
@@ -118,11 +118,46 @@ int egress_handler(struct __sk_buff* skb) {
   return TC_ACT_OK;
 }
 
+static int ingress_handle_ipv4(struct __sk_buff* skb) {
+  check_decl_shot(struct iphdr, ipv4, ETH_END, skb);
+  try_ok(ipv4->protocol == IPPROTO_TCP);
+  // TODO: match IP address
+
+  check_decl_shot(struct tcphdr, tcp, IPV4_END, skb);
+  // TODO: match port
+
+  __be16 old_len = ipv4->tot_len;
+  __be16 new_len = bpf_htons(bpf_ntohs(old_len) - TCP_UDP_HEADER_DIFF);
+  ipv4->tot_len = new_len;
+  ipv4->protocol = IPPROTO_UDP;
+
+  try_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, old_len, new_len, 2));
+  try_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, bpf_htons(IPPROTO_TCP),
+                               bpf_htons(IPPROTO_UDP), 2));
+
+  __u8 buf[TCP_UDP_HEADER_DIFF] = {0};
+  __u16 data_len = skb->len - IPV4_TCP_END;
+  __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
+  if (copy_len > 0) {
+    if (copy_len < 2) copy_len = 1;  // HACK: see above
+    try_shot(bpf_skb_load_bytes(skb, skb->len - copy_len, buf, copy_len));
+    try_shot(bpf_skb_store_bytes(skb, IPV4_UDP_END, buf, copy_len, 0));
+  }
+  try_shot(bpf_skb_change_tail(skb, skb->len - TCP_UDP_HEADER_DIFF, 0));
+
+  check_decl_shot(struct udphdr, udp, IPV4_END, skb);
+  udp->len = bpf_htons(data_len + sizeof(struct udphdr));
+  udp->check = 0;  // TODO
+
+  return TC_ACT_OK;
+}
+
 SEC("ingress")
 int ingress_handler(struct __sk_buff* skb) {
   check_decl_ok(struct ethhdr, eth, 0, skb);
   switch (bpf_ntohs(eth->h_proto)) {
     case ETH_P_IP:
+      try(ingress_handle_ipv4(skb));
       break;
     case ETH_P_IPV6:
       break;
