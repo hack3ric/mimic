@@ -26,8 +26,22 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
   ipv4->tot_len = new_len;
   ipv4->protocol = IPPROTO_TCP;
 
+  __u32 saddr = bpf_ntohl(ipv4->saddr);
+  __u32 daddr = bpf_ntohl(ipv4->daddr);
   __u16 udp_len = bpf_ntohs(udp->len);
-  __u16 udp_csum = bpf_ntohs(udp->check);
+
+  // Should get a better understanding on how HW checksum offloading works.
+  //
+  // It seems, on my machine (libvirt's NIC), that the UDP checksum field is
+  // just RFC 1071'd IPv4 pseudo-header, without the one's complement step?
+  //
+  // We should be able to utilize it, if there are similar patterns across
+  // different NICs; but for now, we just calculate the whole checksum from
+  // scratch. All the `udp_csum == true` path below is based on that the UDP
+  // checksum is complete and valid.
+  //
+  // __u16 udp_csum = bpf_ntohs(udp->check);
+  __u16 udp_csum = 0;
   __u16 tcp_csum = udp_csum ? udp_csum : 0xffff;
 
   try_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, old_len, new_len, 2));
@@ -48,11 +62,27 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
   }
 
   check_decl_shot(struct tcphdr, tcp, IPV4_END, skb);
-  update_csum(&tcp_csum, IPPROTO_TCP - IPPROTO_UDP);
+  if (udp_csum) {
+    update_csum(&tcp_csum,
+                IPPROTO_TCP - IPPROTO_UDP);       // proto in pseudo-header
+    update_csum(&tcp_csum, TCP_UDP_HEADER_DIFF);  // length in pseudo-header
+  } else {
+    update_csum_ul(&tcp_csum, saddr);
+    update_csum_ul(&tcp_csum, daddr);
+    update_csum(&tcp_csum, IPPROTO_TCP);
+    update_csum(&tcp_csum, data_len + sizeof(struct tcphdr));
+
+    update_csum(&tcp_csum, bpf_ntohs(tcp->source));
+    update_csum(&tcp_csum, bpf_ntohs(tcp->dest));
+  }
 
   __u32 seq = 114514;  // TODO: make sequence number more real
-  update_csum(&tcp_csum, (seq >> 16) - udp_len);  // UDP length -> seq[0:15]
-  update_csum(&tcp_csum, seq & 0xffff);  // UDP checksum (0) -> seq[16:31]
+  if (udp_csum) {
+    update_csum(&tcp_csum, (seq >> 16) - udp_len);  // UDP length -> seq[0:15]
+    update_csum(&tcp_csum, seq & 0xffff);  // UDP checksum (0) -> seq[16:31]
+  } else {
+    update_csum_ul(&tcp_csum, seq);
+  }
   tcp->seq = bpf_htonl(seq);
 
   __u32 ack_seq = 1919810;  // TODO: make acknowledgment number more real
@@ -70,6 +100,7 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
 
   if (!udp_csum) update_csum_data(skb, &tcp_csum, IPV4_TCP_END);
   tcp->check = bpf_htons(tcp_csum);
+  bpf_printk("csum: 0x%x", tcp_csum);
 
   return TC_ACT_OK;
 }
