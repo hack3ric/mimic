@@ -22,11 +22,14 @@ static inline void update_csum_ul(__u16* csum, __u32 new) {
 
 static void update_csum_data(struct __sk_buff* skb, __u16* csum, __u32 off) {
   __u16* data = (void*)(size_t)skb->data + off;
-  for (int i = 0; i < ETH_DATA_LEN / 2; i++) {
+  int i = 0;
+  for (; i < ETH_DATA_LEN / sizeof(__u16); i++) {
     if ((size_t)(data + i + 1) > (size_t)skb->data_end) break;
     update_csum(csum, bpf_ntohs(data[i]));
-    // TODO: remaining byte?
   }
+  __u8* remainder = (__u8*)data + i * sizeof(__u16);
+  if ((size_t)(remainder + 1) > (size_t)skb->data_end) return;
+  update_csum(csum, (__u16)(*remainder << 8));
 }
 
 #endif  // __MIMIC_CHECKSUM_H__
