@@ -6,8 +6,8 @@
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
-#include <linux/udp.h>
 #include <linux/tcp.h>
+#include <linux/udp.h>
 
 #define ETH_END (ETH_HLEN)
 #define IPV4_END (ETH_END + sizeof(struct iphdr))
