@@ -10,16 +10,27 @@
 #include <stddef.h>
 
 #include "checksum.h"
+#include "config.h"
 #include "offset.h"
 #include "util.h"
 
 static int egress_handle_ipv4(struct __sk_buff* skb) {
   decl_or_shot(struct iphdr, ipv4, ETH_END, skb);
   if (ipv4->protocol != IPPROTO_UDP) return TC_ACT_OK;
-  // TODO: match IP address
-
   decl_or_shot(struct udphdr, udp, IPV4_END, skb);
-  // TODO: match port
+
+  for (int i = 0; i < egress_whitelist_ipv4_count; i++) {
+    if (bpf_ntohl(ipv4->daddr) == egress_whitelist_ipv4[i] &&
+        bpf_ntohs(udp->dest) == egress_whitelist_ipv4_port[i])
+      goto matched;
+  }
+  return TC_ACT_OK;
+
+matched:;
+#ifdef __DEBUG__
+  bpf_printk("egress: matched UDP packet to %pI4:%d", &ipv4->daddr,
+             bpf_ntohs(udp->dest));
+#endif
 
   __be16 old_len = ipv4->tot_len;
   __be16 new_len = bpf_htons(bpf_ntohs(old_len) + TCP_UDP_HEADER_DIFF);
@@ -109,6 +120,7 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
 static int egress_handle_ipv6(struct __sk_buff* skb) {
   decl_or_shot(struct ipv6hdr, ipv6, ETH_END, skb);
   if (ipv6->nexthdr != IPPROTO_UDP) return TC_ACT_OK;
+  decl_or_ok(struct udphdr, udp, IPV6_END, skb);
   // TODO: check IP address
 
   return TC_ACT_OK;
@@ -122,6 +134,7 @@ int egress_handler(struct __sk_buff* skb) {
       try(egress_handle_ipv4(skb));
       break;
     case ETH_P_IPV6:
+      try(egress_handle_ipv6(skb));
       break;
   }
   return TC_ACT_OK;
@@ -129,12 +142,21 @@ int egress_handler(struct __sk_buff* skb) {
 
 static int ingress_handle_ipv4(struct __sk_buff* skb) {
   decl_or_shot(struct iphdr, ipv4, ETH_END, skb);
-  try_or_ok(ipv4->protocol == IPPROTO_TCP);
-  // TODO: match IP address
-
+  if (ipv4->protocol != IPPROTO_TCP) return TC_ACT_OK;
   decl_or_shot(struct tcphdr, tcp, IPV4_END, skb);
-  // TODO: match port
 
+  for (int i = 0; i < ingress_whitelist_ipv4_count; i++) {
+    if (bpf_ntohl(ipv4->saddr) == ingress_whitelist_ipv4[i] &&
+        bpf_ntohs(tcp->source) == ingress_whitelist_ipv4_port[i])
+      goto matched;
+  }
+  return TC_ACT_OK;
+
+matched:;
+#ifdef __DEBUG__
+  bpf_printk("ingress: matched (fake) TCP packet from %pI4:%d", &ipv4->saddr,
+             bpf_ntohs(tcp->source));
+#endif
   __be16 old_len = ipv4->tot_len;
   __be16 new_len = bpf_htons(bpf_ntohs(old_len) - TCP_UDP_HEADER_DIFF);
   ipv4->tot_len = new_len;
@@ -161,6 +183,15 @@ static int ingress_handle_ipv4(struct __sk_buff* skb) {
   return TC_ACT_OK;
 }
 
+static int ingress_handle_ipv6(struct __sk_buff* skb) {
+  decl_or_shot(struct ipv6hdr, ipv6, ETH_END, skb);
+  if (ipv6->nexthdr != IPPROTO_UDP) return TC_ACT_OK;
+  decl_or_ok(struct tcphdr, tcp, IPV6_END, skb);
+  // TODO: check IP address
+
+  return TC_ACT_OK;
+}
+
 SEC("ingress")
 int ingress_handler(struct __sk_buff* skb) {
   decl_or_ok(struct ethhdr, eth, 0, skb);
@@ -169,6 +200,7 @@ int ingress_handler(struct __sk_buff* skb) {
       try(ingress_handle_ipv4(skb));
       break;
     case ETH_P_IPV6:
+      try(ingress_handle_ipv6(skb));
       break;
   }
   return TC_ACT_OK;

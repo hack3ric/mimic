@@ -32,5 +32,5 @@ manual-test-stop:
 		echo "You must run manual-test-stop with root priviledges."; \
 		exit 1;                                                      \
 	fi
-	make clean
+	@make clean
 	tc qdisc del dev $(IF) clsact
