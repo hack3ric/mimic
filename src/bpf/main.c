@@ -30,30 +30,31 @@ static int mangle_data(struct __sk_buff* skb, __u16 offset) {
     try_or_shot(
         bpf_skb_store_bytes(skb, skb->len - copy_len, buf, copy_len, 0));
   }
+  return TC_ACT_OK;
 }
 
 static void update_tcp_header(struct tcphdr* tcp, __u16* tcp_csum,
                               _Bool delta_csum, __u16 udp_len) {
   __u32 seq = 114514;  // TODO: make sequence number more real
   if (delta_csum) {
-    update_csum(&tcp_csum, (seq >> 16) - udp_len);  // UDP length -> seq[0:15]
-    update_csum(&tcp_csum, seq & 0xffff);  // UDP checksum (0) -> seq[16:31]
+    update_csum(tcp_csum, (seq >> 16) - udp_len);  // UDP length -> seq[0:15]
+    update_csum(tcp_csum, seq & 0xffff);  // UDP checksum (0) -> seq[16:31]
   } else {
-    update_csum_ul(&tcp_csum, seq);
+    update_csum_ul(tcp_csum, seq);
   }
   tcp->seq = bpf_htonl(seq);
 
   __u32 ack_seq = 1919810;  // TODO: make acknowledgment number more real
-  update_csum_ul(&tcp_csum, ack_seq);
+  update_csum_ul(tcp_csum, ack_seq);
   tcp->ack_seq = bpf_htonl(ack_seq);
 
   tcp_flag_word(tcp) = 0;
   tcp->doff = 5;
   // TODO: flags, tcp->window
-  update_csum_ul(&tcp_csum, bpf_ntohl(tcp_flag_word(tcp)));
+  update_csum_ul(tcp_csum, bpf_ntohl(tcp_flag_word(tcp)));
 
   __u16 urg_ptr = 0;
-  update_csum(&tcp_csum, urg_ptr);
+  update_csum(tcp_csum, urg_ptr);
   tcp->urg_ptr = bpf_htons(urg_ptr);
 }
 
@@ -205,6 +206,7 @@ static int restore_data(struct __sk_buff* skb, __u16 offset) {
     try_or_shot(bpf_skb_store_bytes(skb, offset, buf, copy_len, 0));
   }
   try_or_shot(bpf_skb_change_tail(skb, skb->len - TCP_UDP_HEADER_DIFF, 0));
+  return TC_ACT_OK;
 }
 
 static int ingress_handle_ipv4(struct __sk_buff* skb) {
