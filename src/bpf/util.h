@@ -4,6 +4,7 @@
 #include <linux/bpf.h>
 
 #include <bpf/bpf_helpers.h>
+#include <linux/in6.h>
 #include <linux/pkt_cls.h>
 #include <stddef.h>
 
@@ -44,5 +45,12 @@
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define max(x, y) ((x) < (y) ? (y) : (x))
+
+static _Bool inet6_eq(struct in6_addr* a, struct in6_addr* b) {
+  for (int i = 0; i < 4; i++) {
+    if (a->s6_addr32[i] != b->s6_addr32[i]) return 0;
+  }
+  return 1;
+}
 
 #endif  // __MIMIC_UTIL_H__

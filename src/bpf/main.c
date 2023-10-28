@@ -14,6 +14,49 @@
 #include "offset.h"
 #include "util.h"
 
+// Extend socket buffer and move n bytes from front to back.
+static int mangle_data(struct __sk_buff* skb, __u16 offset) {
+  try_or_shot(bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0));
+  __u8 buf[TCP_UDP_HEADER_DIFF] = {0};
+  __u16 data_len = skb->len - offset;
+  __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
+  if (copy_len > 0) {
+    // HACK: make verifier happy
+    // Probably related:
+    // https://lore.kernel.org/bpf/f464186c-0353-9f9e-0271-e70a30e2fcdb@linux.dev/T/
+    if (copy_len < 2) copy_len = 1;
+
+    try_or_shot(bpf_skb_load_bytes(skb, offset, buf, copy_len));
+    try_or_shot(
+        bpf_skb_store_bytes(skb, skb->len - copy_len, buf, copy_len, 0));
+  }
+}
+
+static void update_tcp_header(struct tcphdr* tcp, __u16* tcp_csum,
+                              _Bool delta_csum, __u16 udp_len) {
+  __u32 seq = 114514;  // TODO: make sequence number more real
+  if (delta_csum) {
+    update_csum(&tcp_csum, (seq >> 16) - udp_len);  // UDP length -> seq[0:15]
+    update_csum(&tcp_csum, seq & 0xffff);  // UDP checksum (0) -> seq[16:31]
+  } else {
+    update_csum_ul(&tcp_csum, seq);
+  }
+  tcp->seq = bpf_htonl(seq);
+
+  __u32 ack_seq = 1919810;  // TODO: make acknowledgment number more real
+  update_csum_ul(&tcp_csum, ack_seq);
+  tcp->ack_seq = bpf_htonl(ack_seq);
+
+  tcp_flag_word(tcp) = 0;
+  tcp->doff = 5;
+  // TODO: flags, tcp->window
+  update_csum_ul(&tcp_csum, bpf_ntohl(tcp_flag_word(tcp)));
+
+  __u16 urg_ptr = 0;
+  update_csum(&tcp_csum, urg_ptr);
+  tcp->urg_ptr = bpf_htons(urg_ptr);
+}
+
 static int egress_handle_ipv4(struct __sk_buff* skb) {
   decl_or_shot(struct iphdr, ipv4, ETH_END, skb);
   if (ipv4->protocol != IPPROTO_UDP) return TC_ACT_OK;
@@ -58,21 +101,8 @@ matched:;
   try_or_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, old_len, new_len, 2));
   try_or_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, bpf_htons(IPPROTO_UDP),
                                   bpf_htons(IPPROTO_TCP), 2));
-  try_or_shot(bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0));
 
-  __u8 buf[TCP_UDP_HEADER_DIFF] = {0};
-  __u16 data_len = udp_len - sizeof(struct udphdr);
-  __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
-  if (copy_len > 0) {
-    // HACK: make verifier happy
-    // Probably related:
-    // https://lore.kernel.org/bpf/f464186c-0353-9f9e-0271-e70a30e2fcdb@linux.dev/T/
-    if (copy_len < 2) copy_len = 1;
-
-    try_or_shot(bpf_skb_load_bytes(skb, IPV4_UDP_END, buf, copy_len));
-    try_or_shot(
-        bpf_skb_store_bytes(skb, skb->len - copy_len, buf, copy_len, 0));
-  }
+  try(mangle_data(skb, IPV4_UDP_END));
 
   decl_or_shot(struct tcphdr, tcp, IPV4_END, skb);
   if (udp_csum) {
@@ -83,33 +113,13 @@ matched:;
     update_csum_ul(&tcp_csum, saddr);
     update_csum_ul(&tcp_csum, daddr);
     update_csum(&tcp_csum, IPPROTO_TCP);
-    update_csum(&tcp_csum, data_len + sizeof(struct tcphdr));
+    update_csum(&tcp_csum, udp_len + TCP_UDP_HEADER_DIFF);
 
     update_csum(&tcp_csum, bpf_ntohs(tcp->source));
     update_csum(&tcp_csum, bpf_ntohs(tcp->dest));
   }
 
-  __u32 seq = 114514;  // TODO: make sequence number more real
-  if (udp_csum) {
-    update_csum(&tcp_csum, (seq >> 16) - udp_len);  // UDP length -> seq[0:15]
-    update_csum(&tcp_csum, seq & 0xffff);  // UDP checksum (0) -> seq[16:31]
-  } else {
-    update_csum_ul(&tcp_csum, seq);
-  }
-  tcp->seq = bpf_htonl(seq);
-
-  __u32 ack_seq = 1919810;  // TODO: make acknowledgment number more real
-  update_csum_ul(&tcp_csum, ack_seq);
-  tcp->ack_seq = bpf_htonl(ack_seq);
-
-  tcp_flag_word(tcp) = 0;
-  tcp->doff = 5;
-  // TODO: flags, tcp->window
-  update_csum_ul(&tcp_csum, bpf_ntohl(tcp_flag_word(tcp)));
-
-  __u16 urg_ptr = 0;
-  update_csum(&tcp_csum, urg_ptr);
-  tcp->urg_ptr = bpf_htons(urg_ptr);
+  update_tcp_header(tcp, &tcp_csum, udp_csum, udp_len);
 
   if (!udp_csum) update_csum_data(skb, &tcp_csum, IPV4_TCP_END);
   tcp->check = bpf_htons(tcp_csum);
@@ -121,7 +131,51 @@ static int egress_handle_ipv6(struct __sk_buff* skb) {
   decl_or_shot(struct ipv6hdr, ipv6, ETH_END, skb);
   if (ipv6->nexthdr != IPPROTO_UDP) return TC_ACT_OK;
   decl_or_ok(struct udphdr, udp, IPV6_END, skb);
-  // TODO: check IP address
+
+  for (int i = 0; i < egress_whitelist_ipv6_count; i++) {
+    if (inet6_eq(&egress_whitelist_ipv6[i], &ipv6->daddr) &&
+        bpf_ntohs(udp->dest) == egress_whitelist_ipv6_port[i])
+      goto matched;
+  }
+  return TC_ACT_OK;
+
+matched:;
+#ifdef __DEBUG__
+  bpf_printk("egress: matched UDP packet to [%pI6]:%d", &ipv6->daddr,
+             bpf_ntohs(udp->dest));
+#endif
+
+  ipv6->payload_len =
+      bpf_htons(bpf_ntohs(ipv6->payload_len) + TCP_UDP_HEADER_DIFF);
+  ipv6->nexthdr = IPPROTO_TCP;
+  __u16 udp_len = bpf_ntohs(udp->len);
+
+  // __u16 udp_csum = bpf_ntohs(udp->check);
+  __u16 udp_csum = 0;
+  __u16 tcp_csum = udp_csum ? udp_csum : 0xffff;
+
+  try(mangle_data(skb, IPV6_UDP_END));
+
+  decl_or_shot(struct tcphdr, tcp, IPV6_END, skb);
+  if (udp_csum) {
+    update_csum(&tcp_csum,
+                IPPROTO_TCP - IPPROTO_UDP);       // proto in pseudo-header
+    update_csum(&tcp_csum, TCP_UDP_HEADER_DIFF);  // length in pseudo-header
+  } else {
+    for (int i = 0; i < 8; i++) {
+      update_csum(&tcp_csum, ipv6->saddr.s6_addr16[i]);
+      update_csum(&tcp_csum, ipv6->daddr.s6_addr16[i]);
+    }
+    update_csum(&tcp_csum, IPPROTO_TCP);
+    update_csum(&tcp_csum, udp_len + TCP_UDP_HEADER_DIFF);
+
+    update_csum(&tcp_csum, bpf_ntohs(tcp->source));
+    update_csum(&tcp_csum, bpf_ntohs(tcp->dest));
+  }
+
+  update_tcp_header(tcp, &tcp_csum, udp_csum, udp_len);
+  if (!udp_csum) update_csum_data(skb, &tcp_csum, IPV6_TCP_END);
+  tcp->check = bpf_htons(tcp_csum);
 
   return TC_ACT_OK;
 }
@@ -138,6 +192,19 @@ int egress_handler(struct __sk_buff* skb) {
       break;
   }
   return TC_ACT_OK;
+}
+
+// Move back n bytes, shrink socket buffer and restore data.
+static int restore_data(struct __sk_buff* skb, __u16 offset) {
+  __u8 buf[TCP_UDP_HEADER_DIFF] = {0};
+  __u16 data_len = skb->len - offset;
+  __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
+  if (copy_len > 0) {
+    if (copy_len < 2) copy_len = 1;  // HACK: see above
+    try_or_shot(bpf_skb_load_bytes(skb, skb->len - copy_len, buf, copy_len));
+    try_or_shot(bpf_skb_store_bytes(skb, offset, buf, copy_len, 0));
+  }
+  try_or_shot(bpf_skb_change_tail(skb, skb->len - TCP_UDP_HEADER_DIFF, 0));
 }
 
 static int ingress_handle_ipv4(struct __sk_buff* skb) {
@@ -166,18 +233,10 @@ matched:;
   try_or_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, bpf_htons(IPPROTO_TCP),
                                   bpf_htons(IPPROTO_UDP), 2));
 
-  __u8 buf[TCP_UDP_HEADER_DIFF] = {0};
-  __u16 data_len = skb->len - IPV4_TCP_END;
-  __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
-  if (copy_len > 0) {
-    if (copy_len < 2) copy_len = 1;  // HACK: see above
-    try_or_shot(bpf_skb_load_bytes(skb, skb->len - copy_len, buf, copy_len));
-    try_or_shot(bpf_skb_store_bytes(skb, IPV4_UDP_END, buf, copy_len, 0));
-  }
-  try_or_shot(bpf_skb_change_tail(skb, skb->len - TCP_UDP_HEADER_DIFF, 0));
+  try(restore_data(skb, IPV4_TCP_END));
 
   decl_or_shot(struct udphdr, udp, IPV4_END, skb);
-  udp->len = bpf_htons(data_len + sizeof(struct udphdr));
+  udp->len = bpf_htons(skb->len - IPV4_UDP_END);
   udp->check = 0;  // TODO
 
   return TC_ACT_OK;
@@ -187,7 +246,19 @@ static int ingress_handle_ipv6(struct __sk_buff* skb) {
   decl_or_shot(struct ipv6hdr, ipv6, ETH_END, skb);
   if (ipv6->nexthdr != IPPROTO_UDP) return TC_ACT_OK;
   decl_or_ok(struct tcphdr, tcp, IPV6_END, skb);
-  // TODO: check IP address
+
+  for (int i = 0; i < ingress_whitelist_ipv6_count; i++) {
+    if (inet6_eq(&egress_whitelist_ipv6[i], &ipv6->saddr) &&
+        bpf_ntohs(tcp->source) == ingress_whitelist_ipv6_port[i])
+      goto matched;
+  }
+  return TC_ACT_OK;
+
+matched:;
+#ifdef __DEBUG__
+  bpf_printk("ingress: matched (fake) TCP packet from [%pI6]:%d", &ipv6->saddr,
+             bpf_ntohs(tcp->source));
+#endif
 
   return TC_ACT_OK;
 }
