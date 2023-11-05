@@ -70,10 +70,11 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
   if (ipv4->protocol != IPPROTO_UDP) return TC_ACT_OK;
   decl_or_shot(struct udphdr, udp, IPV4_END, skb);
 
+  __be32 saddr = ipv4->saddr, daddr = ipv4->daddr;
   struct ip_port_filter local_key = {
-      DIR_LOCAL, TYPE_IPV4, {.v4 = ipv4->saddr}, udp->source};
+      DIR_LOCAL, TYPE_IPV4, {.v4 = saddr}, udp->source};
   struct ip_port_filter remote_key = {
-      DIR_REMOTE, TYPE_IPV4, {.v4 = ipv4->daddr}, udp->dest};
+      DIR_REMOTE, TYPE_IPV4, {.v4 = daddr}, udp->dest};
   if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
       !bpf_map_lookup_elem(&whitelist, &remote_key))
     return TC_ACT_OK;
@@ -88,8 +89,6 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
   ipv4->tot_len = new_len;
   ipv4->protocol = IPPROTO_TCP;
 
-  __u32 saddr = bpf_ntohl(ipv4->saddr);
-  __u32 daddr = bpf_ntohl(ipv4->daddr);
   __u16 udp_len = bpf_ntohs(udp->len);
 
   // Should get a better understanding on how HW checksum offloading works.
@@ -118,8 +117,8 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
                 IPPROTO_TCP - IPPROTO_UDP);       // proto in pseudo-header
     update_csum(&tcp_csum, TCP_UDP_HEADER_DIFF);  // length in pseudo-header
   } else {
-    update_csum_ul(&tcp_csum, saddr);
-    update_csum_ul(&tcp_csum, daddr);
+    update_csum_ul(&tcp_csum, bpf_ntohl(saddr));
+    update_csum_ul(&tcp_csum, bpf_ntohl(daddr));
     update_csum(&tcp_csum, IPPROTO_TCP);
     update_csum(&tcp_csum, udp_len + TCP_UDP_HEADER_DIFF);
 
@@ -140,6 +139,7 @@ static int egress_handle_ipv6(struct __sk_buff* skb) {
   if (ipv6->nexthdr != IPPROTO_UDP) return TC_ACT_OK;
   decl_or_ok(struct udphdr, udp, IPV6_END, skb);
 
+  struct in6_addr saddr = ipv6->saddr, daddr = ipv6->daddr;
   struct ip_port_filter local_key = {
       DIR_LOCAL, TYPE_IPV6, {.v6 = ipv6->saddr}, udp->source};
   struct ip_port_filter remote_key = {
@@ -171,8 +171,8 @@ static int egress_handle_ipv6(struct __sk_buff* skb) {
     update_csum(&tcp_csum, TCP_UDP_HEADER_DIFF);  // length in pseudo-header
   } else {
     for (int i = 0; i < 8; i++) {
-      update_csum(&tcp_csum, ipv6->saddr.s6_addr16[i]);
-      update_csum(&tcp_csum, ipv6->daddr.s6_addr16[i]);
+      update_csum(&tcp_csum, saddr.s6_addr16[i]);
+      update_csum(&tcp_csum, daddr.s6_addr16[i]);
     }
     update_csum(&tcp_csum, IPPROTO_TCP);
     update_csum(&tcp_csum, udp_len + TCP_UDP_HEADER_DIFF);
@@ -221,10 +221,11 @@ static int ingress_handle_ipv4(struct __sk_buff* skb) {
   if (ipv4->protocol != IPPROTO_TCP) return TC_ACT_OK;
   decl_or_shot(struct tcphdr, tcp, IPV4_END, skb);
 
+  __be32 saddr = ipv4->saddr, daddr = ipv4->daddr;
   struct ip_port_filter local_key = {
-      DIR_LOCAL, TYPE_IPV4, {.v4 = ipv4->daddr}, tcp->dest};
+      DIR_LOCAL, TYPE_IPV4, {.v4 = daddr}, tcp->dest};
   struct ip_port_filter remote_key = {
-      DIR_REMOTE, TYPE_IPV4, {.v4 = ipv4->saddr}, tcp->source};
+      DIR_REMOTE, TYPE_IPV4, {.v4 = saddr}, tcp->source};
   if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
       !bpf_map_lookup_elem(&whitelist, &remote_key))
     return TC_ACT_OK;
@@ -256,10 +257,11 @@ static int ingress_handle_ipv6(struct __sk_buff* skb) {
   if (ipv6->nexthdr != IPPROTO_UDP) return TC_ACT_OK;
   decl_or_ok(struct tcphdr, tcp, IPV6_END, skb);
 
+  struct in6_addr saddr = ipv6->saddr, daddr = ipv6->daddr;
   struct ip_port_filter local_key = {
-      DIR_LOCAL, TYPE_IPV4, {.v6 = ipv6->daddr}, tcp->dest};
+      DIR_LOCAL, TYPE_IPV4, {.v6 = daddr}, tcp->dest};
   struct ip_port_filter remote_key = {
-      DIR_REMOTE, TYPE_IPV4, {.v6 = ipv6->saddr}, tcp->source};
+      DIR_REMOTE, TYPE_IPV4, {.v6 = saddr}, tcp->source};
   if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
       !bpf_map_lookup_elem(&whitelist, &remote_key))
     return TC_ACT_OK;
