@@ -1,5 +1,5 @@
-#ifndef __MIMIC_CHECKSUM_H__
-#define __MIMIC_CHECKSUM_H__
+#ifndef __MIMIC_BPF_CHECKSUM_H__
+#define __MIMIC_BPF_CHECKSUM_H__
 
 #include <linux/bpf.h>
 #include <stddef.h>
@@ -32,4 +32,4 @@ static void update_csum_data(struct __sk_buff* skb, __u16* csum, __u32 off) {
   update_csum(csum, (__u16)(*remainder << 8));
 }
 
-#endif  // __MIMIC_CHECKSUM_H__
+#endif  // __MIMIC_BPF_CHECKSUM_H__

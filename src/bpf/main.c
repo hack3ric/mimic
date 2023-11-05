@@ -10,18 +10,9 @@
 #include <stddef.h>
 
 #include "checksum.h"
+#include "main.h"
 #include "offset.h"
 #include "util.h"
-
-struct ip_port_filter {
-  enum direction_type { DIR_LOCAL, DIR_REMOTE } direction : 1;
-  enum ip_type { TYPE_IPV4, TYPE_IPV6 } protocol : 1;
-  union {
-    __be32 v4;
-    struct in6_addr v6;
-  } ip;
-  __be32 port;
-};
 
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
