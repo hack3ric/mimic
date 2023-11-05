@@ -1,5 +1,5 @@
 CC := clang
-CFLAGS := -mcpu=v3 -O2
+CFLAGS := -mcpu=v3 -O2 $(EXTRA_CFLAGS)
 DEBUG ?= 1
 OUTFILE ?= mimic.o
 
@@ -7,13 +7,29 @@ ifneq ($(DEBUG),)
 CFLAGS += -g -D__DEBUG__
 endif
 
+config_args :=
+ifneq ($(INGRESS),)
+config_args += -i $(INGRESS)
+endif
+ifneq ($(EGRESS),)
+config_args += -e $(EGRESS)
+endif
+
 all: build
 
-build:
+mimic.o:
 	$(CC) --target=bpf $(CFLAGS) -c src/bpf/main.c -o $(OUTFILE)
+
+src/mimic.skel.h:
+	bpftool gen skeleton mimic.o > $@
+
+build: mimic.o src/mimic.skel.h
+	$(CC) $(CFLAGS) src/main.c -o mimic -lbpf
 
 clean:
 	rm -f mimic.o
+	rm -f src/bpf/config.h
+	rm -f src/mimic.skel.h
 
 IF ?= virbr0
 

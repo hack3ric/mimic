@@ -53,3 +53,4 @@ dkms.conf
 
 /.vscode/
 /src/bpf/config.h
+/src/mimic.skel.h

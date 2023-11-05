@@ -10,9 +10,25 @@
 #include <stddef.h>
 
 #include "checksum.h"
-#include "config.h"
 #include "offset.h"
 #include "util.h"
+
+struct ip_port_filter {
+  enum direction_type { DIR_LOCAL, DIR_REMOTE } direction : 1;
+  enum ip_type { TYPE_IPV4, TYPE_IPV6 } protocol : 1;
+  union {
+    __be32 v4;
+    struct in6_addr v6;
+  } ip;
+  __be32 port;
+};
+
+struct {
+  __uint(type, BPF_MAP_TYPE_HASH);
+  __uint(max_entries, 8);
+  __type(key, struct ip_port_filter);
+  __type(value, _Bool);
+} whitelist SEC(".maps");
 
 // Extend socket buffer and move n bytes from front to back.
 static int mangle_data(struct __sk_buff* skb, __u16 offset) {
@@ -63,14 +79,14 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
   if (ipv4->protocol != IPPROTO_UDP) return TC_ACT_OK;
   decl_or_shot(struct udphdr, udp, IPV4_END, skb);
 
-  for (int i = 0; i < egress_whitelist_ipv4_count; i++) {
-    if (bpf_ntohl(ipv4->daddr) == egress_whitelist_ipv4[i] &&
-        bpf_ntohs(udp->dest) == egress_whitelist_ipv4_port[i])
-      goto matched;
-  }
-  return TC_ACT_OK;
+  struct ip_port_filter local_key = {
+      DIR_LOCAL, TYPE_IPV4, {.v4 = ipv4->saddr}, udp->source};
+  struct ip_port_filter remote_key = {
+      DIR_REMOTE, TYPE_IPV4, {.v4 = ipv4->daddr}, udp->dest};
+  if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
+      !bpf_map_lookup_elem(&whitelist, &remote_key))
+    return TC_ACT_OK;
 
-matched:;
 #ifdef __DEBUG__
   bpf_printk("egress: matched UDP packet to %pI4:%d", &ipv4->daddr,
              bpf_ntohs(udp->dest));
@@ -133,14 +149,14 @@ static int egress_handle_ipv6(struct __sk_buff* skb) {
   if (ipv6->nexthdr != IPPROTO_UDP) return TC_ACT_OK;
   decl_or_ok(struct udphdr, udp, IPV6_END, skb);
 
-  for (int i = 0; i < egress_whitelist_ipv6_count; i++) {
-    if (inet6_eq(&egress_whitelist_ipv6[i], &ipv6->daddr) &&
-        bpf_ntohs(udp->dest) == egress_whitelist_ipv6_port[i])
-      goto matched;
-  }
-  return TC_ACT_OK;
+  struct ip_port_filter local_key = {
+      DIR_LOCAL, TYPE_IPV6, {.v6 = ipv6->saddr}, udp->source};
+  struct ip_port_filter remote_key = {
+      DIR_REMOTE, TYPE_IPV6, {.v6 = ipv6->daddr}, udp->dest};
+  if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
+      !bpf_map_lookup_elem(&whitelist, &remote_key))
+    return TC_ACT_OK;
 
-matched:;
 #ifdef __DEBUG__
   bpf_printk("egress: matched UDP packet to [%pI6]:%d", &ipv6->daddr,
              bpf_ntohs(udp->dest));
@@ -181,7 +197,7 @@ matched:;
   return TC_ACT_OK;
 }
 
-SEC("egress")
+SEC("tc")
 int egress_handler(struct __sk_buff* skb) {
   decl_or_ok(struct ethhdr, eth, 0, skb);
   switch (bpf_ntohs(eth->h_proto)) {
@@ -214,14 +230,14 @@ static int ingress_handle_ipv4(struct __sk_buff* skb) {
   if (ipv4->protocol != IPPROTO_TCP) return TC_ACT_OK;
   decl_or_shot(struct tcphdr, tcp, IPV4_END, skb);
 
-  for (int i = 0; i < ingress_whitelist_ipv4_count; i++) {
-    if (bpf_ntohl(ipv4->saddr) == ingress_whitelist_ipv4[i] &&
-        bpf_ntohs(tcp->source) == ingress_whitelist_ipv4_port[i])
-      goto matched;
-  }
-  return TC_ACT_OK;
+  struct ip_port_filter local_key = {
+      DIR_LOCAL, TYPE_IPV4, {.v4 = ipv4->daddr}, tcp->dest};
+  struct ip_port_filter remote_key = {
+      DIR_REMOTE, TYPE_IPV4, {.v4 = ipv4->saddr}, tcp->source};
+  if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
+      !bpf_map_lookup_elem(&whitelist, &remote_key))
+    return TC_ACT_OK;
 
-matched:;
 #ifdef __DEBUG__
   bpf_printk("ingress: matched (fake) TCP packet from %pI4:%d", &ipv4->saddr,
              bpf_ntohs(tcp->source));
@@ -249,14 +265,14 @@ static int ingress_handle_ipv6(struct __sk_buff* skb) {
   if (ipv6->nexthdr != IPPROTO_UDP) return TC_ACT_OK;
   decl_or_ok(struct tcphdr, tcp, IPV6_END, skb);
 
-  for (int i = 0; i < ingress_whitelist_ipv6_count; i++) {
-    if (inet6_eq(&egress_whitelist_ipv6[i], &ipv6->saddr) &&
-        bpf_ntohs(tcp->source) == ingress_whitelist_ipv6_port[i])
-      goto matched;
-  }
-  return TC_ACT_OK;
+  struct ip_port_filter local_key = {
+      DIR_LOCAL, TYPE_IPV4, {.v6 = ipv6->daddr}, tcp->dest};
+  struct ip_port_filter remote_key = {
+      DIR_REMOTE, TYPE_IPV4, {.v6 = ipv6->saddr}, tcp->source};
+  if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
+      !bpf_map_lookup_elem(&whitelist, &remote_key))
+    return TC_ACT_OK;
 
-matched:;
 #ifdef __DEBUG__
   bpf_printk("ingress: matched (fake) TCP packet from [%pI6]:%d", &ipv6->saddr,
              bpf_ntohs(tcp->source));
@@ -265,7 +281,7 @@ matched:;
   return TC_ACT_OK;
 }
 
-SEC("ingress")
+SEC("tc")
 int ingress_handler(struct __sk_buff* skb) {
   decl_or_ok(struct ethhdr, eth, 0, skb);
   switch (bpf_ntohs(eth->h_proto)) {
