@@ -72,9 +72,9 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
 
   __be32 saddr = ipv4->saddr, daddr = ipv4->daddr;
   struct ip_port_filter local_key = {
-      DIR_LOCAL, TYPE_IPV4, {.v4 = saddr}, udp->source};
+      DIR_LOCAL, TYPE_IPV4, udp->source, {.v4 = saddr}};
   struct ip_port_filter remote_key = {
-      DIR_REMOTE, TYPE_IPV4, {.v4 = daddr}, udp->dest};
+      DIR_REMOTE, TYPE_IPV4, udp->dest, {.v4 = daddr}};
   if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
       !bpf_map_lookup_elem(&whitelist, &remote_key))
     return TC_ACT_OK;
@@ -141,9 +141,9 @@ static int egress_handle_ipv6(struct __sk_buff* skb) {
 
   struct in6_addr saddr = ipv6->saddr, daddr = ipv6->daddr;
   struct ip_port_filter local_key = {
-      DIR_LOCAL, TYPE_IPV6, {.v6 = ipv6->saddr}, udp->source};
+      DIR_LOCAL, TYPE_IPV6, udp->source, {.v6 = ipv6->saddr}};
   struct ip_port_filter remote_key = {
-      DIR_REMOTE, TYPE_IPV6, {.v6 = ipv6->daddr}, udp->dest};
+      DIR_REMOTE, TYPE_IPV6, udp->dest, {.v6 = ipv6->daddr}};
   if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
       !bpf_map_lookup_elem(&whitelist, &remote_key))
     return TC_ACT_OK;
@@ -223,9 +223,9 @@ static int ingress_handle_ipv4(struct __sk_buff* skb) {
 
   __be32 saddr = ipv4->saddr, daddr = ipv4->daddr;
   struct ip_port_filter local_key = {
-      DIR_LOCAL, TYPE_IPV4, {.v4 = daddr}, tcp->dest};
+      DIR_LOCAL, TYPE_IPV4, tcp->dest, {.v4 = daddr}};
   struct ip_port_filter remote_key = {
-      DIR_REMOTE, TYPE_IPV4, {.v4 = saddr}, tcp->source};
+      DIR_REMOTE, TYPE_IPV4, tcp->source, {.v4 = saddr}};
   if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
       !bpf_map_lookup_elem(&whitelist, &remote_key))
     return TC_ACT_OK;
@@ -259,9 +259,9 @@ static int ingress_handle_ipv6(struct __sk_buff* skb) {
 
   struct in6_addr saddr = ipv6->saddr, daddr = ipv6->daddr;
   struct ip_port_filter local_key = {
-      DIR_LOCAL, TYPE_IPV4, {.v6 = daddr}, tcp->dest};
+      DIR_LOCAL, TYPE_IPV4, tcp->dest, {.v6 = daddr}};
   struct ip_port_filter remote_key = {
-      DIR_REMOTE, TYPE_IPV4, {.v6 = saddr}, tcp->source};
+      DIR_REMOTE, TYPE_IPV4, tcp->source, {.v6 = saddr}};
   if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
       !bpf_map_lookup_elem(&whitelist, &remote_key))
     return TC_ACT_OK;
