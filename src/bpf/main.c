@@ -10,7 +10,7 @@
 #include <stddef.h>
 
 #include "checksum.h"
-#include "main.h"
+#include "filter.h"
 #include "offset.h"
 #include "util.h"
 

@@ -2,7 +2,7 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 
-#include "bpf/main.h"
+#include "bpf/filter.h"
 #include "bpf/skel.h"
 #include "util.h"
 
@@ -66,8 +66,10 @@ int main(int argc, char* argv[]) {
     if (!port_str) exit_with_error(3, "no port number specified: %s", value);
     *port_str = '\0';
     port_str++;
-    int port = atoi(port_str);
-    if (port <= 0 || port > 65535) exit_with_error(4, "invalid port number: `%s`", port_str);
+    char* endptr;
+    long port = strtol(port_str, &endptr, 10);
+    if (port <= 0 || port > 65535 || *endptr != '\0')
+      exit_with_error(4, "invalid port number: `%s`", port_str);
     filter->port = htons((__u16)port);
 
     int af;
