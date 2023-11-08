@@ -19,7 +19,7 @@ struct {
   __uint(max_entries, 8);
   __type(key, struct ip_port_filter);
   __type(value, _Bool);
-} whitelist SEC(".maps");
+} mimic_whitelist SEC(".maps");
 
 // Extend socket buffer and move n bytes from front to back.
 static int mangle_data(struct __sk_buff* skb, __u16 offset) {
@@ -75,8 +75,8 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
       DIR_LOCAL, TYPE_IPV4, udp->source, {.v4 = saddr}};
   struct ip_port_filter remote_key = {
       DIR_REMOTE, TYPE_IPV4, udp->dest, {.v4 = daddr}};
-  if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
-      !bpf_map_lookup_elem(&whitelist, &remote_key))
+  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) &&
+      !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
 #ifdef __DEBUG__
@@ -144,8 +144,8 @@ static int egress_handle_ipv6(struct __sk_buff* skb) {
       DIR_LOCAL, TYPE_IPV6, udp->source, {.v6 = ipv6->saddr}};
   struct ip_port_filter remote_key = {
       DIR_REMOTE, TYPE_IPV6, udp->dest, {.v6 = ipv6->daddr}};
-  if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
-      !bpf_map_lookup_elem(&whitelist, &remote_key))
+  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) &&
+      !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
 #ifdef __DEBUG__
@@ -226,8 +226,8 @@ static int ingress_handle_ipv4(struct __sk_buff* skb) {
       DIR_LOCAL, TYPE_IPV4, tcp->dest, {.v4 = daddr}};
   struct ip_port_filter remote_key = {
       DIR_REMOTE, TYPE_IPV4, tcp->source, {.v4 = saddr}};
-  if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
-      !bpf_map_lookup_elem(&whitelist, &remote_key))
+  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) &&
+      !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
 #ifdef __DEBUG__
@@ -262,14 +262,27 @@ static int ingress_handle_ipv6(struct __sk_buff* skb) {
       DIR_LOCAL, TYPE_IPV4, tcp->dest, {.v6 = daddr}};
   struct ip_port_filter remote_key = {
       DIR_REMOTE, TYPE_IPV4, tcp->source, {.v6 = saddr}};
-  if (!bpf_map_lookup_elem(&whitelist, &local_key) &&
-      !bpf_map_lookup_elem(&whitelist, &remote_key))
+  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) &&
+      !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
 #ifdef __DEBUG__
   bpf_printk("ingress: matched (fake) TCP packet from [%pI6]:%d", &ipv6->saddr,
              bpf_ntohs(tcp->source));
 #endif
+  __be16 old_len = ipv6->payload_len;
+  __be16 new_len = bpf_htons(bpf_ntohs(old_len) - TCP_UDP_HEADER_DIFF);
+  ipv6->payload_len = new_len;
+  ipv6->nexthdr = IPPROTO_UDP;
+
+  // IPv6 has no checksum field
+
+  try(restore_data(skb, IPV6_TCP_END));
+
+  decl_or_shot(struct udphdr, udp, IPV6_END, skb);
+  udp->len = bpf_htons(skb->len - IPV6_UDP_END);
+  // TODO: IPv6 UDP checksum is required; just reuse TCP checksum
+  udp->check = 0;
 
   return TC_ACT_OK;
 }
