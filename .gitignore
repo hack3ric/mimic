@@ -52,5 +52,5 @@ Mkfile.old
 dkms.conf
 
 /.vscode/
-/src/mimic.skel.h
+/src/bpf/skel.h
 /out/
