@@ -34,18 +34,18 @@ static int mangle_data(struct __sk_buff* skb, __u16 offset) {
     if (copy_len < 2) copy_len = 1;
 
     try_or_shot(bpf_skb_load_bytes(skb, offset, buf, copy_len));
-    try_or_shot(
-        bpf_skb_store_bytes(skb, skb->len - copy_len, buf, copy_len, 0));
+    try_or_shot(bpf_skb_store_bytes(skb, skb->len - copy_len, buf, copy_len, 0));
   }
   return TC_ACT_OK;
 }
 
-static void update_tcp_header(struct tcphdr* tcp, __u16* tcp_csum,
-                              _Bool delta_csum, __u16 udp_len) {
+static void update_tcp_header(
+  struct tcphdr* tcp, __u16* tcp_csum, _Bool delta_csum, __u16 udp_len
+) {
   __u32 seq = 114514;  // TODO: make sequence number more real
   if (delta_csum) {
     update_csum(tcp_csum, (seq >> 16) - udp_len);  // UDP length -> seq[0:15]
-    update_csum(tcp_csum, seq & 0xffff);  // UDP checksum (0) -> seq[16:31]
+    update_csum(tcp_csum, seq & 0xffff);           // UDP checksum (0) -> seq[16:31]
   } else {
     update_csum_ul(tcp_csum, seq);
   }
@@ -71,17 +71,13 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
   decl_or_shot(struct udphdr, udp, IPV4_END, skb);
 
   __be32 saddr = ipv4->saddr, daddr = ipv4->daddr;
-  struct ip_port_filter local_key = {
-      DIR_LOCAL, TYPE_IPV4, udp->source, {.v4 = saddr}};
-  struct ip_port_filter remote_key = {
-      DIR_REMOTE, TYPE_IPV4, udp->dest, {.v4 = daddr}};
-  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) &&
-      !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
+  struct ip_port_filter local_key = {DIR_LOCAL, TYPE_IPV4, udp->source, {.v4 = saddr}};
+  struct ip_port_filter remote_key = {DIR_REMOTE, TYPE_IPV4, udp->dest, {.v4 = daddr}};
+  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
 #ifdef __DEBUG__
-  bpf_printk("egress: matched UDP packet to %pI4:%d", &ipv4->daddr,
-             bpf_ntohs(udp->dest));
+  bpf_printk("egress: matched UDP packet to %pI4:%d", &ipv4->daddr, bpf_ntohs(udp->dest));
 #endif
 
   __be16 old_len = ipv4->tot_len;
@@ -106,8 +102,9 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
   __u16 tcp_csum = udp_csum ? udp_csum : 0xffff;
 
   try_or_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, old_len, new_len, 2));
-  try_or_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, bpf_htons(IPPROTO_UDP),
-                                  bpf_htons(IPPROTO_TCP), 2));
+  try_or_shot(
+    bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, bpf_htons(IPPROTO_UDP), bpf_htons(IPPROTO_TCP), 2)
+  );
 
   try(mangle_data(skb, IPV4_UDP_END));
 
@@ -140,21 +137,16 @@ static int egress_handle_ipv6(struct __sk_buff* skb) {
   decl_or_ok(struct udphdr, udp, IPV6_END, skb);
 
   struct in6_addr saddr = ipv6->saddr, daddr = ipv6->daddr;
-  struct ip_port_filter local_key = {
-      DIR_LOCAL, TYPE_IPV6, udp->source, {.v6 = ipv6->saddr}};
-  struct ip_port_filter remote_key = {
-      DIR_REMOTE, TYPE_IPV6, udp->dest, {.v6 = ipv6->daddr}};
-  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) &&
-      !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
+  struct ip_port_filter local_key = {DIR_LOCAL, TYPE_IPV6, udp->source, {.v6 = ipv6->saddr}};
+  struct ip_port_filter remote_key = {DIR_REMOTE, TYPE_IPV6, udp->dest, {.v6 = ipv6->daddr}};
+  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
 #ifdef __DEBUG__
-  bpf_printk("egress: matched UDP packet to [%pI6]:%d", &ipv6->daddr,
-             bpf_ntohs(udp->dest));
+  bpf_printk("egress: matched UDP packet to [%pI6]:%d", &ipv6->daddr, bpf_ntohs(udp->dest));
 #endif
 
-  ipv6->payload_len =
-      bpf_htons(bpf_ntohs(ipv6->payload_len) + TCP_UDP_HEADER_DIFF);
+  ipv6->payload_len = bpf_htons(bpf_ntohs(ipv6->payload_len) + TCP_UDP_HEADER_DIFF);
   ipv6->nexthdr = IPPROTO_TCP;
   __u16 udp_len = bpf_ntohs(udp->len);
 
@@ -222,17 +214,15 @@ static int ingress_handle_ipv4(struct __sk_buff* skb) {
   decl_or_shot(struct tcphdr, tcp, IPV4_END, skb);
 
   __be32 saddr = ipv4->saddr, daddr = ipv4->daddr;
-  struct ip_port_filter local_key = {
-      DIR_LOCAL, TYPE_IPV4, tcp->dest, {.v4 = daddr}};
-  struct ip_port_filter remote_key = {
-      DIR_REMOTE, TYPE_IPV4, tcp->source, {.v4 = saddr}};
-  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) &&
-      !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
+  struct ip_port_filter local_key = {DIR_LOCAL, TYPE_IPV4, tcp->dest, {.v4 = daddr}};
+  struct ip_port_filter remote_key = {DIR_REMOTE, TYPE_IPV4, tcp->source, {.v4 = saddr}};
+  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
 #ifdef __DEBUG__
-  bpf_printk("ingress: matched (fake) TCP packet from %pI4:%d", &ipv4->saddr,
-             bpf_ntohs(tcp->source));
+  bpf_printk(
+    "ingress: matched (fake) TCP packet from %pI4:%d", &ipv4->saddr, bpf_ntohs(tcp->source)
+  );
 #endif
   __be16 old_len = ipv4->tot_len;
   __be16 new_len = bpf_htons(bpf_ntohs(old_len) - TCP_UDP_HEADER_DIFF);
@@ -240,8 +230,9 @@ static int ingress_handle_ipv4(struct __sk_buff* skb) {
   ipv4->protocol = IPPROTO_UDP;
 
   try_or_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, old_len, new_len, 2));
-  try_or_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, bpf_htons(IPPROTO_TCP),
-                                  bpf_htons(IPPROTO_UDP), 2));
+  try_or_shot(
+    bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, bpf_htons(IPPROTO_TCP), bpf_htons(IPPROTO_UDP), 2)
+  );
 
   try(restore_data(skb, IPV4_TCP_END));
 
@@ -258,17 +249,15 @@ static int ingress_handle_ipv6(struct __sk_buff* skb) {
   decl_or_ok(struct tcphdr, tcp, IPV6_END, skb);
 
   struct in6_addr saddr = ipv6->saddr, daddr = ipv6->daddr;
-  struct ip_port_filter local_key = {
-      DIR_LOCAL, TYPE_IPV4, tcp->dest, {.v6 = daddr}};
-  struct ip_port_filter remote_key = {
-      DIR_REMOTE, TYPE_IPV4, tcp->source, {.v6 = saddr}};
-  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) &&
-      !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
+  struct ip_port_filter local_key = {DIR_LOCAL, TYPE_IPV4, tcp->dest, {.v6 = daddr}};
+  struct ip_port_filter remote_key = {DIR_REMOTE, TYPE_IPV4, tcp->source, {.v6 = saddr}};
+  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
 #ifdef __DEBUG__
-  bpf_printk("ingress: matched (fake) TCP packet from [%pI6]:%d", &ipv6->saddr,
-             bpf_ntohs(tcp->source));
+  bpf_printk(
+    "ingress: matched (fake) TCP packet from [%pI6]:%d", &ipv6->saddr, bpf_ntohs(tcp->source)
+  );
 #endif
   __be16 old_len = ipv6->payload_len;
   __be16 new_len = bpf_htons(bpf_ntohs(old_len) - TCP_UDP_HEADER_DIFF);

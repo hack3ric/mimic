@@ -1,2 +1,6 @@
 BasedOnStyle: Google
 IncludeBlocks: Preserve
+AlignAfterOpenBracket: BlockIndent
+IndentWidth: 2
+ContinuationIndentWidth: 2
+ColumnLimit: 100

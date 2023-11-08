@@ -18,18 +18,11 @@
     ptr;                                                      \
   })
 
-#define redecl_or_ok(type, name, off, skb) \
-  redecl(type, name, off, skb, TC_ACT_OK)
-
-#define redecl_or_shot(type, name, off, skb) \
-  redecl(type, name, off, skb, TC_ACT_SHOT)
-
+#define redecl_or_ok(type, name, off, skb) redecl(type, name, off, skb, TC_ACT_OK)
+#define redecl_or_shot(type, name, off, skb) redecl(type, name, off, skb, TC_ACT_SHOT)
 #define decl(type, name, off, skb, ret) type* redecl(type, name, off, skb, ret)
-
 #define decl_or_ok(type, name, off, skb) decl(type, name, off, skb, TC_ACT_OK)
-
-#define decl_or_shot(type, name, off, skb) \
-  decl(type, name, off, skb, TC_ACT_SHOT)
+#define decl_or_shot(type, name, off, skb) decl(type, name, off, skb, TC_ACT_SHOT)
 
 #define try(x)                 \
   ({                           \
