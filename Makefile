@@ -7,6 +7,8 @@ CFLAGS += -g -D__DEBUG__
 endif
 
 all: build
+build: out/mimic
+generate: src/bpf/skel.h
 
 out/:
 	mkdir $@
@@ -20,8 +22,6 @@ src/bpf/skel.h: out/mimic.bpf.o
 
 out/mimic: src/bpf/skel.h
 	$(CC) $(CFLAGS) src/main.c -o $@ -lbpf
-
-build: out/mimic
 
 clean:
 	rm -rf out/
