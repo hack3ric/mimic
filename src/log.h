@@ -4,10 +4,10 @@
 #include <bpf/libbpf.h>
 #include <stdio.h>
 
-#define _LOG_DEBUG_PREFIX " \e[1;34mdebug:\e[0m "
-#define _LOG_INFO_PREFIX "  \e[1;32minfo:\e[0m "
-#define _LOG_WARN_PREFIX "  \e[1;33mwarn:\e[0m "
-#define _LOG_ERROR_PREFIX " \e[1;31merror:\e[0m "
+#define _LOG_DEBUG_PREFIX "  \e[1;34mdebug:\e[0m "
+#define _LOG_INFO_PREFIX "   \e[1;32minfo:\e[0m "
+#define _LOG_WARN_PREFIX "   \e[1;33mwarn:\e[0m "
+#define _LOG_ERROR_PREFIX "  \e[1;31merror:\e[0m "
 
 static int log_verbosity = 2;
 
