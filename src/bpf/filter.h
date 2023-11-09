@@ -1,5 +1,5 @@
-#ifndef __MIMIC_BPF_FILTER_H__
-#define __MIMIC_BPF_FILTER_H__
+#ifndef _MIMIC_BPF_FILTER_H
+#define _MIMIC_BPF_FILTER_H
 
 #include <linux/types.h>
 #ifdef __MIMIC_BPF__
@@ -53,4 +53,4 @@ void mimic_filter_fmt(const struct mimic_filter* restrict filter, char* restrict
 
 #endif  // __MIMIC_BPF__
 
-#endif  // __MIMIC_BPF_FILTER_H__
+#endif  // _MIMIC_BPF_FILTER_H

@@ -1,5 +1,5 @@
-#ifndef __MIMIC_LOG_H__
-#define __MIMIC_LOG_H__
+#ifndef _MIMIC_LOG_H
+#define _MIMIC_LOG_H
 
 #include <bpf/libbpf.h>
 #include <stdio.h>

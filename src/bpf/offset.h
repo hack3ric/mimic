@@ -1,5 +1,5 @@
-#ifndef __MIMIC_BPF_OFFSET_H__
-#define __MIMIC_BPF_OFFSET_H__
+#ifndef _MIMIC_BPF_OFFSET_H
+#define _MIMIC_BPF_OFFSET_H
 
 #include <linux/bpf.h>
 
@@ -21,4 +21,4 @@
 #define IPV4_UDP_CSUM_OFF (IPV4_END + offsetof(struct udphdr, check))
 #define TCP_UDP_HEADER_DIFF (sizeof(struct tcphdr) - sizeof(struct udphdr))
 
-#endif  // __MIMIC_BPF_OFFSET_H__
+#endif  // _MIMIC_BPF_OFFSET_H

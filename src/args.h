@@ -1,5 +1,5 @@
-#ifndef __MIMIC_ARGS_H__
-#define __MIMIC_ARGS_H__
+#ifndef _MIMIC_ARGS_H
+#define _MIMIC_ARGS_H
 
 #include <argp.h>
 #include <stdlib.h>
@@ -49,4 +49,4 @@ static error_t _args_parse_opt(int key, char* arg, struct argp_state* state) {
 
 static const struct argp args_argp = {_args_options, _args_parse_opt, NULL, NULL};
 
-#endif  // __MIMIC_ARGS_H__
+#endif  // _MIMIC_ARGS_H

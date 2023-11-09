@@ -1,5 +1,5 @@
-#ifndef __MIMIC_BPF_UTIL_H__
-#define __MIMIC_BPF_UTIL_H__
+#ifndef _MIMIC_BPF_UTIL_H
+#define _MIMIC_BPF_UTIL_H
 
 #include <linux/bpf.h>
 
@@ -46,4 +46,4 @@ static _Bool inet6_eq(struct in6_addr* a, struct in6_addr* b) {
   return 1;
 }
 
-#endif  // __MIMIC_BPF_UTIL_H__
+#endif  // _MIMIC_BPF_UTIL_H

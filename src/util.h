@@ -1,5 +1,5 @@
-#ifndef __MIMIC_UTIL_H__
-#define __MIMIC_UTIL_H__
+#ifndef _MIMIC_UTIL_H
+#define _MIMIC_UTIL_H
 
 #include <stdio.h>
 
@@ -64,4 +64,4 @@
     result;                   \
   })
 
-#endif  // __MIMIC_UTIL_H__
+#endif  // _MIMIC_UTIL_H
