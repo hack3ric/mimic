@@ -5,77 +5,19 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include "args.h"
 #include "bpf/filter.h"
 #include "bpf/skel.h"
+#include "log.h"
 #include "util.h"
-
-static const struct argp_option options[] = {
-  {"filter", 'f', "FILTER", 0,
-   "Specify what packets to process. This may be specified for multiple times."},
-  {"interface", 'i', "IFNAME", 0, "Interface to bind"},
-  {"verbose", 'v', 0, 0, "Output more information"},
-  {"quiet", 'q', 0, 0, "Output less information"},
-  {0}
-};
-
-struct arguments {
-  char* filters[8];
-  int filter_count;
-  char* ifname;
-};
-
-static int verbosity = 2;
-
-static error_t parse_opt(int key, char* arg, struct argp_state* state) {
-  struct arguments* args = state->input;
-  switch (key) {
-    case 'f':
-      args->filters[args->filter_count] = arg;
-      if (args->filter_count++ > 8) {
-        error_fmt("currently only maximum of 8 filters is supported");
-        exit(1);
-      }
-      break;
-    case 'i':
-      args->ifname = arg;
-      break;
-    case 'v':
-      if (verbosity < 3) verbosity++;
-      break;
-    case 'q':
-      if (verbosity > 0) verbosity--;
-      break;
-    default:
-      return ARGP_ERR_UNKNOWN;
-  }
-  return 0;
-}
-
-static const struct argp argp = {options, parse_opt, NULL, NULL};
 
 static volatile sig_atomic_t exiting = 0;
 static void sig_int(int signo) { exiting = 1; }
 
-static int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list args) {
-  int result1;
-  if (level == LIBBPF_WARN && verbosity >= 1)
-    result1 = fprintf(stderr, "\e[1;33mwarning:\e[0m ");
-  else if (level == LIBBPF_INFO && verbosity >= 2)
-    result1 = fprintf(stderr, "   \e[1;32minfo:\e[0m ");
-  else if (level == LIBBPF_DEBUG && verbosity >= 3)
-    result1 = fprintf(stderr, "  \e[1;34mdebug:\e[0m ");
-  else
-    return 0;
-  if (result1 < 0) return result1;
-  int result2 = vfprintf(stderr, format, args);
-  if (result2 < 0) return result2;
-  return result1 + result2;
-}
-
 int main(int argc, char* argv[]) {
   int result, retcode = 0;
   struct arguments args = {0};
-  try_msg(argp_parse(&argp, argc, argv, 0, 0, &args), "error parsing arguments");
+  try_msg(argp_parse(&args_argp, argc, argv, 0, 0, &args), "error parsing arguments");
 
   struct mimic_filter filters[args.filter_count];
   for (int i = 0; i < args.filter_count; i++) {

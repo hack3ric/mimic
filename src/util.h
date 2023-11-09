@@ -3,12 +3,13 @@
 
 #include <stdio.h>
 
+#include "log.h"
+
 #define strerrno strerror(errno)
-#define error_fmt(fmt, ...) fprintf(stderr, "  \e[1;31merror:\e[0m " fmt "\n", ##__VA_ARGS__)
 
 #define ret_with_error(error, ...) \
   ({                               \
-    error_fmt(__VA_ARGS__);        \
+    log_error(__VA_ARGS__);        \
     return error;                  \
   })
 
@@ -16,7 +17,7 @@
 // returned after cleanup.
 #define cleanup_with_error(e, ...) \
   ({                               \
-    error_fmt(__VA_ARGS__);        \
+    log_error(__VA_ARGS__);        \
     retcode = e;                   \
     goto cleanup;                  \
   })
@@ -31,7 +32,7 @@
   ({                          \
     int result = x;           \
     if (result) {             \
-      error_fmt(__VA_ARGS__); \
+      log_error(__VA_ARGS__); \
       return -result;         \
     }                         \
   })
@@ -40,7 +41,7 @@
   ({                            \
     int result = x;             \
     if (result) {               \
-      error_fmt(__VA_ARGS__);   \
+      log_error(__VA_ARGS__);   \
       retcode = -result;        \
       goto cleanup;             \
     }                           \
@@ -57,7 +58,7 @@
   ({                          \
     void* result = x;         \
     if (!result) {            \
-      error_fmt(__VA_ARGS__); \
+      log_error(__VA_ARGS__); \
       return 1;               \
     }                         \
     result;                   \
