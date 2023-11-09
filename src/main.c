@@ -1,13 +1,15 @@
 #include <argp.h>
 #include <arpa/inet.h>
 #include <net/if.h>
+#include <signal.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include "bpf/filter.h"
 #include "bpf/skel.h"
 #include "util.h"
 
-static struct argp_option options[] = {
+static const struct argp_option options[] = {
   {"filter", 'f', "FILTER", 0,
    "Specify what packets to process. This may be specified for multiple times."},
   {"interface", 'i', "IFNAME", 0, "Interface to bind"},
@@ -19,8 +21,9 @@ struct arguments {
   char* filters[8];
   int filter_count;
   char* ifname;
-  int verbosity;
 };
+
+static int verbosity = 0;
 
 static error_t parse_opt(int key, char* arg, struct argp_state* state) {
   struct arguments* args = state->input;
@@ -36,7 +39,7 @@ static error_t parse_opt(int key, char* arg, struct argp_state* state) {
       args->ifname = arg;
       break;
     case 'v':
-      if (args->verbosity < 3) args->verbosity++;
+      if (verbosity < 3) verbosity++;
       break;
     default:
       return ARGP_ERR_UNKNOWN;
@@ -44,9 +47,10 @@ static error_t parse_opt(int key, char* arg, struct argp_state* state) {
   return 0;
 }
 
-static struct argp argp = {options, parse_opt, NULL, NULL};
+static const struct argp argp = {options, parse_opt, NULL, NULL};
 
-static int verbosity = 0;
+static volatile sig_atomic_t exiting = 0;
+static void sig_int(int signo) { exiting = 1; }
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list args) {
   int result1;
@@ -69,11 +73,10 @@ int main(int argc, char* argv[]) {
   struct arguments args = {0};
   try(argp_parse(&argp, argc, argv, 0, 0, &args));
 
-  verbosity = args.verbosity;
-
-  struct ip_port_filter filters[args.filter_count];
+  struct mimic_filter filters[args.filter_count];
   for (int i = 0; i < args.filter_count; i++) {
-    struct ip_port_filter* filter = &filters[i];
+    struct mimic_filter* filter = &filters[i];
+    memset(filter, 0, sizeof(*filter));
     char* filter_str = args.filters[i];
     char* delim_pos = strchr(filter_str, '=');
     if (delim_pos == NULL || delim_pos == filter_str)
@@ -108,9 +111,13 @@ int main(int argc, char* argv[]) {
       port_str[-2] = '\0';
       af = AF_INET6;
     } else {
+      filter->protocol = TYPE_IPV4;
       af = AF_INET;
     }
-    if (inet_pton(af, value, &filter->ip) == 0) ret_with_error(1, "bad IP address: %s", value);
+    if (inet_pton(af, value, &filter->ip.v6) == 0) ret_with_error(1, "bad IP address: %s", value);
+    char fmt[FILTER_FMT_MAX_LEN];
+    mimic_filter_fmt(filter, fmt);
+    printf("%s\n", fmt);
   }
 
   int ifindex;
@@ -126,12 +133,12 @@ int main(int argc, char* argv[]) {
   _Bool value = 1;
   for (int i = 0; i < args.filter_count; i++) {
     result = bpf_map__update_elem(
-      skel->maps.mimic_whitelist, &filters[i], sizeof(struct ip_port_filter), &value, sizeof(_Bool),
+      skel->maps.mimic_whitelist, &filters[i], sizeof(struct mimic_filter), &value, sizeof(_Bool),
       BPF_ANY
     );
     if (result) {
       char fmt[FILTER_FMT_MAX_LEN];
-      ip_port_filter_fmt(&filters[i], fmt);
+      mimic_filter_fmt(&filters[i], fmt);
       cleanup_with_error(-result, "failed to add filter: %s", fmt);
     }
   }
@@ -157,6 +164,14 @@ int main(int argc, char* argv[]) {
   try_cleanup_msg(
     bpf_tc_attach(&tc_hook_ingress, &tc_opts_ingress), "failed to attach to TC ingress hook"
   );
+
+  if (signal(SIGINT, sig_int) == SIG_ERR) {
+    retcode = errno;
+    error_fmt("cannot set signal handler: %s", strerror(errno));
+    goto cleanup;
+  }
+
+  while (!exiting) sleep(1);
 
 cleanup:
   printf("cleanup\n");

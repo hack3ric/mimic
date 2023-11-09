@@ -1,3 +1,4 @@
+#define __MIMIC_BPF__
 #include <linux/bpf.h>
 
 #include <bpf/bpf_endian.h>
@@ -17,7 +18,7 @@
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 8);
-  __type(key, struct ip_port_filter);
+  __type(key, struct mimic_filter);
   __type(value, _Bool);
 } mimic_whitelist SEC(".maps");
 
@@ -71,8 +72,8 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
   decl_or_shot(struct udphdr, udp, IPV4_END, skb);
 
   __be32 saddr = ipv4->saddr, daddr = ipv4->daddr;
-  struct ip_port_filter local_key = {DIR_LOCAL, TYPE_IPV4, udp->source, {.v4 = saddr}};
-  struct ip_port_filter remote_key = {DIR_REMOTE, TYPE_IPV4, udp->dest, {.v4 = daddr}};
+  struct mimic_filter local_key = mimic_filter_v4(DIR_LOCAL, saddr, udp->source);
+  struct mimic_filter remote_key = mimic_filter_v4(DIR_REMOTE, daddr, udp->dest);
   if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
@@ -137,8 +138,8 @@ static int egress_handle_ipv6(struct __sk_buff* skb) {
   decl_or_ok(struct udphdr, udp, IPV6_END, skb);
 
   struct in6_addr saddr = ipv6->saddr, daddr = ipv6->daddr;
-  struct ip_port_filter local_key = {DIR_LOCAL, TYPE_IPV6, udp->source, {.v6 = ipv6->saddr}};
-  struct ip_port_filter remote_key = {DIR_REMOTE, TYPE_IPV6, udp->dest, {.v6 = ipv6->daddr}};
+  struct mimic_filter local_key = mimic_filter_v6(DIR_LOCAL, saddr, udp->source);
+  struct mimic_filter remote_key = mimic_filter_v6(DIR_REMOTE, daddr, udp->dest);
   if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
@@ -214,8 +215,8 @@ static int ingress_handle_ipv4(struct __sk_buff* skb) {
   decl_or_shot(struct tcphdr, tcp, IPV4_END, skb);
 
   __be32 saddr = ipv4->saddr, daddr = ipv4->daddr;
-  struct ip_port_filter local_key = {DIR_LOCAL, TYPE_IPV4, tcp->dest, {.v4 = daddr}};
-  struct ip_port_filter remote_key = {DIR_REMOTE, TYPE_IPV4, tcp->source, {.v4 = saddr}};
+  struct mimic_filter local_key = mimic_filter_v4(DIR_LOCAL, daddr, tcp->dest);
+  struct mimic_filter remote_key = mimic_filter_v4(DIR_REMOTE, saddr, tcp->source);
   if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
@@ -249,8 +250,8 @@ static int ingress_handle_ipv6(struct __sk_buff* skb) {
   decl_or_ok(struct tcphdr, tcp, IPV6_END, skb);
 
   struct in6_addr saddr = ipv6->saddr, daddr = ipv6->daddr;
-  struct ip_port_filter local_key = {DIR_LOCAL, TYPE_IPV4, tcp->dest, {.v6 = daddr}};
-  struct ip_port_filter remote_key = {DIR_REMOTE, TYPE_IPV4, tcp->source, {.v6 = saddr}};
+  struct mimic_filter local_key = mimic_filter_v6(DIR_LOCAL, daddr, tcp->dest);
+  struct mimic_filter remote_key = mimic_filter_v6(DIR_REMOTE, saddr, tcp->source);
   if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 

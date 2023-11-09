@@ -1,5 +1,5 @@
-#ifndef __MIMIC_BPF_MAIN_H__
-#define __MIMIC_BPF_MAIN_H__
+#ifndef __MIMIC_BPF_FILTER_H__
+#define __MIMIC_BPF_FILTER_H__
 
 #include <linux/types.h>
 #ifdef __MIMIC_BPF__
@@ -10,9 +10,9 @@
 #include <string.h>
 #endif
 
-struct ip_port_filter {
-  enum direction_type { DIR_LOCAL, DIR_REMOTE } direction : 1;
-  enum ip_type { TYPE_IPV4, TYPE_IPV6 } protocol : 1;
+struct mimic_filter {
+  enum direction_type { DIR_LOCAL, DIR_REMOTE } direction;
+  enum ip_type { TYPE_IPV4, TYPE_IPV6 } protocol;
   __be16 port;
   union ip_value {
     __be32 v4;
@@ -20,10 +20,25 @@ struct ip_port_filter {
   } ip;
 };
 
+#define _mimic_filter_init(_dir, _p, _p2, _ip, _port) \
+  ({                                                  \
+    struct mimic_filter result = {0};                 \
+    result.direction = (_dir);                        \
+    result.protocol = (_p);                           \
+    result.port = (_port);                            \
+    result.ip._p2 = (_ip);                            \
+    result;                                           \
+  })
+
+#define mimic_filter_v4(dir, ip, port) _mimic_filter_init(dir, TYPE_IPV4, v4, ip, port)
+#define mimic_filter_v6(dir, ip, port) _mimic_filter_init(dir, TYPE_IPV6, v6, ip, port)
+
 #ifndef __MIMIC_BPF__
+
 #define FILTER_FMT_MAX_LEN (7 + INET6_ADDRSTRLEN + 6)
+
 // `dest` must be at least `FILTER_FMT_MAX_LEN` bytes long.
-void ip_port_filter_fmt(const struct ip_port_filter* restrict filter, char* restrict dest) {
+void mimic_filter_fmt(const struct mimic_filter* restrict filter, char* restrict dest) {
   *dest = '\0';
   if (filter->direction == DIR_LOCAL)
     strcat(dest, "local=");
@@ -35,6 +50,7 @@ void ip_port_filter_fmt(const struct ip_port_filter* restrict filter, char* rest
   if (filter->protocol == TYPE_IPV6) strcat(dest, "]");
   snprintf(dest + strlen(dest), 6, ":%d", ntohs(filter->port));
 }
-#endif
 
-#endif  // __MIMIC_BPF_MAIN_H__
+#endif  // __MIMIC_BPF__
+
+#endif  // __MIMIC_BPF_FILTER_H__

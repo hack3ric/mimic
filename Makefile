@@ -13,7 +13,7 @@ out/:
 
 # -g is required in order to obtain BTF
 out/mimic.bpf.o: out/
-	$(CC) --target=bpf -g -D__MIMIC_BPF__ $(CFLAGS) -c src/bpf/main.c -o $@
+	$(CC) --target=bpf -g $(CFLAGS) -c src/bpf/main.c -o $@
 
 src/bpf/skel.h: out/mimic.bpf.o
 	bpftool gen skeleton out/mimic.bpf.o > $@
