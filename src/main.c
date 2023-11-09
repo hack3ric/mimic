@@ -14,6 +14,7 @@ static const struct argp_option options[] = {
    "Specify what packets to process. This may be specified for multiple times."},
   {"interface", 'i', "IFNAME", 0, "Interface to bind"},
   {"verbose", 'v', 0, 0, "Output more information"},
+  {"quiet", 'q', 0, 0, "Output less information"},
   {0}
 };
 
@@ -23,7 +24,7 @@ struct arguments {
   char* ifname;
 };
 
-static int verbosity = 0;
+static int verbosity = 2;
 
 static error_t parse_opt(int key, char* arg, struct argp_state* state) {
   struct arguments* args = state->input;
@@ -40,6 +41,9 @@ static error_t parse_opt(int key, char* arg, struct argp_state* state) {
       break;
     case 'v':
       if (verbosity < 3) verbosity++;
+      break;
+    case 'q':
+      if (verbosity > 0) verbosity--;
       break;
     default:
       return ARGP_ERR_UNKNOWN;
@@ -71,7 +75,7 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char* format, va
 int main(int argc, char* argv[]) {
   int result, retcode = 0;
   struct arguments args = {0};
-  try(argp_parse(&argp, argc, argv, 0, 0, &args));
+  try_msg(argp_parse(&argp, argc, argv, 0, 0, &args), "error parsing arguments");
 
   struct mimic_filter filters[args.filter_count];
   for (int i = 0; i < args.filter_count; i++) {
@@ -128,7 +132,7 @@ int main(int argc, char* argv[]) {
   libbpf_set_print(libbpf_print_fn);
 
   struct mimic_bpf* skel =
-    try_ptr_msg(mimic_bpf__open_and_load(), "failed to open and load BPF program");
+    try_ptr_msg(mimic_bpf__open_and_load(), "failed to open and load BPF program: %s", strerrno);
 
   _Bool value = 1;
   for (int i = 0; i < args.filter_count; i++) {
@@ -139,7 +143,7 @@ int main(int argc, char* argv[]) {
     if (result) {
       char fmt[FILTER_FMT_MAX_LEN];
       mimic_filter_fmt(&filters[i], fmt);
-      cleanup_with_error(-result, "failed to add filter: %s", fmt);
+      cleanup_with_error(-result, "failed to add filter `%s`: %s", fmt, strerrno);
     }
   }
 
@@ -147,30 +151,30 @@ int main(int argc, char* argv[]) {
   LIBBPF_OPTS(bpf_tc_opts, tc_opts_egress, .handle = 1, .priority = 1);
 
   result = bpf_tc_hook_create(&tc_hook_egress);
-  if (result && result != -EEXIST) cleanup_with_error(-result, "failed to create TC egress hook");
+  if (result && result != -EEXIST)
+    cleanup_with_error(-result, "failed to create TC egress hook: %s", strerrno);
 
   tc_opts_egress.prog_fd = bpf_program__fd(skel->progs.egress_handler);
   try_cleanup_msg(
-    bpf_tc_attach(&tc_hook_egress, &tc_opts_egress), "failed to attach to TC egress hook"
+    bpf_tc_attach(&tc_hook_egress, &tc_opts_egress), "failed to attach to TC egress hook: %s",
+    strerrno
   );
 
   LIBBPF_OPTS(bpf_tc_hook, tc_hook_ingress, .ifindex = ifindex, .attach_point = BPF_TC_INGRESS);
   LIBBPF_OPTS(bpf_tc_opts, tc_opts_ingress, .handle = 1, .priority = 1);
 
   result = bpf_tc_hook_create(&tc_hook_ingress);
-  if (result && result != -EEXIST) cleanup_with_error(-result, "failed to create TC ingress hook");
+  if (result && result != -EEXIST)
+    cleanup_with_error(-result, "failed to create TC ingress hook: %s", strerrno);
 
   tc_opts_ingress.prog_fd = bpf_program__fd(skel->progs.ingress_handler);
   try_cleanup_msg(
-    bpf_tc_attach(&tc_hook_ingress, &tc_opts_ingress), "failed to attach to TC ingress hook"
+    bpf_tc_attach(&tc_hook_ingress, &tc_opts_ingress), "failed to attach to TC ingress hook: %s",
+    strerrno
   );
 
-  if (signal(SIGINT, sig_int) == SIG_ERR) {
-    retcode = errno;
-    error_fmt("cannot set signal handler: %s", strerror(errno));
-    goto cleanup;
-  }
-
+  if (signal(SIGINT, sig_int) == SIG_ERR)
+    cleanup_with_error(errno, "cannot set signal handler: %s", strerrno);
   while (!exiting) sleep(1);
 
 cleanup:

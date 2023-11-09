@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 
+#define strerrno strerror(errno)
 #define error_fmt(fmt, ...) fprintf(stderr, "  \e[1;31merror:\e[0m " fmt "\n", ##__VA_ARGS__)
 
 #define ret_with_error(error, ...) \
