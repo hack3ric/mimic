@@ -1,4 +1,3 @@
-#include <argp.h>
 #include <arpa/inet.h>
 #include <net/if.h>
 #include <signal.h>
@@ -12,9 +11,12 @@
 #include "util.h"
 
 static volatile sig_atomic_t exiting = 0;
-static void sig_int(int signo) { exiting = 1; }
+static void sig_int(int signo) {
+  log_warn("SIGINT received, exiting");
+  exiting = 1;
+}
 
-int tc_hook_create_bind(
+static int tc_hook_create_bind(
   struct bpf_tc_hook* hook, struct bpf_tc_opts* opts, const struct bpf_program* prog, char* name
 ) {
   int result = bpf_tc_hook_create(hook);
@@ -24,7 +26,7 @@ int tc_hook_create_bind(
   return 0;
 }
 
-int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts) {
+static int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts) {
   opts->flags = opts->prog_fd = opts->prog_id = 0;
   return bpf_tc_detach(hook, opts);
   // bpf_tc_hook_destroy(&hook);
@@ -36,9 +38,9 @@ int main(int argc, char* argv[]) {
   try(argp_parse(&args_argp, argc, argv, 0, 0, &args), "error parsing arguments");
 
   struct mimic_filter filters[args.filter_count];
+  memset(filters, 0, args.filter_count * sizeof(*filters));
   for (int i = 0; i < args.filter_count; i++) {
     struct mimic_filter* filter = &filters[i];
-    memset(filter, 0, sizeof(*filter));
     char* filter_str = args.filters[i];
     char* delim_pos = strchr(filter_str, '=');
     if (delim_pos == NULL || delim_pos == filter_str)

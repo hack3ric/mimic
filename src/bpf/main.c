@@ -24,9 +24,9 @@ struct {
 
 // Extend socket buffer and move n bytes from front to back.
 static int mangle_data(struct __sk_buff* skb, __u16 offset) {
+  __u16 data_len = skb->len - offset;
   try_or_shot(bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0));
   __u8 buf[TCP_UDP_HEADER_DIFF] = {0};
-  __u16 data_len = skb->len - offset;
   __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
   if (copy_len > 0) {
     // HACK: make verifier happy
@@ -203,7 +203,7 @@ static int restore_data(struct __sk_buff* skb, __u16 offset) {
   if (copy_len > 0) {
     if (copy_len < 2) copy_len = 1;  // HACK: see above
     try_or_shot(bpf_skb_load_bytes(skb, skb->len - copy_len, buf, copy_len));
-    try_or_shot(bpf_skb_store_bytes(skb, offset, buf, copy_len, 0));
+    try_or_shot(bpf_skb_store_bytes(skb, offset - TCP_UDP_HEADER_DIFF, buf, copy_len, 0));
   }
   try_or_shot(bpf_skb_change_tail(skb, skb->len - TCP_UDP_HEADER_DIFF, 0));
   return TC_ACT_OK;
@@ -238,7 +238,7 @@ static int ingress_handle_ipv4(struct __sk_buff* skb) {
   try(restore_data(skb, IPV4_TCP_END));
 
   decl_or_shot(struct udphdr, udp, IPV4_END, skb);
-  udp->len = bpf_htons(skb->len - IPV4_UDP_END);
+  udp->len = bpf_htons(skb->len - IPV4_END);
   udp->check = 0;  // TODO
 
   return TC_ACT_OK;
@@ -270,7 +270,7 @@ static int ingress_handle_ipv6(struct __sk_buff* skb) {
   try(restore_data(skb, IPV6_TCP_END));
 
   decl_or_shot(struct udphdr, udp, IPV6_END, skb);
-  udp->len = bpf_htons(skb->len - IPV6_UDP_END);
+  udp->len = bpf_htons(skb->len - IPV6_END);
   // TODO: IPv6 UDP checksum is required; just reuse TCP checksum
   udp->check = 0;
 
