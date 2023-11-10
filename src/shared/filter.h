@@ -22,12 +22,12 @@ struct pkt_filter {
 
 #define _pkt_filter_init(_dir, _p, _p2, _ip, _port) \
   ({                                                \
-    struct pkt_filter result = {0};                 \
-    result.direction = (_dir);                      \
-    result.protocol = (_p);                         \
-    result.port = (_port);                          \
-    result.ip._p2 = (_ip);                          \
-    result;                                         \
+    struct pkt_filter _x = {0};                     \
+    _x.direction = (_dir);                          \
+    _x.protocol = (_p);                             \
+    _x.port = (_port);                              \
+    _x.ip._p2 = (_ip);                              \
+    _x;                                             \
   })
 
 #define pkt_filter_v4(dir, ip, port) _pkt_filter_init(dir, TYPE_IPV4, v4, ip, port)

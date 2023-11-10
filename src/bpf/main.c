@@ -53,9 +53,9 @@ static int mangle_data(struct __sk_buff* skb, __u16 offset) {
 }
 
 static void update_tcp_header(
-  struct tcphdr* tcp, __u16* tcp_csum, _Bool delta_csum, __u16 udp_len
+  struct tcphdr* tcp, __u16* tcp_csum, _Bool delta_csum, __u16 udp_len, _Bool syn, _Bool ack,
+  __u32 seq, __u32 ack_seq
 ) {
-  __u32 seq = 1;  // TODO: make sequence number more real
   if (delta_csum) {
     update_csum(tcp_csum, (seq >> 16) - udp_len);  // UDP length -> seq[0:15]
     update_csum(tcp_csum, seq & 0xffff);           // UDP checksum (0) -> seq[16:31]
@@ -64,15 +64,14 @@ static void update_tcp_header(
   }
   tcp->seq = bpf_htonl(seq);
 
-  __u32 ack_seq = 0;  // TODO: make acknowledgment number more real
   update_csum_ul(tcp_csum, ack_seq);
   tcp->ack_seq = bpf_htonl(ack_seq);
 
   tcp_flag_word(tcp) = 0;
   tcp->doff = 5;
-  tcp->window = bpf_htons(11451);
-  tcp->syn = 1;
-  // TODO: flags, tcp->window
+  tcp->window = bpf_htons(0xfff);
+  tcp->syn = syn;
+  tcp->ack = ack;
   update_csum_ul(tcp_csum, bpf_ntohl(tcp_flag_word(tcp)));
 
   __u16 urg_ptr = 0;
@@ -126,6 +125,45 @@ int egress_handler(struct __sk_buff* skb) {
     bpf_printk(_DEBUG_EGRESS_MSG "[%pI6]:%d", &ipv6_daddr, bpf_ntohs(udp->dest));
 #endif
 
+  struct conn_tuple conn_key;
+  if (ipv4)
+    conn_key = conn_tuple_v4(ipv4_saddr, udp->source, ipv4_daddr, udp->dest);
+  else if (ipv6)
+    conn_key = conn_tuple_v6(ipv6_saddr, udp->source, ipv6_daddr, udp->dest);
+
+  struct connection* conn_ptr = bpf_map_lookup_elem(&mimic_conns, &conn_key);
+  struct conn_inner conn_value = {0};
+  if (conn_ptr) {
+    __builtin_memcpy(&conn_value, &conn_ptr->inner, sizeof(conn_value));
+  } else {
+    conn_value.state = STATE_IDLE;
+    conn_value.seq = conn_value.ack_seq = conn_value.last_ack_seq = 0;
+    try_or_shot(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
+    conn_ptr = bpf_map_lookup_elem(&mimic_conns, &conn_key);
+    if (!conn_ptr) return TC_ACT_SHOT;
+  }
+
+  _Bool state_changed = 0;
+
+  _Bool syn = 0, ack = 0;
+  switch (conn_value.state) {
+    case STATE_IDLE:
+      conn_value.state = STATE_SYN_SENT;
+      state_changed = 1;
+      syn = 1;
+      break;
+    case STATE_SYN_SENT:
+      syn = 1;
+      break;
+    case STATE_SYN_RECV:
+      conn_value.state = STATE_ESTABLISHED;
+      state_changed = syn = ack = 1;
+      break;
+    case STATE_ESTABLISHED:
+      ack = 1;
+      break;
+  }
+
   // Should get a better understanding on how HW checksum offloading works.
   //
   // It seems, on my machine (libvirt's NIC), that the UDP checksum field is
@@ -178,9 +216,16 @@ int egress_handler(struct __sk_buff* skb) {
     update_csum(&tcp_csum, bpf_ntohs(tcp->dest));
   }
 
-  update_tcp_header(tcp, &tcp_csum, udp_csum, udp_len);
+  // todo: seq, ack_seq
+  update_tcp_header(tcp, &tcp_csum, udp_csum, udp_len, syn, ack, 1, 0);
   if (!udp_csum) update_csum_data(skb, &tcp_csum, ip_end + sizeof(*tcp));
   tcp->check = bpf_htons(tcp_csum);
+
+  if (state_changed) {
+    bpf_spin_lock(&conn_ptr->lock);
+    __builtin_memcpy(&conn_ptr->inner, &conn_value, sizeof(conn_value));
+    bpf_spin_unlock(&conn_ptr->lock);
+  }
 
   return TC_ACT_OK;
 }
@@ -221,7 +266,6 @@ int ingress_handler(struct __sk_buff* skb) {
   __u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? ipv6->nexthdr : 0;
   if (ip_proto != IPPROTO_TCP) return TC_ACT_OK;
   decl_or_ok(struct tcphdr, tcp, ip_end, skb);
-  if (tcp->rst) return TC_ACT_SHOT;
 
   __be32 ipv4_saddr = 0, ipv4_daddr = 0;
   struct in6_addr ipv6_saddr = {0}, ipv6_daddr = {0};
@@ -246,8 +290,14 @@ int ingress_handler(struct __sk_buff* skb) {
     bpf_printk(_DEBUG_MSG_INGRESS "[%pI6]:%d", &ipv6_saddr, bpf_ntohs(tcp->source));
 #endif
 
+  // TODO: reset connection state
+  if (tcp->rst) return TC_ACT_SHOT;
+
+  // TODO: retrieve state
+
   __u16 udp_csum = bpf_ntohs(tcp->check);
-  __u32 seq = bpf_ntohl(tcp->seq), ack_seq = bpf_ntohl(tcp->ack_seq), flag_word = bpf_ntohl(tcp_flag_word(tcp));
+  __u32 seq = bpf_ntohl(tcp->seq), ack_seq = bpf_ntohl(tcp->ack_seq),
+        flag_word = bpf_ntohl(tcp_flag_word(tcp));
   __u16 urg_ptr = bpf_ntohs(tcp->urg_ptr);
 
   if (ipv4) {
@@ -276,6 +326,8 @@ int ingress_handler(struct __sk_buff* skb) {
   update_csum_ul_neg(&udp_csum, ack_seq);
   update_csum_ul_neg(&udp_csum, flag_word);
   udp->check = bpf_htons(udp_csum);
+
+  // TODO: store state
 
   return TC_ACT_OK;
 }
