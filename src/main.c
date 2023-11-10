@@ -5,9 +5,9 @@
 #include <unistd.h>
 
 #include "args.h"
-#include "bpf/filter.h"
 #include "bpf/skel.h"
 #include "log.h"
+#include "shared/structs.h"
 #include "util.h"
 
 static volatile sig_atomic_t exiting = 0;
@@ -37,10 +37,10 @@ int main(int argc, char* argv[]) {
   struct arguments args = {0};
   try(argp_parse(&args_argp, argc, argv, 0, 0, &args), "error parsing arguments");
 
-  struct mimic_filter filters[args.filter_count];
+  struct pkt_filter filters[args.filter_count];
   memset(filters, 0, args.filter_count * sizeof(*filters));
   for (int i = 0; i < args.filter_count; i++) {
-    struct mimic_filter* filter = &filters[i];
+    struct pkt_filter* filter = &filters[i];
     char* filter_str = args.filters[i];
     char* delim_pos = strchr(filter_str, '=');
     if (delim_pos == NULL || delim_pos == filter_str)
@@ -93,12 +93,11 @@ int main(int argc, char* argv[]) {
   _Bool value = 1;
   for (int i = 0; i < args.filter_count; i++) {
     result = bpf_map__update_elem(
-      skel->maps.mimic_whitelist, &filters[i], sizeof(struct mimic_filter), &value, sizeof(_Bool),
-      BPF_ANY
+      skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter), &value, sizeof(_Bool), BPF_ANY
     );
     if (result || LOG_ALLOW_DEBUG) {
       char fmt[FILTER_FMT_MAX_LEN];
-      mimic_filter_fmt(&filters[i], fmt);
+      filter_fmt(&filters[i], fmt);
       if (result)
         cleanup(-result, "failed to add filter `%s`: %s", fmt, strerrno);
       else if (LOG_ALLOW_DEBUG)

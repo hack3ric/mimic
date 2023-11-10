@@ -10,17 +10,24 @@
 #include <linux/udp.h>
 #include <stddef.h>
 
+#include "../shared/structs.h"
 #include "checksum.h"
-#include "filter.h"
 #include "offset.h"
 #include "util.h"
 
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 8);
-  __type(key, struct mimic_filter);
+  __type(key, struct pkt_filter);
   __type(value, _Bool);
 } mimic_whitelist SEC(".maps");
+
+struct {
+  __uint(type, BPF_MAP_TYPE_HASH);
+  __uint(max_entries, 32);
+  __type(key, struct conn_tuple);
+  __type(value, struct conn_state);
+} mimic_conns SEC(".maps");
 
 // Extend socket buffer and move n bytes from front to back.
 static int mangle_data(struct __sk_buff* skb, __u16 offset) {
@@ -43,7 +50,7 @@ static int mangle_data(struct __sk_buff* skb, __u16 offset) {
 static void update_tcp_header(
   struct tcphdr* tcp, __u16* tcp_csum, _Bool delta_csum, __u16 udp_len
 ) {
-  __u32 seq = 114514;  // TODO: make sequence number more real
+  __u32 seq = 1;  // TODO: make sequence number more real
   if (delta_csum) {
     update_csum(tcp_csum, (seq >> 16) - udp_len);  // UDP length -> seq[0:15]
     update_csum(tcp_csum, seq & 0xffff);           // UDP checksum (0) -> seq[16:31]
@@ -52,12 +59,14 @@ static void update_tcp_header(
   }
   tcp->seq = bpf_htonl(seq);
 
-  __u32 ack_seq = 1919810;  // TODO: make acknowledgment number more real
+  __u32 ack_seq = 0;  // TODO: make acknowledgment number more real
   update_csum_ul(tcp_csum, ack_seq);
   tcp->ack_seq = bpf_htonl(ack_seq);
 
   tcp_flag_word(tcp) = 0;
   tcp->doff = 5;
+  tcp->window = bpf_htons(11451);
+  tcp->syn = 1;
   // TODO: flags, tcp->window
   update_csum_ul(tcp_csum, bpf_ntohl(tcp_flag_word(tcp)));
 
@@ -72,8 +81,8 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
   decl_or_shot(struct udphdr, udp, IPV4_END, skb);
 
   __be32 saddr = ipv4->saddr, daddr = ipv4->daddr;
-  struct mimic_filter local_key = mimic_filter_v4(DIR_LOCAL, saddr, udp->source);
-  struct mimic_filter remote_key = mimic_filter_v4(DIR_REMOTE, daddr, udp->dest);
+  struct pkt_filter local_key = pkt_filter_v4(DIR_LOCAL, saddr, udp->source);
+  struct pkt_filter remote_key = pkt_filter_v4(DIR_REMOTE, daddr, udp->dest);
   if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
@@ -119,6 +128,7 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
     update_csum_ul(&tcp_csum, bpf_ntohl(daddr));
     update_csum(&tcp_csum, IPPROTO_TCP);
     update_csum(&tcp_csum, udp_len + TCP_UDP_HEADER_DIFF);
+    bpf_printk("TCP len: 0x%x", udp_len + TCP_UDP_HEADER_DIFF);
 
     update_csum(&tcp_csum, bpf_ntohs(tcp->source));
     update_csum(&tcp_csum, bpf_ntohs(tcp->dest));
@@ -128,6 +138,9 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
 
   if (!udp_csum) update_csum_data(skb, &tcp_csum, IPV4_TCP_END);
   tcp->check = bpf_htons(tcp_csum);
+#ifdef __DEBUG__
+  bpf_printk("TCP checksum: 0x%x", tcp_csum);
+#endif
 
   return TC_ACT_OK;
 }
@@ -138,8 +151,8 @@ static int egress_handle_ipv6(struct __sk_buff* skb) {
   decl_or_ok(struct udphdr, udp, IPV6_END, skb);
 
   struct in6_addr saddr = ipv6->saddr, daddr = ipv6->daddr;
-  struct mimic_filter local_key = mimic_filter_v6(DIR_LOCAL, saddr, udp->source);
-  struct mimic_filter remote_key = mimic_filter_v6(DIR_REMOTE, daddr, udp->dest);
+  struct pkt_filter local_key = pkt_filter_v6(DIR_LOCAL, saddr, udp->source);
+  struct pkt_filter remote_key = pkt_filter_v6(DIR_REMOTE, daddr, udp->dest);
   if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
@@ -215,8 +228,8 @@ static int ingress_handle_ipv4(struct __sk_buff* skb) {
   decl_or_shot(struct tcphdr, tcp, IPV4_END, skb);
 
   __be32 saddr = ipv4->saddr, daddr = ipv4->daddr;
-  struct mimic_filter local_key = mimic_filter_v4(DIR_LOCAL, daddr, tcp->dest);
-  struct mimic_filter remote_key = mimic_filter_v4(DIR_REMOTE, saddr, tcp->source);
+  struct pkt_filter local_key = pkt_filter_v4(DIR_LOCAL, daddr, tcp->dest);
+  struct pkt_filter remote_key = pkt_filter_v4(DIR_REMOTE, saddr, tcp->source);
   if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
@@ -250,8 +263,8 @@ static int ingress_handle_ipv6(struct __sk_buff* skb) {
   decl_or_ok(struct tcphdr, tcp, IPV6_END, skb);
 
   struct in6_addr saddr = ipv6->saddr, daddr = ipv6->daddr;
-  struct mimic_filter local_key = mimic_filter_v6(DIR_LOCAL, daddr, tcp->dest);
-  struct mimic_filter remote_key = mimic_filter_v6(DIR_REMOTE, saddr, tcp->source);
+  struct pkt_filter local_key = pkt_filter_v6(DIR_LOCAL, daddr, tcp->dest);
+  struct pkt_filter remote_key = pkt_filter_v6(DIR_REMOTE, saddr, tcp->source);
   if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
