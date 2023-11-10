@@ -25,7 +25,6 @@ static int log_verbosity = 2;
 #define log_error(fmt, ...) \
   if (LOG_ALLOW_ERROR) fprintf(stderr, _LOG_ERROR_PREFIX fmt "\n", ##__VA_ARGS__)
 
-
 static int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list args) {
   int result1;
   if (level == LIBBPF_WARN && LOG_ALLOW_WARN)

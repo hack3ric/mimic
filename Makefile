@@ -4,8 +4,8 @@ CFLAGS ?= -O2
 DEBUG ?= 1
 
 ifneq ($(DEBUG),)
-BPF_CFLAGS += -D__DEBUG__
-CFLAGS += -g -D__DEBUG__
+BPF_CFLAGS += -D_DEBUG
+CFLAGS += -g -D_DEBUG
 endif
 
 all: build

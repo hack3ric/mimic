@@ -1,4 +1,4 @@
-#define __MIMIC_BPF__
+#define _MIMIC_BPF
 #include <linux/bpf.h>
 
 #include <bpf/bpf_endian.h>
@@ -10,8 +10,9 @@
 #include <linux/udp.h>
 #include <stddef.h>
 
-#include "../shared/structs.h"
+#include "../shared/filter.h"
 #include "checksum.h"
+#include "conn.h"
 #include "offset.h"
 #include "util.h"
 
@@ -26,7 +27,7 @@ struct {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 32);
   __type(key, struct conn_tuple);
-  __type(value, struct conn_state);
+  __type(value, struct connection);
 } mimic_conns SEC(".maps");
 
 // Extend socket buffer and move n bytes from front to back.
@@ -75,27 +76,51 @@ static void update_tcp_header(
   tcp->urg_ptr = bpf_htons(urg_ptr);
 }
 
-static int egress_handle_ipv4(struct __sk_buff* skb) {
-  decl_or_shot(struct iphdr, ipv4, ETH_END, skb);
-  if (ipv4->protocol != IPPROTO_UDP) return TC_ACT_OK;
-  decl_or_shot(struct udphdr, udp, IPV4_END, skb);
+SEC("tc")
+int egress_handler(struct __sk_buff* skb) {
+  decl_or_ok(struct ethhdr, eth, 0, skb);
+  __u16 eth_proto = bpf_ntohs(eth->h_proto);
 
-  __be32 saddr = ipv4->saddr, daddr = ipv4->daddr;
-  struct pkt_filter local_key = pkt_filter_v4(DIR_LOCAL, saddr, udp->source);
-  struct pkt_filter remote_key = pkt_filter_v4(DIR_REMOTE, daddr, udp->dest);
+  struct iphdr* ipv4 = NULL;
+  struct ipv6hdr* ipv6 = NULL;
+  __u32 ip_end;
+
+  if (eth_proto == ETH_P_IP) {
+    redecl_or_shot(struct iphdr, ipv4, ETH_END, skb);
+    ip_end = IPV4_END;
+  } else if (eth_proto == ETH_P_IPV6) {
+    redecl_or_shot(struct ipv6hdr, ipv6, ETH_END, skb);
+    ip_end = IPV6_END;
+  } else {
+    return TC_ACT_OK;
+  }
+
+  __u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? ipv6->nexthdr : 0;
+  if (ip_proto != IPPROTO_UDP) return TC_ACT_OK;
+  decl_or_ok(struct udphdr, udp, ip_end, skb);
+
+  __be32 ipv4_saddr = 0, ipv4_daddr = 0;
+  struct in6_addr ipv6_saddr = {0}, ipv6_daddr = {0};
+  struct pkt_filter local_key = {0}, remote_key = {0};
+  if (ipv4) {
+    ipv4_saddr = ipv4->saddr, ipv4_daddr = ipv4->daddr;
+    local_key = pkt_filter_v4(DIR_LOCAL, ipv4_saddr, udp->source);
+    remote_key = pkt_filter_v4(DIR_REMOTE, ipv4_daddr, udp->dest);
+  } else if (ipv6) {
+    ipv6_saddr = ipv6->saddr, ipv6_daddr = ipv6->daddr;
+    local_key = pkt_filter_v6(DIR_LOCAL, ipv6_saddr, udp->source);
+    remote_key = pkt_filter_v6(DIR_REMOTE, ipv6_daddr, udp->dest);
+  }
   if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
     return TC_ACT_OK;
 
-#ifdef __DEBUG__
-  bpf_printk("egress: matched UDP packet to %pI4:%d", &ipv4->daddr, bpf_ntohs(udp->dest));
+#ifdef _DEBUG
+#define _DEBUG_EGRESS_MSG "egress: matched UDP packet to "
+  if (ipv4)
+    bpf_printk(_DEBUG_EGRESS_MSG "%pI4:%d", &ipv4_daddr, bpf_ntohs(udp->dest));
+  else if (ipv6)
+    bpf_printk(_DEBUG_EGRESS_MSG "[%pI6]:%d", &ipv6_daddr, bpf_ntohs(udp->dest));
 #endif
-
-  __be16 old_len = ipv4->tot_len;
-  __be16 new_len = bpf_htons(bpf_ntohs(old_len) + TCP_UDP_HEADER_DIFF);
-  ipv4->tot_len = new_len;
-  ipv4->protocol = IPPROTO_TCP;
-
-  __u16 udp_len = bpf_ntohs(udp->len);
 
   // Should get a better understanding on how HW checksum offloading works.
   //
@@ -111,100 +136,48 @@ static int egress_handle_ipv4(struct __sk_buff* skb) {
   __u16 udp_csum = 0;
   __u16 tcp_csum = udp_csum ? udp_csum : 0xffff;
 
-  try_or_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, old_len, new_len, 2));
-  try_or_shot(
-    bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, bpf_htons(IPPROTO_UDP), bpf_htons(IPPROTO_TCP), 2)
-  );
-
-  try(mangle_data(skb, IPV4_UDP_END));
-
-  decl_or_shot(struct tcphdr, tcp, IPV4_END, skb);
-  if (udp_csum) {
-    update_csum(&tcp_csum,
-                IPPROTO_TCP - IPPROTO_UDP);       // proto in pseudo-header
-    update_csum(&tcp_csum, TCP_UDP_HEADER_DIFF);  // length in pseudo-header
-  } else {
-    update_csum_ul(&tcp_csum, bpf_ntohl(saddr));
-    update_csum_ul(&tcp_csum, bpf_ntohl(daddr));
-    update_csum(&tcp_csum, IPPROTO_TCP);
-    update_csum(&tcp_csum, udp_len + TCP_UDP_HEADER_DIFF);
-    bpf_printk("TCP len: 0x%x", udp_len + TCP_UDP_HEADER_DIFF);
-
-    update_csum(&tcp_csum, bpf_ntohs(tcp->source));
-    update_csum(&tcp_csum, bpf_ntohs(tcp->dest));
-  }
-
-  update_tcp_header(tcp, &tcp_csum, udp_csum, udp_len);
-
-  if (!udp_csum) update_csum_data(skb, &tcp_csum, IPV4_TCP_END);
-  tcp->check = bpf_htons(tcp_csum);
-#ifdef __DEBUG__
-  bpf_printk("TCP checksum: 0x%x", tcp_csum);
-#endif
-
-  return TC_ACT_OK;
-}
-
-static int egress_handle_ipv6(struct __sk_buff* skb) {
-  decl_or_shot(struct ipv6hdr, ipv6, ETH_END, skb);
-  if (ipv6->nexthdr != IPPROTO_UDP) return TC_ACT_OK;
-  decl_or_ok(struct udphdr, udp, IPV6_END, skb);
-
-  struct in6_addr saddr = ipv6->saddr, daddr = ipv6->daddr;
-  struct pkt_filter local_key = pkt_filter_v6(DIR_LOCAL, saddr, udp->source);
-  struct pkt_filter remote_key = pkt_filter_v6(DIR_REMOTE, daddr, udp->dest);
-  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
-    return TC_ACT_OK;
-
-#ifdef __DEBUG__
-  bpf_printk("egress: matched UDP packet to [%pI6]:%d", &ipv6->daddr, bpf_ntohs(udp->dest));
-#endif
-
-  ipv6->payload_len = bpf_htons(bpf_ntohs(ipv6->payload_len) + TCP_UDP_HEADER_DIFF);
-  ipv6->nexthdr = IPPROTO_TCP;
   __u16 udp_len = bpf_ntohs(udp->len);
 
-  // __u16 udp_csum = bpf_ntohs(udp->check);
-  __u16 udp_csum = 0;
-  __u16 tcp_csum = udp_csum ? udp_csum : 0xffff;
+  if (ipv4) {
+    __be16 old_len = ipv4->tot_len;
+    __be16 new_len = bpf_htons(bpf_ntohs(old_len) + TCP_UDP_HEADER_DIFF);
+    ipv4->tot_len = new_len;
+    ipv4->protocol = IPPROTO_TCP;
 
-  try(mangle_data(skb, IPV6_UDP_END));
+    try_or_shot(bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, old_len, new_len, 2));
+    try_or_shot(
+      bpf_l3_csum_replace(skb, IPV4_CSUM_OFF, bpf_htons(IPPROTO_UDP), bpf_htons(IPPROTO_TCP), 2)
+    );
+  } else if (ipv6) {
+    ipv6->payload_len = bpf_htons(bpf_ntohs(ipv6->payload_len) + TCP_UDP_HEADER_DIFF);
+    ipv6->nexthdr = IPPROTO_TCP;
+  }
 
-  decl_or_shot(struct tcphdr, tcp, IPV6_END, skb);
+  try(mangle_data(skb, ip_end + sizeof(*udp)));
+  decl_or_shot(struct tcphdr, tcp, ip_end, skb);
   if (udp_csum) {
-    update_csum(&tcp_csum,
-                IPPROTO_TCP - IPPROTO_UDP);       // proto in pseudo-header
-    update_csum(&tcp_csum, TCP_UDP_HEADER_DIFF);  // length in pseudo-header
+    update_csum(&tcp_csum, IPPROTO_TCP - IPPROTO_UDP);
+    update_csum(&tcp_csum, TCP_UDP_HEADER_DIFF);
   } else {
-    for (int i = 0; i < 8; i++) {
-      update_csum(&tcp_csum, saddr.s6_addr16[i]);
-      update_csum(&tcp_csum, daddr.s6_addr16[i]);
+    if (ipv4) {
+      update_csum_ul(&tcp_csum, bpf_ntohl(ipv4_saddr));
+      update_csum_ul(&tcp_csum, bpf_ntohl(ipv4_daddr));
+    } else if (ipv6) {
+      for (int i = 0; i < 8; i++) {
+        update_csum(&tcp_csum, ipv6_saddr.s6_addr16[i]);
+        update_csum(&tcp_csum, ipv6_saddr.s6_addr16[i]);
+      }
     }
     update_csum(&tcp_csum, IPPROTO_TCP);
     update_csum(&tcp_csum, udp_len + TCP_UDP_HEADER_DIFF);
-
     update_csum(&tcp_csum, bpf_ntohs(tcp->source));
     update_csum(&tcp_csum, bpf_ntohs(tcp->dest));
   }
 
   update_tcp_header(tcp, &tcp_csum, udp_csum, udp_len);
-  if (!udp_csum) update_csum_data(skb, &tcp_csum, IPV6_TCP_END);
+  if (!udp_csum) update_csum_data(skb, &tcp_csum, ip_end + sizeof(*tcp));
   tcp->check = bpf_htons(tcp_csum);
 
-  return TC_ACT_OK;
-}
-
-SEC("tc")
-int egress_handler(struct __sk_buff* skb) {
-  decl_or_ok(struct ethhdr, eth, 0, skb);
-  switch (bpf_ntohs(eth->h_proto)) {
-    case ETH_P_IP:
-      try(egress_handle_ipv4(skb));
-      break;
-    case ETH_P_IPV6:
-      try(egress_handle_ipv6(skb));
-      break;
-  }
   return TC_ACT_OK;
 }
 
@@ -225,7 +198,7 @@ static int restore_data(struct __sk_buff* skb, __u16 offset) {
 static int ingress_handle_ipv4(struct __sk_buff* skb) {
   decl_or_shot(struct iphdr, ipv4, ETH_END, skb);
   if (ipv4->protocol != IPPROTO_TCP) return TC_ACT_OK;
-  decl_or_shot(struct tcphdr, tcp, IPV4_END, skb);
+  decl_or_ok(struct tcphdr, tcp, IPV4_END, skb);
 
   __be32 saddr = ipv4->saddr, daddr = ipv4->daddr;
   struct pkt_filter local_key = pkt_filter_v4(DIR_LOCAL, daddr, tcp->dest);

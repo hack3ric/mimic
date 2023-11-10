@@ -4,8 +4,8 @@
 #include <argp.h>
 #include <stdlib.h>
 
-#include "util.h"
 #include "log.h"
+#include "util.h"
 
 static const struct argp_option _args_options[] = {
   {"filter", 'f', "FILTER", 0,

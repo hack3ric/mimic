@@ -7,7 +7,7 @@
 #include "args.h"
 #include "bpf/skel.h"
 #include "log.h"
-#include "shared/structs.h"
+#include "shared/filter.h"
 #include "util.h"
 
 static volatile sig_atomic_t exiting = 0;
@@ -93,7 +93,8 @@ int main(int argc, char* argv[]) {
   _Bool value = 1;
   for (int i = 0; i < args.filter_count; i++) {
     result = bpf_map__update_elem(
-      skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter), &value, sizeof(_Bool), BPF_ANY
+      skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter), &value, sizeof(_Bool),
+      BPF_ANY
     );
     if (result || LOG_ALLOW_DEBUG) {
       char fmt[FILTER_FMT_MAX_LEN];
