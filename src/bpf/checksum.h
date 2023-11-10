@@ -17,8 +17,11 @@ static void update_csum(__u16* csum, __s32 delta) {
 }
 
 static inline void update_csum_ul(__u16* csum, __u32 new) {
-  update_csum(csum, new >> 16);
-  update_csum(csum, new & 0xffff);
+  update_csum(csum, (new >> 16) + (new & 0xffff));
+}
+
+static inline void update_csum_ul_neg(__u16* csum, __u32 new) {
+  update_csum(csum, -(new >> 16) - (new & 0xffff));
 }
 
 static void update_csum_data(struct __sk_buff* skb, __u16* csum, __u32 off) {

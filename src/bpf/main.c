@@ -246,6 +246,10 @@ int ingress_handler(struct __sk_buff* skb) {
     bpf_printk(_DEBUG_MSG_INGRESS "[%pI6]:%d", &ipv6_saddr, bpf_ntohs(tcp->source));
 #endif
 
+  __u16 udp_csum = bpf_ntohs(tcp->check);
+  __u32 seq = bpf_ntohl(tcp->seq), ack_seq = bpf_ntohl(tcp->ack_seq), flag_word = bpf_ntohl(tcp_flag_word(tcp));
+  __u16 urg_ptr = bpf_ntohs(tcp->urg_ptr);
+
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
     __be16 new_len = bpf_htons(bpf_ntohs(old_len) - TCP_UDP_HEADER_DIFF);
@@ -263,9 +267,15 @@ int ingress_handler(struct __sk_buff* skb) {
 
   try(restore_data(skb, ip_end + sizeof(*tcp)));
   decl_or_shot(struct udphdr, udp, ip_end, skb);
-  udp->len = bpf_htons(skb->len - ip_end);
-  // TODO: IPv6 UDP checksum is required; just reuse TCP checksum
-  udp->check = 0;
+
+  __u16 udp_len = skb->len - ip_end;
+  udp->len = bpf_htons(udp_len);
+
+  update_csum(&udp_csum, (__s32)udp_len - (seq >> 16));
+  update_csum(&udp_csum, -(seq & 0xffff) - urg_ptr);
+  update_csum_ul_neg(&udp_csum, ack_seq);
+  update_csum_ul_neg(&udp_csum, flag_word);
+  udp->check = bpf_htons(udp_csum);
 
   return TC_ACT_OK;
 }
