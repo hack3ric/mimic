@@ -97,7 +97,7 @@ int main(int argc, char* argv[]) {
     );
     if (result || LOG_ALLOW_DEBUG) {
       char fmt[FILTER_FMT_MAX_LEN];
-      filter_fmt(&filters[i], fmt);
+      pkt_filter_fmt(&filters[i], fmt);
       if (result)
         cleanup(-result, "failed to add filter `%s`: %s", fmt, strerrno);
       else if (LOG_ALLOW_DEBUG)

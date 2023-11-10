@@ -52,7 +52,7 @@ struct pkt_filter {
 #define FILTER_FMT_MAX_LEN (7 + INET6_ADDRSTRLEN + 6)
 
 // `dest` must be at least `FILTER_FMT_MAX_LEN` bytes long.
-void filter_fmt(const struct pkt_filter* restrict filter, char* restrict dest) {
+void pkt_filter_fmt(const struct pkt_filter* restrict filter, char* restrict dest) {
   *dest = '\0';
   if (filter->direction == DIR_LOCAL)
     strcat(dest, "local=");
