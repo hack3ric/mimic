@@ -53,18 +53,12 @@ static int mangle_data(struct __sk_buff* skb, __u16 offset) {
 }
 
 static __always_inline void update_tcp_header(
-  struct tcphdr* tcp, __u16* tcp_csum, _Bool delta_csum, __u16 udp_len, _Bool syn, _Bool ack,
-  __u32 seq, __u32 ack_seq
+  struct tcphdr* tcp, __u32* csum, __u16 udp_len, _Bool syn, _Bool ack, __u32 seq, __u32 ack_seq
 ) {
-  if (delta_csum) {
-    update_csum(tcp_csum, (seq >> 16) - udp_len);  // UDP length -> seq[0:15]
-    update_csum(tcp_csum, seq & 0xffff);           // UDP checksum (0) -> seq[16:31]
-  } else {
-    update_csum_ul(tcp_csum, seq);
-  }
+  update_csum_ul(csum, seq);
   tcp->seq = bpf_htonl(seq);
 
-  update_csum_ul(tcp_csum, ack_seq);
+  update_csum(csum, ack_seq);
   tcp->ack_seq = bpf_htonl(ack_seq);
 
   tcp_flag_word(tcp) = 0;
@@ -72,10 +66,10 @@ static __always_inline void update_tcp_header(
   tcp->window = bpf_htons(0xfff);
   tcp->syn = syn;
   tcp->ack = ack;
-  update_csum_ul(tcp_csum, bpf_ntohl(tcp_flag_word(tcp)));
+  update_csum(csum, bpf_ntohl(tcp_flag_word(tcp)));
 
   __u16 urg_ptr = 0;
-  update_csum(tcp_csum, urg_ptr);
+  update_csum(csum, urg_ptr);
   tcp->urg_ptr = bpf_htons(urg_ptr);
 }
 
@@ -174,20 +168,6 @@ int egress_handler(struct __sk_buff* skb) {
   conn->seq += data_len;
   bpf_spin_unlock(&conn->lock);
 
-  // Should get a better understanding on how HW checksum offloading works.
-  //
-  // It seems, on my machine (libvirt's NIC), that the UDP checksum field is
-  // just RFC 1071'd IPv4 pseudo-header, without the one's complement step?
-  //
-  // We should be able to utilize it, if there are similar patterns across
-  // different NICs; but for now, we just calculate the whole checksum from
-  // scratch. All the `udp_csum == true` path below is based on that the UDP
-  // checksum is complete and valid.
-  //
-  // __u16 udp_csum = bpf_ntohs(udp->check);
-  __u16 udp_csum = 0;
-  __u16 tcp_csum = udp_csum ? udp_csum : 0xffff;
-
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
     __be16 new_len = bpf_htons(bpf_ntohs(old_len) + TCP_UDP_HEADER_DIFF);
@@ -205,32 +185,25 @@ int egress_handler(struct __sk_buff* skb) {
 
   try(mangle_data(skb, ip_end + sizeof(*udp)));
   decl_or_shot(struct tcphdr, tcp, ip_end, skb);
-  if (udp_csum) {
-    update_csum(&tcp_csum, IPPROTO_TCP - IPPROTO_UDP);
-    update_csum(&tcp_csum, TCP_UDP_HEADER_DIFF);
-  } else {
-    if (ipv4) {
-      update_csum_ul(&tcp_csum, bpf_ntohl(ipv4_saddr));
-      update_csum_ul(&tcp_csum, bpf_ntohl(ipv4_daddr));
-    } else if (ipv6) {
-      for (int i = 0; i < 8; i++) {
-        update_csum(&tcp_csum, bpf_ntohs(ipv6_saddr.s6_addr16[i]));
-        update_csum(&tcp_csum, bpf_ntohs(ipv6_daddr.s6_addr16[i]));
-      }
-    }
-    update_csum(&tcp_csum, IPPROTO_TCP);
-    update_csum(&tcp_csum, udp_len + TCP_UDP_HEADER_DIFF);
-    update_csum(&tcp_csum, bpf_ntohs(tcp->source));
-    update_csum(&tcp_csum, bpf_ntohs(tcp->dest));
-  }
 
-  // todo: seq, ack_seq
-  update_tcp_header(tcp, &tcp_csum, udp_csum, udp_len, syn, ack, seq, ack_seq);
-  if (!udp_csum) update_csum_data(skb, &tcp_csum, ip_end + sizeof(*tcp));
-#ifdef _DEBUG
-  bpf_printk("TCP Checksum: 0x%04x", tcp_csum);
-#endif
-  tcp->check = bpf_htons(tcp_csum);
+  __u32 csum = 0;
+  if (ipv4) {
+    update_csum_ul(&csum, bpf_ntohl(ipv4_saddr));
+    update_csum_ul(&csum, bpf_ntohl(ipv4_daddr));
+  } else if (ipv6) {
+    for (int i = 0; i < 8; i++) {
+      update_csum(&csum, bpf_ntohs(ipv6_saddr.s6_addr16[i]));
+      update_csum(&csum, bpf_ntohs(ipv6_daddr.s6_addr16[i]));
+    }
+  }
+  update_csum(&csum, IPPROTO_TCP);
+  update_csum(&csum, udp_len + TCP_UDP_HEADER_DIFF);
+  update_csum(&csum, bpf_ntohs(tcp->source));
+  update_csum(&csum, bpf_ntohs(tcp->dest));
+
+  update_tcp_header(tcp, &csum, udp_len, syn, ack, seq, ack_seq);
+  update_csum_data(skb, &csum, ip_end + sizeof(*tcp));
+  tcp->check = bpf_htons(csum_fold(csum));
 
   return TC_ACT_OK;
 }
@@ -336,7 +309,6 @@ int ingress_handler2(struct xdp_md* xdp) {
         conn->state = STATE_ESTABLISHED;
       } else if (tcp->syn && !tcp->ack) {
         // Decide which side is going to transition into STATE_SYN_RECV
-        // In the worst case scenario,
         // if (local <= remote) state = STATE_SYN_RECV
         int det;
         if (ipv4) {
@@ -356,7 +328,6 @@ int ingress_handler2(struct xdp_md* xdp) {
       }
       break;
     case STATE_SYN_RECV:
-      // TODO: It will probably change seq and ack_seq if received SYN again?
     case STATE_ESTABLISHED:
       break;
   }
@@ -374,9 +345,8 @@ int ingress_handler2(struct xdp_md* xdp) {
     ipv4->protocol = IPPROTO_UDP;
 
     __u32 ipv4_csum = ~bpf_ntohs(ipv4->check);
-    ipv4_csum -= TCP_UDP_HEADER_DIFF;
-    ipv4_csum -= IPPROTO_TCP;
-    ipv4_csum += IPPROTO_UDP;
+    update_csum(&ipv4_csum, -(__s32)TCP_UDP_HEADER_DIFF);
+    update_csum(&ipv4_csum, IPPROTO_UDP - IPPROTO_TCP);
     ipv4->check = bpf_htons(csum_fold(ipv4_csum));
   } else if (ipv6) {
     ipv6->payload_len = bpf_htons(bpf_ntohs(ipv6->payload_len) - TCP_UDP_HEADER_DIFF);
@@ -389,24 +359,24 @@ int ingress_handler2(struct xdp_md* xdp) {
   __u16 udp_len = bpf_xdp_get_buff_len(xdp) - ip_end;
   udp->len = bpf_htons(udp_len);
 
-  __u16 udp_csum = 0;
+  __u32 csum = 0;
   if (ipv4) {
-    update_csum_ul(&udp_csum, bpf_ntohl(ipv4_saddr));
-    update_csum_ul(&udp_csum, bpf_ntohl(ipv4_daddr));
+    update_csum_ul(&csum, bpf_ntohl(ipv4_saddr));
+    update_csum_ul(&csum, bpf_ntohl(ipv4_daddr));
   } else if (ipv6) {
     for (int i = 0; i < 8; i++) {
-      update_csum(&udp_csum, bpf_ntohs(ipv6_saddr.s6_addr16[i]));
-      update_csum(&udp_csum, bpf_ntohs(ipv6_daddr.s6_addr16[i]));
+      update_csum(&csum, bpf_ntohs(ipv6_saddr.s6_addr16[i]));
+      update_csum(&csum, bpf_ntohs(ipv6_daddr.s6_addr16[i]));
     }
   }
-  update_csum(&udp_csum, IPPROTO_UDP);
-  update_csum(&udp_csum, udp_len);
-  update_csum(&udp_csum, bpf_ntohs(udp->source));
-  update_csum(&udp_csum, bpf_ntohs(udp->dest));
-  update_csum(&udp_csum, udp_len);
+  update_csum(&csum, IPPROTO_UDP);
+  update_csum(&csum, udp_len);
+  update_csum(&csum, bpf_ntohs(udp->source));
+  update_csum(&csum, bpf_ntohs(udp->dest));
+  update_csum(&csum, udp_len);
 
-  update_csum_data(xdp, &udp_csum, ip_end + sizeof(*udp));
-  udp->check = bpf_htons(udp_csum);
+  update_csum_data(xdp, &csum, ip_end + sizeof(*udp));
+  udp->check = bpf_htons(csum_fold(csum));
 
   return XDP_PASS;
 }
