@@ -227,28 +227,31 @@ int egress_handler(struct __sk_buff* skb) {
   // todo: seq, ack_seq
   update_tcp_header(tcp, &tcp_csum, udp_csum, udp_len, syn, ack, seq, ack_seq);
   if (!udp_csum) update_csum_data(skb, &tcp_csum, ip_end + sizeof(*tcp));
+#ifdef _DEBUG
+  bpf_printk("TCP Checksum: 0x%04x", tcp_csum);
+#endif
   tcp->check = bpf_htons(tcp_csum);
 
   return TC_ACT_OK;
 }
 
 // Move back n bytes, shrink socket buffer and restore data.
-static int restore_data(struct __sk_buff* skb, __u16 offset) {
+static int restore_data(struct xdp_md* xdp, __u16 offset) {\
   __u8 buf[TCP_UDP_HEADER_DIFF] = {};
-  __u16 data_len = skb->len - offset;
+  __u16 data_len = bpf_xdp_get_buff_len(xdp) - offset;
   __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
   if (copy_len > 0) {
     if (copy_len < 2) copy_len = 1;  // HACK: see above
-    try_or_shot(bpf_skb_load_bytes(skb, skb->len - copy_len, buf, copy_len));
-    try_or_shot(bpf_skb_store_bytes(skb, offset - TCP_UDP_HEADER_DIFF, buf, copy_len, 0));
+    try_or_drop(bpf_xdp_load_bytes(xdp, bpf_xdp_get_buff_len(xdp) - copy_len, buf, copy_len));
+    try_or_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf, copy_len));
   }
-  try_or_shot(bpf_skb_change_tail(skb, skb->len - TCP_UDP_HEADER_DIFF, 0));
-  return TC_ACT_OK;
+  try_or_drop(bpf_xdp_adjust_tail(xdp, -(int)TCP_UDP_HEADER_DIFF));
+  return XDP_PASS;
 }
 
-SEC("tc")
-int ingress_handler(struct __sk_buff* skb) {
-  decl_or_ok(struct ethhdr, eth, 0, skb);
+SEC("xdp")
+int ingress_handler2(struct xdp_md* xdp) {
+  decl_or_pass(struct ethhdr, eth, 0, xdp);
   __u16 eth_proto = bpf_ntohs(eth->h_proto);
 
   struct iphdr* ipv4 = NULL;
@@ -256,18 +259,18 @@ int ingress_handler(struct __sk_buff* skb) {
   __u32 ip_end;
 
   if (eth_proto == ETH_P_IP) {
-    redecl_or_shot(struct iphdr, ipv4, ETH_HLEN, skb);
+    redecl_or_drop(struct iphdr, ipv4, ETH_HLEN, xdp);
     ip_end = ETH_HLEN + sizeof(*ipv4);
   } else if (eth_proto == ETH_P_IPV6) {
-    redecl_or_shot(struct ipv6hdr, ipv6, ETH_HLEN, skb);
+    redecl_or_drop(struct ipv6hdr, ipv6, ETH_HLEN, xdp);
     ip_end = ETH_HLEN + sizeof(*ipv6);
   } else {
-    return TC_ACT_OK;
+    return XDP_PASS;
   }
 
   __u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? ipv6->nexthdr : 0;
-  if (ip_proto != IPPROTO_TCP) return TC_ACT_OK;
-  decl_or_ok(struct tcphdr, tcp, ip_end, skb);
+  if (ip_proto != IPPROTO_TCP) return XDP_PASS;
+  decl_or_pass(struct tcphdr, tcp, ip_end, xdp);
 
   __be32 ipv4_saddr = 0, ipv4_daddr = 0;
   struct in6_addr ipv6_saddr = {}, ipv6_daddr = {};
@@ -282,7 +285,7 @@ int ingress_handler(struct __sk_buff* skb) {
     remote_key = pkt_filter_v6(DIR_REMOTE, ipv6_saddr, tcp->source);
   }
   if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
-    return TC_ACT_OK;
+    return XDP_PASS;
 
 #ifdef _DEBUG
 #define _DEBUG_MSG_INGRESS "ingress: matched (fake) TCP packet from "
@@ -298,16 +301,16 @@ int ingress_handler(struct __sk_buff* skb) {
   else if (ipv6)
     conn_key = conn_tuple_v6(ipv6_daddr, tcp->dest, ipv6_saddr, tcp->source);
   else
-    return TC_ACT_SHOT;
+    return XDP_DROP;
 
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
   if (!conn) {
     struct connection conn_value = {};
     conn_value.state = STATE_IDLE;
     conn_value.seq = conn_value.ack_seq = conn_value.last_ack_seq = 0;
-    try_or_shot(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
+    try_or_drop(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
     conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
-    if (!conn) return TC_ACT_SHOT;
+    if (!conn) return XDP_DROP;
   }
 
   if (tcp->rst) {
@@ -315,9 +318,10 @@ int ingress_handler(struct __sk_buff* skb) {
     conn->state = STATE_IDLE;
     conn->seq = conn->ack_seq = conn->last_ack_seq = 0;
     bpf_spin_unlock(&conn->lock);
-    return TC_ACT_SHOT;
+    return XDP_DROP;
   }
 
+  __u64 buf_len = bpf_xdp_get_buff_len(xdp);
   bpf_spin_lock(&conn->lock);
   switch (conn->state) {
     case STATE_IDLE:
@@ -347,7 +351,7 @@ int ingress_handler(struct __sk_buff* skb) {
         if (det <= 0) {
           conn->state = STATE_SYN_RECV;
           conn->seq = 0;
-          conn->ack_seq = bpf_htonl(tcp->seq);
+          conn->ack_seq = bpf_ntohl(tcp->seq);
         }
       }
       break;
@@ -356,11 +360,13 @@ int ingress_handler(struct __sk_buff* skb) {
     case STATE_ESTABLISHED:
       break;
   }
-  // conn.ack_seq += data_len
-  conn->ack_seq += skb->len - ip_end - sizeof(*tcp);
+  conn->ack_seq += buf_len - ip_end - sizeof(*tcp);
   bpf_spin_unlock(&conn->lock);
 
   __u16 udp_csum = bpf_ntohs(tcp->check);
+#ifdef _DEBUG
+  bpf_printk("Original TCP checksum: 0x%04x", udp_csum);
+#endif
   __u32 seq = bpf_ntohl(tcp->seq), ack_seq = bpf_ntohl(tcp->ack_seq);
   __u32 flag_word = bpf_ntohl(tcp_flag_word(tcp));
   __u16 urg_ptr = bpf_ntohs(tcp->urg_ptr);
@@ -370,29 +376,36 @@ int ingress_handler(struct __sk_buff* skb) {
     __be16 new_len = bpf_htons(bpf_ntohs(old_len) - TCP_UDP_HEADER_DIFF);
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_UDP;
+    // udp_len = bpf_ntohs(old_len) - TCP_UDP_HEADER_DIFF -sizeof(*ipv4);
 
-    try_or_shot(bpf_l3_csum_replace(skb, ETH_HLEN + IPV4_CSUM_OFF, old_len, new_len, 2));
-    try_or_shot(bpf_l3_csum_replace(
-      skb, ETH_HLEN + IPV4_CSUM_OFF, bpf_htons(IPPROTO_TCP), bpf_htons(IPPROTO_UDP), 2
-    ));
+    __u32 ipv4_csum = ~bpf_ntohs(ipv4->check);
+    ipv4_csum -= bpf_ntohs(old_len);
+    ipv4_csum += bpf_ntohs(new_len);
+    ipv4_csum -= IPPROTO_TCP;
+    ipv4_csum += IPPROTO_UDP;
+    ipv4->check = bpf_htons(csum_fold(ipv4_csum));
   } else if (ipv6) {
     ipv6->payload_len = bpf_htons(bpf_ntohs(ipv6->payload_len) - TCP_UDP_HEADER_DIFF);
     ipv6->nexthdr = IPPROTO_UDP;
   }
 
-  try(restore_data(skb, ip_end + sizeof(*tcp)));
-  decl_or_shot(struct udphdr, udp, ip_end, skb);
+  try_xdp(restore_data(xdp, ip_end + sizeof(*tcp)));
+  decl_or_drop(struct udphdr, udp, ip_end, xdp);
 
-  __u16 udp_len = skb->len - ip_end;
+  __u16 udp_len = bpf_xdp_get_buff_len(xdp) - ip_end;
   udp->len = bpf_htons(udp_len);
 
-  update_csum(&udp_csum, (__s32)udp_len - (seq >> 16));
-  update_csum(&udp_csum, -(seq & 0xffff) - urg_ptr);
-  update_csum_ul_neg(&udp_csum, ack_seq);
-  update_csum_ul_neg(&udp_csum, flag_word);
-  udp->check = bpf_htons(udp_csum);
+  // update_csum(&udp_csum, (__s32)udp_len - (seq >> 16));
+  // update_csum(&udp_csum, -(seq & 0xffff) - urg_ptr);
+  // update_csum_ul_neg(&udp_csum, ack_seq);
+  // update_csum_ul_neg(&udp_csum, flag_word);
+  // update_csum(&udp_csum, IPPROTO_UDP - IPPROTO_TCP);
+  // update_csum(&udp_csum, -(int)TCP_UDP_HEADER_DIFF);
+  // udp->check = bpf_htons(udp_csum);
+  // TODO: Fix ingress checksum
+  udp->check = 0;
 
-  return TC_ACT_OK;
+  return XDP_PASS;
 }
 
 char _license[] SEC("license") = "GPL";

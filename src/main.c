@@ -111,10 +111,7 @@ int main(int argc, char* argv[]) {
   struct bpf_program* egress = skel->progs.egress_handler;
   try_or_cleanup(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, egress, "egress"));
 
-  LIBBPF_OPTS(bpf_tc_hook, tc_hook_ingress, .ifindex = ifindex, .attach_point = BPF_TC_INGRESS);
-  LIBBPF_OPTS(bpf_tc_opts, tc_opts_ingress, .handle = 1, .priority = 1);
-  struct bpf_program* ingress = skel->progs.ingress_handler;
-  try_or_cleanup(tc_hook_create_bind(&tc_hook_ingress, &tc_opts_ingress, ingress, "ingress"));
+  bpf_program__attach_xdp(skel->progs.ingress_handler2, ifindex);
 
   if (signal(SIGINT, sig_int) == SIG_ERR) cleanup(errno, "cannot set signal handler: %s", strerrno);
   while (!exiting) sleep(1);
@@ -122,7 +119,6 @@ int main(int argc, char* argv[]) {
 cleanup:
   log_info("cleaning up");
   tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
-  tc_hook_cleanup(&tc_hook_ingress, &tc_opts_ingress);
   mimic_bpf__destroy(skel);
   return retcode;
 }
