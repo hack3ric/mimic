@@ -1,6 +1,6 @@
 # Mimic
 
-Mimic is a UDP to TCP obfuscator designed to bypass UDP QoS and port blocking. Based on eBPF, it directly mangles data inside Traffic Control (TC) subsystem in the kernel space, achieving remarkably high performance compared to other projects, such as [udp2raw](https://github.com/wangyu-/udp2raw) or [Phantun](https://github.com/dndx/phantun).
+Mimic is a UDP to TCP obfuscator designed to bypass UDP QoS and port blocking. Based on eBPF, it directly mangles data inside Traffic Control (TC) subsystem in the kernel space and restores data using XDP, achieving remarkably high performance compared to other projects, such as [udp2raw](https://github.com/wangyu-/udp2raw) or [Phantun](https://github.com/dndx/phantun).
 
 ## Usage
 
@@ -13,7 +13,7 @@ Deploying Mimic does not require changing much of your existing configuration, a
 
 A filter is an entry of whitelist that looks like a key-value pair: `{origin}={ip}:{port}`. Origin is either `local` or `remote`, indicating which side's IP and port is matched. For example, `remote=192.0.2.1:6000` matches the server's IP (192.0.2.1) and its listening port (6000).
 
-For IPv6, the IP field needs to be surrounded by square brackets: `local=[fc00::cafe]:7000`. This means packets originated from or sending to the local machine using that IP and port is processed. Multiple parallel filters can be specified by passing multiple `-f` options.
+For IPv6, the IP field needs to be surrounded by square brackets: `local=[2001:db8::cafe]:7000`. This means packets originated from or sending to the local machine using that IP and port is processed. Multiple parallel filters can be specified by passing multiple `-f` options.
 
 The general usage of Mimic CLI looks like:
 
@@ -55,6 +55,26 @@ To build without debug information:
 
 ```console
 $ make DEBUG=
+```
+
+## Details
+
+Mimic extends every UDP packet with 12 bytes. First 12 bytes of the data is moved to the back, and the UDP header is transformed into TCP header in place.
+
+When used with a tunnel protocol, make sure to lower the MTU bytes by 12. For example, a WireGuard tunnel over IPv6 and Ethernet would need to change its MTU from 1420 to 1408.
+
+The following shows how Mimic works visually:
+
+```
++---------------+-------------------------+---------+----------------------------------------+
+| Ethernet (14) |    IPv4 Header (20)     | UDP (8) |               Data  ...                |
++---------------+-------------------------+---------+----------------------------------------+
+                                                    |<------------->|
+                                                     Part to be moved                             ...here
+                                                                                             |<-------------->|
++---------------+-------------------------+-------------------------+------------------------+----------------+
+| Ethernet (14) |    IPv4 Header (20)     |     TCP Header (20)     |   Remaining Data  ...  |  Fragment (12) |
++---------------+-------------------------+-------------------------+------------------------+----------------+
 ```
 
 ## Benchmark
