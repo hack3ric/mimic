@@ -39,4 +39,19 @@ end:
   *csum = csum_fold(new_csum);
 }
 
+static void update_csum_data_xdp(struct xdp_md* xdp, __u16* csum, __u32 off) {
+  __u16* data = (void*)(size_t)xdp->data + off;
+  __u32 new_csum = (__u16) ~*csum;
+  int i = 0;
+  for (; i < ETH_DATA_LEN / sizeof(__u16); i++) {
+    if ((size_t)(data + i + 1) > (size_t)xdp->data_end) break;
+    new_csum += bpf_ntohs(data[i]);
+  }
+  __u8* remainder = (__u8*)data + i * sizeof(__u16);
+  if ((size_t)(remainder + 1) > (size_t)xdp->data_end) goto end;
+  new_csum += (__u16)(*remainder << 8);
+end:
+  *csum = csum_fold(new_csum);
+}
+
 #endif  // _MIMIC_BPF_CHECKSUM_H

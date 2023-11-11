@@ -236,7 +236,7 @@ int egress_handler(struct __sk_buff* skb) {
 }
 
 // Move back n bytes, shrink socket buffer and restore data.
-static int restore_data(struct xdp_md* xdp, __u16 offset) {\
+static int restore_data(struct xdp_md* xdp, __u16 offset) {
   __u8 buf[TCP_UDP_HEADER_DIFF] = {};
   __u16 data_len = bpf_xdp_get_buff_len(xdp) - offset;
   __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
@@ -363,10 +363,6 @@ int ingress_handler2(struct xdp_md* xdp) {
   conn->ack_seq += buf_len - ip_end - sizeof(*tcp);
   bpf_spin_unlock(&conn->lock);
 
-  __u16 udp_csum = bpf_ntohs(tcp->check);
-#ifdef _DEBUG
-  bpf_printk("Original TCP checksum: 0x%04x", udp_csum);
-#endif
   __u32 seq = bpf_ntohl(tcp->seq), ack_seq = bpf_ntohl(tcp->ack_seq);
   __u32 flag_word = bpf_ntohl(tcp_flag_word(tcp));
   __u16 urg_ptr = bpf_ntohs(tcp->urg_ptr);
@@ -376,11 +372,9 @@ int ingress_handler2(struct xdp_md* xdp) {
     __be16 new_len = bpf_htons(bpf_ntohs(old_len) - TCP_UDP_HEADER_DIFF);
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_UDP;
-    // udp_len = bpf_ntohs(old_len) - TCP_UDP_HEADER_DIFF -sizeof(*ipv4);
 
     __u32 ipv4_csum = ~bpf_ntohs(ipv4->check);
-    ipv4_csum -= bpf_ntohs(old_len);
-    ipv4_csum += bpf_ntohs(new_len);
+    ipv4_csum -= TCP_UDP_HEADER_DIFF;
     ipv4_csum -= IPPROTO_TCP;
     ipv4_csum += IPPROTO_UDP;
     ipv4->check = bpf_htons(csum_fold(ipv4_csum));
@@ -395,15 +389,24 @@ int ingress_handler2(struct xdp_md* xdp) {
   __u16 udp_len = bpf_xdp_get_buff_len(xdp) - ip_end;
   udp->len = bpf_htons(udp_len);
 
-  // update_csum(&udp_csum, (__s32)udp_len - (seq >> 16));
-  // update_csum(&udp_csum, -(seq & 0xffff) - urg_ptr);
-  // update_csum_ul_neg(&udp_csum, ack_seq);
-  // update_csum_ul_neg(&udp_csum, flag_word);
-  // update_csum(&udp_csum, IPPROTO_UDP - IPPROTO_TCP);
-  // update_csum(&udp_csum, -(int)TCP_UDP_HEADER_DIFF);
-  // udp->check = bpf_htons(udp_csum);
-  // TODO: Fix ingress checksum
-  udp->check = 0;
+  __u16 udp_csum = 0;
+  if (ipv4) {
+    update_csum_ul(&udp_csum, bpf_ntohl(ipv4_saddr));
+    update_csum_ul(&udp_csum, bpf_ntohl(ipv4_daddr));
+  } else if (ipv6) {
+    for (int i = 0; i < 8; i++) {
+      update_csum(&udp_csum, bpf_ntohs(ipv6_saddr.s6_addr16[i]));
+      update_csum(&udp_csum, bpf_ntohs(ipv6_daddr.s6_addr16[i]));
+    }
+  }
+  update_csum(&udp_csum, IPPROTO_UDP);
+  update_csum(&udp_csum, udp_len);
+  update_csum(&udp_csum, bpf_ntohs(udp->source));
+  update_csum(&udp_csum, bpf_ntohs(udp->dest));
+  update_csum(&udp_csum, udp_len);
+
+  update_csum_data_xdp(xdp, &udp_csum, ip_end + sizeof(*udp));
+  udp->check = bpf_htons(udp_csum);
 
   return XDP_PASS;
 }
