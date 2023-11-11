@@ -81,6 +81,13 @@ The following shows how Mimic works visually:
 
 TODO
 
+## Future work
+
+- More obfuscation options: XOR, padding, etc.
+- Make fake TCP optional
+- Variable cwnd
+- State reset mechanism
+
 ## License
 
 The project is licensed under GNU General Public License version 2 (GPLv2). See LICENSE for more details.
