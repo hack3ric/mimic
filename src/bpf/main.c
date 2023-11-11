@@ -347,7 +347,7 @@ int ingress_handler(struct __sk_buff* skb) {
         if (det <= 0) {
           conn->state = STATE_SYN_RECV;
           conn->seq = 0;
-          conn->ack_seq = tcp->seq;
+          conn->ack_seq = bpf_htonl(tcp->seq);
         }
       }
       break;
