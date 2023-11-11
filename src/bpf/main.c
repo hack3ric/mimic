@@ -405,7 +405,7 @@ int ingress_handler2(struct xdp_md* xdp) {
   update_csum(&udp_csum, bpf_ntohs(udp->dest));
   update_csum(&udp_csum, udp_len);
 
-  update_csum_data_xdp(xdp, &udp_csum, ip_end + sizeof(*udp));
+  update_csum_data(xdp, &udp_csum, ip_end + sizeof(*udp));
   udp->check = bpf_htons(udp_csum);
 
   return XDP_PASS;
