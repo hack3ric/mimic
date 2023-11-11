@@ -10,11 +10,12 @@
 static const struct argp_option _args_options[] = {
   {"filter", 'f', "FILTER", 0,
    "Specify what packets to process. This may be specified for multiple times."},
-  {"interface", 'i', "IFNAME", 0, "Interface to bind"},
   {"verbose", 'v', 0, 0, "Output more information"},
   {"quiet", 'q', 0, 0, "Output less information"},
   {0}
 };
+
+static char _args_doc[] = "INTERFACE";
 
 struct arguments {
   char* filters[8];
@@ -32,14 +33,22 @@ static error_t _args_parse_opt(int key, char* arg, struct argp_state* state) {
         exit(1);
       }
       break;
-    case 'i':
-      args->ifname = arg;
-      break;
     case 'v':
       if (log_verbosity < 3) log_verbosity++;
       break;
     case 'q':
       if (log_verbosity > 0) log_verbosity--;
+      break;
+    case ARGP_KEY_NO_ARGS:
+      argp_usage(state);
+    case ARGP_KEY_ARG:
+      if (!args->ifname) {
+        args->ifname = arg;
+      } else {
+        log_error("currently only one interface is supported");
+        exit(1);
+      }
+
       break;
     default:
       return ARGP_ERR_UNKNOWN;
@@ -47,6 +56,6 @@ static error_t _args_parse_opt(int key, char* arg, struct argp_state* state) {
   return 0;
 }
 
-static const struct argp args_argp = {_args_options, _args_parse_opt, NULL, NULL};
+static const struct argp args_argp = {_args_options, _args_parse_opt, _args_doc, NULL};
 
 #endif  // _MIMIC_ARGS_H

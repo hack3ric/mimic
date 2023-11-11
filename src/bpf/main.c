@@ -223,7 +223,7 @@ static int restore_data(struct xdp_md* xdp, __u16 offset) {
 }
 
 SEC("xdp")
-int ingress_handler2(struct xdp_md* xdp) {
+int ingress_handler(struct xdp_md* xdp) {
   decl_or_pass(struct ethhdr, eth, 0, xdp);
   __u16 eth_proto = bpf_ntohs(eth->h_proto);
 

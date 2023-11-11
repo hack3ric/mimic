@@ -9,13 +9,13 @@
 #include <stddef.h>
 
 #define redecl(type, name, off, skb_xdp, ret)                     \
-  name = ({                                                   \
+  name = ({                                                       \
     type* ptr = (void*)(size_t)skb_xdp->data + off;               \
     if ((size_t)ptr + sizeof(type) > (size_t)skb_xdp->data_end) { \
-      bpf_printk("check decl failed");                        \
-      return ret;                                             \
-    }                                                         \
-    ptr;                                                      \
+      bpf_printk("check decl failed");                            \
+      return ret;                                                 \
+    }                                                             \
+    ptr;                                                          \
   })
 
 #define decl(type, name, off, skb_xdp, ret) type* redecl(type, name, off, skb_xdp, ret)
@@ -36,20 +36,20 @@
     if (result) return result; \
   })
 
-#define try_xdp(x)                 \
-  ({                           \
-    int result = x;            \
+#define try_xdp(x)                         \
+  ({                                       \
+    int result = x;                        \
     if (result != XDP_PASS) return result; \
   })
 
 #define try_ret(x, ret) \
   if (x) return ret
 
-#define try_or_shot(x) try_ret(x, TC_ACT_SHOT)
 #define try_or_ok(x) try_ret(x, TC_ACT_OK)
+#define try_or_shot(x) try_ret(x, TC_ACT_SHOT)
 
-#define try_or_drop(x) try_ret(x, XDP_DROP)
 #define try_or_pass(x) try_ret(x, XDP_PASS)
+#define try_or_drop(x) try_ret(x, XDP_DROP)
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define max(x, y) ((x) < (y) ? (y) : (x))

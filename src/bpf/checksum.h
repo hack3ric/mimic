@@ -11,7 +11,7 @@ static __always_inline __u16 csum_fold(__u32 csum) {
   return (__u16)~csum;
 }
 
-static void update_csum(__u32* seed, __s32 delta) {
+static inline void update_csum(__u32* seed, __s32 delta) {
   if (delta < 0) delta += 0xffff;
   *seed += delta;
 }

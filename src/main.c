@@ -29,7 +29,6 @@ static int tc_hook_create_bind(
 static int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts) {
   opts->flags = opts->prog_fd = opts->prog_id = 0;
   return bpf_tc_detach(hook, opts);
-  // bpf_tc_hook_destroy(&hook);
 }
 
 int main(int argc, char* argv[]) {
@@ -111,8 +110,15 @@ int main(int argc, char* argv[]) {
   struct bpf_program* egress = skel->progs.egress_handler;
   try_or_cleanup(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, egress, "egress"));
 
-  bpf_program__attach_xdp(skel->progs.ingress_handler2, ifindex);
+  if (!bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex))
+    cleanup(errno, "failed to attach XDP program: %s", strerrno);
 
+  log_info("Mimic successfully deployed at %s with filters:", args.ifname);
+  for (int i = 0; i < args.filter_count; i++) {
+    char fmt[FILTER_FMT_MAX_LEN];
+    pkt_filter_fmt(&filters[i], fmt);
+    log_info("  * %s", fmt);
+  }
   if (signal(SIGINT, sig_int) == SIG_ERR) cleanup(errno, "cannot set signal handler: %s", strerrno);
   while (!exiting) sleep(1);
 
