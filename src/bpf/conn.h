@@ -28,15 +28,13 @@ struct conn_tuple {
 
 struct connection {
   struct bpf_spin_lock lock;
-  struct conn_inner {
-    enum conn_state {
-      STATE_IDLE,
-      STATE_SYN_SENT,
-      STATE_SYN_RECV,
-      STATE_ESTABLISHED,
-    } state;
-    __u32 seq, ack_seq, last_ack_seq;
-  } inner;
+  enum conn_state {
+    STATE_IDLE,
+    STATE_SYN_SENT,
+    STATE_SYN_RECV,
+    STATE_ESTABLISHED,
+  } state;
+  __u32 seq, ack_seq, last_ack_seq;
 };
 
 #endif  // _MIMIC_BPF_CONN_Hs

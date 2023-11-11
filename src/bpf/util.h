@@ -38,12 +38,6 @@
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define max(x, y) ((x) < (y) ? (y) : (x))
-
-static _Bool inet6_eq(struct in6_addr* a, struct in6_addr* b) {
-  for (int i = 0; i < 4; i++) {
-    if (a->s6_addr32[i] != b->s6_addr32[i]) return 0;
-  }
-  return 1;
-}
+#define cmp(x, y) ((x) > (y) - (x) < (y))
 
 #endif  // _MIMIC_BPF_UTIL_H

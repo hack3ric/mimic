@@ -38,7 +38,7 @@ struct {
 static int mangle_data(struct __sk_buff* skb, __u16 offset) {
   __u16 data_len = skb->len - offset;
   try_or_shot(bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0));
-  __u8 buf[TCP_UDP_HEADER_DIFF] = {0};
+  __u8 buf[TCP_UDP_HEADER_DIFF] = {};
   __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
   if (copy_len > 0) {
     // HACK: make verifier happy
@@ -52,7 +52,7 @@ static int mangle_data(struct __sk_buff* skb, __u16 offset) {
   return TC_ACT_OK;
 }
 
-static void update_tcp_header(
+static __always_inline void update_tcp_header(
   struct tcphdr* tcp, __u16* tcp_csum, _Bool delta_csum, __u16 udp_len, _Bool syn, _Bool ack,
   __u32 seq, __u32 ack_seq
 ) {
@@ -103,8 +103,8 @@ int egress_handler(struct __sk_buff* skb) {
   decl_or_ok(struct udphdr, udp, ip_end, skb);
 
   __be32 ipv4_saddr = 0, ipv4_daddr = 0;
-  struct in6_addr ipv6_saddr = {0}, ipv6_daddr = {0};
-  struct pkt_filter local_key = {0}, remote_key = {0};
+  struct in6_addr ipv6_saddr = {}, ipv6_daddr = {};
+  struct pkt_filter local_key = {}, remote_key = {};
   if (ipv4) {
     ipv4_saddr = ipv4->saddr, ipv4_daddr = ipv4->daddr;
     local_key = pkt_filter_v4(DIR_LOCAL, ipv4_saddr, udp->source);
@@ -130,39 +130,49 @@ int egress_handler(struct __sk_buff* skb) {
     conn_key = conn_tuple_v4(ipv4_saddr, udp->source, ipv4_daddr, udp->dest);
   else if (ipv6)
     conn_key = conn_tuple_v6(ipv6_saddr, udp->source, ipv6_daddr, udp->dest);
+  else
+    return TC_ACT_SHOT;
 
-  struct connection* conn_ptr = bpf_map_lookup_elem(&mimic_conns, &conn_key);
-  struct conn_inner conn_value = {0};
-  if (conn_ptr) {
-    __builtin_memcpy(&conn_value, &conn_ptr->inner, sizeof(conn_value));
-  } else {
+  struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
+  if (!conn) {
+    struct connection conn_value = {};
     conn_value.state = STATE_IDLE;
     conn_value.seq = conn_value.ack_seq = conn_value.last_ack_seq = 0;
     try_or_shot(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
-    conn_ptr = bpf_map_lookup_elem(&mimic_conns, &conn_key);
-    if (!conn_ptr) return TC_ACT_SHOT;
+    conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
+    if (!conn) return TC_ACT_SHOT;
   }
 
-  _Bool state_changed = 0;
+  __u16 udp_len = bpf_ntohs(udp->len);
+  __u16 data_len = udp_len - sizeof(*udp);
 
   _Bool syn = 0, ack = 0;
-  switch (conn_value.state) {
+  __u32 seq, ack_seq;
+  __u32 random = bpf_get_prandom_u32();
+  bpf_spin_lock(&conn->lock);
+  switch (conn->state) {
     case STATE_IDLE:
-      conn_value.state = STATE_SYN_SENT;
-      state_changed = 1;
+      conn->state = STATE_SYN_SENT;
       syn = 1;
+      conn->seq = random;
+      conn->ack_seq = 0;
       break;
     case STATE_SYN_SENT:
       syn = 1;
       break;
     case STATE_SYN_RECV:
-      conn_value.state = STATE_ESTABLISHED;
-      state_changed = syn = ack = 1;
+      conn->state = STATE_ESTABLISHED;
+      syn = ack = 1;
+      conn->seq = random;
       break;
     case STATE_ESTABLISHED:
       ack = 1;
       break;
   }
+  seq = conn->seq;
+  ack_seq = conn->ack_seq;
+  conn->seq += data_len;
+  bpf_spin_unlock(&conn->lock);
 
   // Should get a better understanding on how HW checksum offloading works.
   //
@@ -177,8 +187,6 @@ int egress_handler(struct __sk_buff* skb) {
   // __u16 udp_csum = bpf_ntohs(udp->check);
   __u16 udp_csum = 0;
   __u16 tcp_csum = udp_csum ? udp_csum : 0xffff;
-
-  __u16 udp_len = bpf_ntohs(udp->len);
 
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
@@ -217,22 +225,16 @@ int egress_handler(struct __sk_buff* skb) {
   }
 
   // todo: seq, ack_seq
-  update_tcp_header(tcp, &tcp_csum, udp_csum, udp_len, syn, ack, 1, 0);
+  update_tcp_header(tcp, &tcp_csum, udp_csum, udp_len, syn, ack, seq, ack_seq);
   if (!udp_csum) update_csum_data(skb, &tcp_csum, ip_end + sizeof(*tcp));
   tcp->check = bpf_htons(tcp_csum);
-
-  if (state_changed) {
-    bpf_spin_lock(&conn_ptr->lock);
-    __builtin_memcpy(&conn_ptr->inner, &conn_value, sizeof(conn_value));
-    bpf_spin_unlock(&conn_ptr->lock);
-  }
 
   return TC_ACT_OK;
 }
 
 // Move back n bytes, shrink socket buffer and restore data.
 static int restore_data(struct __sk_buff* skb, __u16 offset) {
-  __u8 buf[TCP_UDP_HEADER_DIFF] = {0};
+  __u8 buf[TCP_UDP_HEADER_DIFF] = {};
   __u16 data_len = skb->len - offset;
   __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
   if (copy_len > 0) {
@@ -268,8 +270,8 @@ int ingress_handler(struct __sk_buff* skb) {
   decl_or_ok(struct tcphdr, tcp, ip_end, skb);
 
   __be32 ipv4_saddr = 0, ipv4_daddr = 0;
-  struct in6_addr ipv6_saddr = {0}, ipv6_daddr = {0};
-  struct pkt_filter local_key = {0}, remote_key = {0};
+  struct in6_addr ipv6_saddr = {}, ipv6_daddr = {};
+  struct pkt_filter local_key = {}, remote_key = {};
   if (ipv4) {
     ipv4_saddr = ipv4->saddr, ipv4_daddr = ipv4->daddr;
     local_key = pkt_filter_v4(DIR_LOCAL, ipv4_daddr, tcp->dest);
@@ -290,14 +292,77 @@ int ingress_handler(struct __sk_buff* skb) {
     bpf_printk(_DEBUG_MSG_INGRESS "[%pI6]:%d", &ipv6_saddr, bpf_ntohs(tcp->source));
 #endif
 
-  // TODO: reset connection state
-  if (tcp->rst) return TC_ACT_SHOT;
+  struct conn_tuple conn_key;
+  if (ipv4)
+    conn_key = conn_tuple_v4(ipv4_daddr, tcp->dest, ipv4_saddr, tcp->source);
+  else if (ipv6)
+    conn_key = conn_tuple_v6(ipv6_daddr, tcp->dest, ipv6_saddr, tcp->source);
+  else
+    return TC_ACT_SHOT;
 
-  // TODO: retrieve state
+  struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
+  if (!conn) {
+    struct connection conn_value = {};
+    conn_value.state = STATE_IDLE;
+    conn_value.seq = conn_value.ack_seq = conn_value.last_ack_seq = 0;
+    try_or_shot(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
+    conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
+    if (!conn) return TC_ACT_SHOT;
+  }
+
+  if (tcp->rst) {
+    bpf_spin_lock(&conn->lock);
+    conn->state = STATE_IDLE;
+    conn->seq = conn->ack_seq = conn->last_ack_seq = 0;
+    bpf_spin_unlock(&conn->lock);
+    return TC_ACT_SHOT;
+  }
+
+  bpf_spin_lock(&conn->lock);
+  switch (conn->state) {
+    case STATE_IDLE:
+      if (tcp->syn) {
+        conn->state = STATE_SYN_RECV;
+        conn->seq = 0;
+        conn->ack_seq = bpf_ntohl(tcp->seq);
+      }
+      break;
+    case STATE_SYN_SENT:
+      if (tcp->syn && tcp->ack) {
+        conn->state = STATE_ESTABLISHED;
+      } else if (tcp->syn && !tcp->ack) {
+        // Decide which side is going to transition into STATE_SYN_RECV
+        // In the worst case scenario,
+        // if (local <= remote) state = STATE_SYN_RECV
+        int det;
+        if (ipv4) {
+          det = cmp(bpf_ntohl(ipv4_daddr), bpf_ntohl(ipv4_saddr));
+        } else {
+          for (int i = 0; i < 16; i++) {
+            det = cmp(ipv6_daddr.s6_addr[i], ipv6_saddr.s6_addr[i]);
+            if (det) break;
+          }
+        }
+        if (!det) det = cmp(bpf_ntohs(tcp->dest), bpf_ntohs(tcp->source));
+        if (det <= 0) {
+          conn->state = STATE_SYN_RECV;
+          conn->seq = 0;
+          conn->ack_seq = tcp->seq;
+        }
+      }
+      break;
+    case STATE_SYN_RECV:
+      // TODO: It will probably change seq and ack_seq if received SYN again?
+    case STATE_ESTABLISHED:
+      break;
+  }
+  // conn.ack_seq += data_len
+  conn->ack_seq += skb->len - ip_end - sizeof(*tcp);
+  bpf_spin_unlock(&conn->lock);
 
   __u16 udp_csum = bpf_ntohs(tcp->check);
-  __u32 seq = bpf_ntohl(tcp->seq), ack_seq = bpf_ntohl(tcp->ack_seq),
-        flag_word = bpf_ntohl(tcp_flag_word(tcp));
+  __u32 seq = bpf_ntohl(tcp->seq), ack_seq = bpf_ntohl(tcp->ack_seq);
+  __u32 flag_word = bpf_ntohl(tcp_flag_word(tcp));
   __u16 urg_ptr = bpf_ntohs(tcp->urg_ptr);
 
   if (ipv4) {
@@ -326,8 +391,6 @@ int ingress_handler(struct __sk_buff* skb) {
   update_csum_ul_neg(&udp_csum, ack_seq);
   update_csum_ul_neg(&udp_csum, flag_word);
   udp->check = bpf_htons(udp_csum);
-
-  // TODO: store state
 
   return TC_ACT_OK;
 }
