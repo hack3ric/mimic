@@ -48,7 +48,7 @@ void pkt_filter_fmt(const struct pkt_filter* restrict filter, char* restrict des
   if (filter->protocol == TYPE_IPV6) strcat(dest, "[");
   inet_ntop(af, &filter->ip, dest + strlen(dest), 32);
   if (filter->protocol == TYPE_IPV6) strcat(dest, "]");
-  snprintf(dest + strlen(dest), 6, ":%d", ntohs(filter->port));
+  snprintf(dest + strlen(dest), 7, ":%d", ntohs(filter->port));
 }
 
 #endif  // _MIMIC_BPF
