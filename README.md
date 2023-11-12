@@ -2,6 +2,8 @@
 
 Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP QoS and port blocking. Based on eBPF, it directly mangles data inside Traffic Control (TC) subsystem in the kernel space and restores data using XDP, achieving remarkably high performance compared to other projects, such as [udp2raw](https://github.com/wangyu-/udp2raw) or [Phantun](https://github.com/dndx/phantun).
 
+**Note:** The project is still in early development stage. Expect broken functionality.
+
 ## Usage
 
 The following requirements need to be satisfied on every machine that would run Mimic:
