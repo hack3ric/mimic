@@ -58,7 +58,7 @@ static __always_inline void update_tcp_header(
 ) {
   update_csum_ul(csum, seq);
   tcp->seq = bpf_htonl(seq);
-  update_csum(csum, ack_seq);
+  update_csum_ul(csum, ack_seq);
   tcp->ack_seq = bpf_htonl(ack_seq);
 
   tcp_flag_word(tcp) = 0;
@@ -70,7 +70,7 @@ static __always_inline void update_tcp_header(
     tcp->syn = syn;
     tcp->ack = ack;
   }
-  update_csum(csum, bpf_ntohl(tcp_flag_word(tcp)));
+  update_csum_ul(csum, bpf_ntohl(tcp_flag_word(tcp)));
 
   __u16 urg_ptr = 0;
   update_csum(csum, urg_ptr);
@@ -124,13 +124,11 @@ int egress_handler(struct __sk_buff* skb) {
   }
 #endif
 
-  struct conn_tuple conn_key;
+  struct conn_tuple conn_key = {};
   if (ipv4) {
     conn_tuple_v4(ipv4_saddr, udp->source, ipv4_daddr, udp->dest);
   } else if (ipv6) {
     conn_key = conn_tuple_v6(ipv6_saddr, udp->source, ipv6_daddr, udp->dest);
-  } else {
-    return TC_ACT_SHOT;
   }
 
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
@@ -281,13 +279,11 @@ int ingress_handler(struct xdp_md* xdp) {
   }
 #endif
 
-  struct conn_tuple conn_key;
+  struct conn_tuple conn_key = {};
   if (ipv4) {
     conn_key = conn_tuple_v4(ipv4_daddr, tcp->dest, ipv4_saddr, tcp->source);
   } else if (ipv6) {
     conn_key = conn_tuple_v6(ipv6_daddr, tcp->dest, ipv6_saddr, tcp->source);
-  } else {
-    return XDP_DROP;
   }
 
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
@@ -367,7 +363,7 @@ int ingress_handler(struct xdp_md* xdp) {
   try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len));
   decl_or_drop(struct udphdr, udp, ip_end, xdp);
 
-  __u16 udp_len = buf_len - ip_end;
+  __u16 udp_len = buf_len - ip_end - TCP_UDP_HEADER_DIFF;
   udp->len = bpf_htons(udp_len);
 
   __u32 csum = 0;
