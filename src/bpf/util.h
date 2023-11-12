@@ -8,16 +8,12 @@
 #include <linux/pkt_cls.h>
 #include <stddef.h>
 
-#define redecl(type, name, off, skb_xdp, ret)                     \
-  name = ({                                                       \
-    type* ptr = (void*)(size_t)skb_xdp->data + off;               \
-    if ((size_t)ptr + sizeof(type) > (size_t)skb_xdp->data_end) { \
-      bpf_printk("check decl failed");                            \
-      return ret;                                                 \
-    }                                                             \
-    ptr;                                                          \
+#define redecl(type, name, off, skb_xdp, ret)                               \
+  name = ({                                                                 \
+    type* ptr = (void*)(size_t)skb_xdp->data + off;                         \
+    if ((size_t)ptr + sizeof(type) > (size_t)skb_xdp->data_end) return ret; \
+    ptr;                                                                    \
   })
-
 #define decl(type, name, off, skb_xdp, ret) type* redecl(type, name, off, skb_xdp, ret)
 
 #define redecl_or_ok(type, name, off, skb) redecl(type, name, off, skb, TC_ACT_OK)

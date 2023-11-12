@@ -42,8 +42,9 @@ int main(int argc, char* argv[]) {
     struct pkt_filter* filter = &filters[i];
     char* filter_str = args.filters[i];
     char* delim_pos = strchr(filter_str, '=');
-    if (delim_pos == NULL || delim_pos == filter_str)
+    if (delim_pos == NULL || delim_pos == filter_str) {
       ret(1, "filter format should look like `{key}={value}`: %s", filter_str);
+    }
 
     if (strncmp("local=", args.filters[i], 6) == 0) {
       filter->direction = DIR_LOCAL;
@@ -66,8 +67,9 @@ int main(int argc, char* argv[]) {
 
     int af;
     if (strchr(value, ':')) {
-      if (*value != '[' || port_str[-2] != ']')
+      if (*value != '[' || port_str[-2] != ']') {
         ret(5, "did you forget square brackets around an IPv6 address?");
+      }
       filter->protocol = TYPE_IPV6;
       value++;
       port_str[-2] = '\0';
@@ -110,8 +112,9 @@ int main(int argc, char* argv[]) {
   struct bpf_program* egress = skel->progs.egress_handler;
   try_or_cleanup(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, egress, "egress"));
 
-  if (!bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex))
+  if (!bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex)) {
     cleanup(errno, "failed to attach XDP program: %s", strerrno);
+  }
 
   log_info("Mimic successfully deployed at %s with filters:", args.ifname);
   for (int i = 0; i < args.filter_count; i++) {

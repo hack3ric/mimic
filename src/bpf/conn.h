@@ -14,7 +14,7 @@ struct conn_tuple {
 
 #define _conn_tuple_init(_p, _p2, _l, _lp, _r, _rp) \
   ({                                                \
-    struct conn_tuple _x = {0};                     \
+    struct conn_tuple _x = {};                      \
     _x.protocol = (_p);                             \
     _x.local_port = (_lp);                          \
     _x.remote_port = (_rp);                         \
@@ -34,7 +34,19 @@ struct connection {
     STATE_SYN_RECV,
     STATE_ESTABLISHED,
   } state;
-  __u32 seq, ack_seq, last_ack_seq;
+  __u32 seq, ack_seq;
+  _Bool rst;
 };
+
+static inline void conn_reset(struct connection* conn) {
+  conn->state = STATE_IDLE;
+  conn->seq = conn->ack_seq = 0;
+}
+
+static inline void conn_syn_recv(struct connection* conn, struct tcphdr* tcp) {
+  conn->state = STATE_SYN_RECV;
+  conn->seq = 0;
+  conn->ack_seq = bpf_ntohl(tcp->seq);
+}
 
 #endif  // _MIMIC_BPF_CONN_Hs

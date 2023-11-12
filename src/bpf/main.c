@@ -53,19 +53,23 @@ static int mangle_data(struct __sk_buff* skb, __u16 offset) {
 }
 
 static __always_inline void update_tcp_header(
-  struct tcphdr* tcp, __u32* csum, __u16 udp_len, _Bool syn, _Bool ack, __u32 seq, __u32 ack_seq
+  struct tcphdr* tcp, __u32* csum, __u16 udp_len, _Bool syn, _Bool ack, _Bool rst, __u32 seq,
+  __u32 ack_seq
 ) {
   update_csum_ul(csum, seq);
   tcp->seq = bpf_htonl(seq);
-
   update_csum(csum, ack_seq);
   tcp->ack_seq = bpf_htonl(ack_seq);
 
   tcp_flag_word(tcp) = 0;
   tcp->doff = 5;
   tcp->window = bpf_htons(0xfff);
-  tcp->syn = syn;
-  tcp->ack = ack;
+  if (rst) {
+    tcp->rst = 1;
+  } else {
+    tcp->syn = syn;
+    tcp->ack = ack;
+  }
   update_csum(csum, bpf_ntohl(tcp_flag_word(tcp)));
 
   __u16 urg_ptr = 0;
@@ -113,25 +117,27 @@ int egress_handler(struct __sk_buff* skb) {
 
 #ifdef _DEBUG
 #define _DEBUG_EGRESS_MSG "egress: matched UDP packet to "
-  if (ipv4)
+  if (ipv4) {
     bpf_printk(_DEBUG_EGRESS_MSG "%pI4:%d", &ipv4_daddr, bpf_ntohs(udp->dest));
-  else if (ipv6)
+  } else if (ipv6) {
     bpf_printk(_DEBUG_EGRESS_MSG "[%pI6]:%d", &ipv6_daddr, bpf_ntohs(udp->dest));
+  }
 #endif
 
   struct conn_tuple conn_key;
-  if (ipv4)
-    conn_key = conn_tuple_v4(ipv4_saddr, udp->source, ipv4_daddr, udp->dest);
-  else if (ipv6)
+  if (ipv4) {
+    conn_tuple_v4(ipv4_saddr, udp->source, ipv4_daddr, udp->dest);
+  } else if (ipv6) {
     conn_key = conn_tuple_v6(ipv6_saddr, udp->source, ipv6_daddr, udp->dest);
-  else
+  } else {
     return TC_ACT_SHOT;
+  }
 
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
   if (!conn) {
     struct connection conn_value = {};
     conn_value.state = STATE_IDLE;
-    conn_value.seq = conn_value.ack_seq = conn_value.last_ack_seq = 0;
+    conn_value.seq = conn_value.ack_seq = 0;
     try_or_shot(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
     conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
     if (!conn) return TC_ACT_SHOT;
@@ -140,32 +146,38 @@ int egress_handler(struct __sk_buff* skb) {
   __u16 udp_len = bpf_ntohs(udp->len);
   __u16 data_len = udp_len - sizeof(*udp);
 
-  _Bool syn = 0, ack = 0;
+  _Bool syn = 0, ack = 0, rst = 0;
   __u32 seq, ack_seq;
   __u32 random = bpf_get_prandom_u32();
   bpf_spin_lock(&conn->lock);
-  switch (conn->state) {
-    case STATE_IDLE:
-      conn->state = STATE_SYN_SENT;
-      syn = 1;
-      conn->seq = random;
-      conn->ack_seq = 0;
-      break;
-    case STATE_SYN_SENT:
-      syn = 1;
-      break;
-    case STATE_SYN_RECV:
-      conn->state = STATE_ESTABLISHED;
-      syn = ack = 1;
-      conn->seq = random;
-      break;
-    case STATE_ESTABLISHED:
-      ack = 1;
-      break;
+  if (conn->rst) {
+    rst = 1;
+    seq = ack_seq = 0;
+    conn->rst = 0;
+  } else {
+    switch (conn->state) {
+      case STATE_IDLE:
+        conn->state = STATE_SYN_SENT;
+        syn = 1;
+        conn->seq = random;
+        conn->ack_seq = 0;
+        break;
+      case STATE_SYN_SENT:
+        syn = 1;
+        break;
+      case STATE_SYN_RECV:
+        conn->state = STATE_ESTABLISHED;
+        syn = ack = 1;
+        conn->seq = random;
+        break;
+      case STATE_ESTABLISHED:
+        ack = 1;
+        break;
+    }
+    seq = conn->seq;
+    ack_seq = conn->ack_seq;
+    conn->seq += data_len;
   }
-  seq = conn->seq;
-  ack_seq = conn->ack_seq;
-  conn->seq += data_len;
   bpf_spin_unlock(&conn->lock);
 
   if (ipv4) {
@@ -201,7 +213,7 @@ int egress_handler(struct __sk_buff* skb) {
   update_csum(&csum, bpf_ntohs(tcp->source));
   update_csum(&csum, bpf_ntohs(tcp->dest));
 
-  update_tcp_header(tcp, &csum, udp_len, syn, ack, seq, ack_seq);
+  update_tcp_header(tcp, &csum, udp_len, syn, ack, rst, seq, ack_seq);
   update_csum_data(skb, &csum, ip_end + sizeof(*tcp));
   tcp->check = bpf_htons(csum_fold(csum));
 
@@ -209,13 +221,13 @@ int egress_handler(struct __sk_buff* skb) {
 }
 
 // Move back n bytes, shrink socket buffer and restore data.
-static int restore_data(struct xdp_md* xdp, __u16 offset) {
+static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u64 buf_len) {
   __u8 buf[TCP_UDP_HEADER_DIFF] = {};
-  __u16 data_len = bpf_xdp_get_buff_len(xdp) - offset;
+  __u16 data_len = buf_len - offset;
   __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
   if (copy_len > 0) {
     if (copy_len < 2) copy_len = 1;  // HACK: see above
-    try_or_drop(bpf_xdp_load_bytes(xdp, bpf_xdp_get_buff_len(xdp) - copy_len, buf, copy_len));
+    try_or_drop(bpf_xdp_load_bytes(xdp, buf_len - copy_len, buf, copy_len));
     try_or_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf, copy_len));
   }
   try_or_drop(bpf_xdp_adjust_tail(xdp, -(int)TCP_UDP_HEADER_DIFF));
@@ -262,54 +274,55 @@ int ingress_handler(struct xdp_md* xdp) {
 
 #ifdef _DEBUG
 #define _DEBUG_MSG_INGRESS "ingress: matched (fake) TCP packet from "
-  if (ipv4)
+  if (ipv4) {
     bpf_printk(_DEBUG_MSG_INGRESS "%pI4:%d", &ipv4_saddr, bpf_ntohs(tcp->source));
-  else if (ipv6)
+  } else if (ipv6) {
     bpf_printk(_DEBUG_MSG_INGRESS "[%pI6]:%d", &ipv6_saddr, bpf_ntohs(tcp->source));
+  }
 #endif
 
   struct conn_tuple conn_key;
-  if (ipv4)
+  if (ipv4) {
     conn_key = conn_tuple_v4(ipv4_daddr, tcp->dest, ipv4_saddr, tcp->source);
-  else if (ipv6)
+  } else if (ipv6) {
     conn_key = conn_tuple_v6(ipv6_daddr, tcp->dest, ipv6_saddr, tcp->source);
-  else
+  } else {
     return XDP_DROP;
+  }
 
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
   if (!conn) {
     struct connection conn_value = {};
     conn_value.state = STATE_IDLE;
-    conn_value.seq = conn_value.ack_seq = conn_value.last_ack_seq = 0;
+    conn_value.seq = conn_value.ack_seq = 0;
     try_or_drop(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
     conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
     if (!conn) return XDP_DROP;
   }
 
+  __u64 buf_len = bpf_xdp_get_buff_len(xdp);
   if (tcp->rst) {
-    bpf_spin_lock(&conn->lock);
-    conn->state = STATE_IDLE;
-    conn->seq = conn->ack_seq = conn->last_ack_seq = 0;
-    bpf_spin_unlock(&conn->lock);
+    conn_reset(conn);
+    // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
+    // no good ways to tell them apart
     return XDP_DROP;
   }
-
-  __u64 buf_len = bpf_xdp_get_buff_len(xdp);
   bpf_spin_lock(&conn->lock);
   switch (conn->state) {
     case STATE_IDLE:
-      if (tcp->syn) {
-        conn->state = STATE_SYN_RECV;
-        conn->seq = 0;
-        conn->ack_seq = bpf_ntohl(tcp->seq);
+      if (tcp->syn && !tcp->ack) {
+        conn_syn_recv(conn, tcp);
+      } else if (!tcp->syn && tcp->ack) {
+        conn_reset(conn);
+        conn->rst = 1;
       }
       break;
     case STATE_SYN_SENT:
       if (tcp->syn && tcp->ack) {
         conn->state = STATE_ESTABLISHED;
-      } else if (tcp->syn && !tcp->ack) {
+      } else if (tcp->syn) {
         // Decide which side is going to transition into STATE_SYN_RECV
-        // if (local <= remote) state = STATE_SYN_RECV
+        // Basically `if (local <= remote) state = STATE_SYN_RECV`
         int det;
         if (ipv4) {
           det = cmp(bpf_ntohl(ipv4_daddr), bpf_ntohl(ipv4_saddr));
@@ -320,15 +333,13 @@ int ingress_handler(struct xdp_md* xdp) {
           }
         }
         if (!det) det = cmp(bpf_ntohs(tcp->dest), bpf_ntohs(tcp->source));
-        if (det <= 0) {
-          conn->state = STATE_SYN_RECV;
-          conn->seq = 0;
-          conn->ack_seq = bpf_ntohl(tcp->seq);
-        }
+        if (det <= 0) conn_syn_recv(conn, tcp);
       }
       break;
     case STATE_SYN_RECV:
     case STATE_ESTABLISHED:
+      // If received SYN again, reset seq and ack_seq
+      if (tcp->syn) conn_syn_recv(conn, tcp);
       break;
   }
   conn->ack_seq += buf_len - ip_end - sizeof(*tcp);
@@ -353,10 +364,10 @@ int ingress_handler(struct xdp_md* xdp) {
     ipv6->nexthdr = IPPROTO_UDP;
   }
 
-  try_xdp(restore_data(xdp, ip_end + sizeof(*tcp)));
+  try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len));
   decl_or_drop(struct udphdr, udp, ip_end, xdp);
 
-  __u16 udp_len = bpf_xdp_get_buff_len(xdp) - ip_end;
+  __u16 udp_len = buf_len - ip_end;
   udp->len = bpf_htons(udp_len);
 
   __u32 csum = 0;
