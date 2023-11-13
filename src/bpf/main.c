@@ -389,7 +389,7 @@ int ingress_handler(struct xdp_md* xdp) {
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_UDP;
 
-    __u32 ipv4_csum = ~bpf_ntohs(ipv4->check);
+    __u32 ipv4_csum = (__u16)~bpf_ntohs(ipv4->check);
     update_csum(&ipv4_csum, -(__s32)TCP_UDP_HEADER_DIFF);
     update_csum(&ipv4_csum, IPPROTO_UDP - IPPROTO_TCP);
     ipv4->check = bpf_htons(csum_fold(ipv4_csum));
