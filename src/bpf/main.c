@@ -126,7 +126,7 @@ int egress_handler(struct __sk_buff* skb) {
 
   struct conn_tuple conn_key = {};
   if (ipv4) {
-    conn_tuple_v4(ipv4_saddr, udp->source, ipv4_daddr, udp->dest);
+    conn_key = conn_tuple_v4(ipv4_saddr, udp->source, ipv4_daddr, udp->dest);
   } else if (ipv6) {
     conn_key = conn_tuple_v6(ipv6_saddr, udp->source, ipv6_daddr, udp->dest);
   }
@@ -153,6 +153,8 @@ int egress_handler(struct __sk_buff* skb) {
   bpf_spin_lock(&conn->lock);
   if (conn->rst) {
     rst = 1;
+    seq = conn->seq;
+    ack_seq = conn->ack_seq;
     conn_reset(conn, 0);
   } else {
     switch (conn->state) {

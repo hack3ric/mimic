@@ -22,7 +22,7 @@ struct pkt_filter {
 
 #define _pkt_filter_init(_dir, _p, _p2, _ip, _port) \
   ({                                                \
-    struct pkt_filter _x = {0};                     \
+    struct pkt_filter _x = {};                      \
     _x.direction = (_dir);                          \
     _x.protocol = (_p);                             \
     _x.port = (_port);                              \

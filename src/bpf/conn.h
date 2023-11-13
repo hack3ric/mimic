@@ -39,7 +39,7 @@ struct connection {
 };
 
 static inline void conn_reset(struct connection* conn, _Bool send_rst) {
-  conn->seq = conn->ack_seq = 0;
+  conn->ack_seq = 0;
   conn->rst = send_rst;
   conn->state = STATE_IDLE;
 }
