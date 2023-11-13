@@ -142,41 +142,55 @@ int egress_handler(struct __sk_buff* skb) {
   }
 
   __u16 udp_len = bpf_ntohs(udp->len);
-  __u16 data_len = udp_len - sizeof(*udp);
+  __u16 payload_len = udp_len - sizeof(*udp);
+#ifdef _DEBUG
+  bpf_printk("egress: payload_len = %d", payload_len);
+#endif
 
   _Bool syn = 0, ack = 0, rst = 0;
-  __u32 seq, ack_seq;
+  __u32 seq, ack_seq, conn_seq, conn_ack_seq;
   __u32 random = bpf_get_prandom_u32();
   bpf_spin_lock(&conn->lock);
   if (conn->rst) {
     rst = 1;
-    seq = ack_seq = 0;
-    conn->rst = 0;
+    conn_reset(conn, 0);
   } else {
     switch (conn->state) {
       case STATE_IDLE:
-        conn->state = STATE_SYN_SENT;
+        // SYN send: seq=A -> seq=A+len+1, ack=0
         syn = 1;
-        conn->seq = random;
-        conn->ack_seq = 0;
+        seq = conn->seq = random;
+        ack_seq = conn->ack_seq = 0;
+        conn->seq += payload_len + 1;  // seq=A+len+1
+        conn->state = STATE_SYN_SENT;
         break;
-      case STATE_SYN_SENT:
+      case STATE_SYN_SENT:  // duplicate SYN without response: resend
         syn = 1;
         break;
       case STATE_SYN_RECV:
-        conn->state = STATE_ESTABLISHED;
+        // SYN+ACK send: seq=B -> seq=B+len+1, ack=A+len+1
         syn = ack = 1;
-        conn->seq = random;
+        seq = conn->seq = random;
+        ack_seq = conn->ack_seq;  // ack_seq set at ingress
+        conn->seq += payload_len + 1;
+        conn->state = STATE_ESTABLISHED;
         break;
       case STATE_ESTABLISHED:
+        // ACK send: seq=seq -> seq=seq+len, ack=ack
         ack = 1;
+        seq = conn->seq;
+        ack_seq = conn->ack_seq;
+        conn->seq += payload_len;
         break;
     }
-    seq = conn->seq;
-    ack_seq = conn->ack_seq;
-    conn->seq += data_len;
   }
+  conn_seq = conn->seq;
+  conn_ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
+#ifdef _DEBUG
+  bpf_printk("egress: sending TCP packet: seq = %u, ack_seq = %u", seq, ack_seq);
+  bpf_printk("egress: current state: seq = %u, ack_seq = %u", conn_seq, conn_ack_seq);
+#endif
 
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
@@ -219,7 +233,7 @@ int egress_handler(struct __sk_buff* skb) {
 }
 
 // Move back n bytes, shrink socket buffer and restore data.
-static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u64 buf_len) {
+static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len) {
   __u8 buf[TCP_UDP_HEADER_DIFF] = {};
   __u16 data_len = buf_len - offset;
   __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
@@ -296,29 +310,40 @@ int ingress_handler(struct xdp_md* xdp) {
     if (!conn) return XDP_DROP;
   }
 
-  __u64 buf_len = bpf_xdp_get_buff_len(xdp);
+  __u32 buf_len = bpf_xdp_get_buff_len(xdp);
+  __u32 payload_len = buf_len - ip_end - sizeof(*tcp);
+  __u32 seq = 0, ack_seq = 0;
+#ifdef _DEBUG
+  bpf_printk("ingress: payload_len = %d", payload_len);
+#endif
   if (tcp->rst) {
-    conn_reset(conn);
+    conn_reset(conn, 0);
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
-    // no good ways to tell them apart
+    // no good ways to tell them apart.
     return XDP_DROP;
   }
   bpf_spin_lock(&conn->lock);
   switch (conn->state) {
     case STATE_IDLE:
+    case STATE_SYN_RECV:  // duplicate SYN received: always use last one
       if (tcp->syn && !tcp->ack) {
-        conn_syn_recv(conn, tcp);
-      } else if (!tcp->syn && tcp->ack) {
-        conn_reset(conn);
-        conn->rst = 1;
+        // SYN recv: seq=0, ack=A+len+1
+        conn_syn_recv(conn, tcp, payload_len);
+      } else {
+        conn_reset(conn, 1);
       }
       break;
     case STATE_SYN_SENT:
       if (tcp->syn && tcp->ack) {
+        // SYN+ACK recv: seq=A+len+1, ack=B+len+1
+        conn->ack_seq = bpf_ntohl(tcp->seq) + payload_len + 1;
         conn->state = STATE_ESTABLISHED;
-      } else if (tcp->syn) {
-        // Decide which side is going to transition into STATE_SYN_RECV
-        // Basically `if (local <= remote) state = STATE_SYN_RECV`
+      } else if (tcp->syn && !tcp->ack) {
+        // SYN sent from both sides: decide which side is going to transition into STATE_SYN_RECV
+        // Basically `if (local < remote) state = STATE_SYN_RECV`
+        //
+        // Edge case: source and destination addresses are the same; this should be VERY rare, but
+        // to handle it safely, both sides yield and transition to STATE_SYN_RECV.
         int det;
         if (ipv4) {
           det = cmp(bpf_ntohl(ipv4_daddr), bpf_ntohl(ipv4_saddr));
@@ -329,21 +354,34 @@ int ingress_handler(struct xdp_md* xdp) {
           }
         }
         if (!det) det = cmp(bpf_ntohs(tcp->dest), bpf_ntohs(tcp->source));
-        if (det <= 0) conn_syn_recv(conn, tcp);
+        if (det <= 0) conn_syn_recv(conn, tcp, payload_len);
+
+      } else {
+        conn_reset(conn, 1);
       }
       break;
-    case STATE_SYN_RECV:
     case STATE_ESTABLISHED:
-      // If received SYN again, reset seq and ack_seq
-      if (tcp->syn) conn_syn_recv(conn, tcp);
+      if (!tcp->syn && tcp->ack) {
+        // ACK recv: seq=seq, ack=ack+len
+        conn->ack_seq += payload_len;
+      } else if (tcp->syn && !tcp->ack) {
+        // SYN again: reset state
+        conn_syn_recv(conn, tcp, payload_len);
+      } else {
+        conn_reset(conn, 1);
+      }
       break;
   }
-  conn->ack_seq += buf_len - ip_end - sizeof(*tcp);
+  seq = conn->seq;
+  ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
-
-  __u32 seq = bpf_ntohl(tcp->seq), ack_seq = bpf_ntohl(tcp->ack_seq);
-  __u32 flag_word = bpf_ntohl(tcp_flag_word(tcp));
-  __u16 urg_ptr = bpf_ntohs(tcp->urg_ptr);
+#ifdef _DEBUG
+  bpf_printk(
+    "ingress: received TCP packet: seq = %u, ack_seq = %u", bpf_ntohl(tcp->seq),
+    bpf_ntohl(tcp->ack_seq)
+  );
+  bpf_printk("ingress: current state: seq = %u, ack_seq = %u", seq, ack_seq);
+#endif
 
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;

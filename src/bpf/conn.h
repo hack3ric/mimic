@@ -38,15 +38,16 @@ struct connection {
   _Bool rst;
 };
 
-static inline void conn_reset(struct connection* conn) {
-  conn->state = STATE_IDLE;
+static inline void conn_reset(struct connection* conn, _Bool send_rst) {
   conn->seq = conn->ack_seq = 0;
+  conn->rst = send_rst;
+  conn->state = STATE_IDLE;
 }
 
-static inline void conn_syn_recv(struct connection* conn, struct tcphdr* tcp) {
-  conn->state = STATE_SYN_RECV;
+static inline void conn_syn_recv(struct connection* conn, struct tcphdr* tcp, __u32 payload_len) {
   conn->seq = 0;
-  conn->ack_seq = bpf_ntohl(tcp->seq);
+  conn->ack_seq = bpf_ntohl(tcp->seq) + payload_len + 1;
+  conn->state = STATE_SYN_RECV;
 }
 
 #endif  // _MIMIC_BPF_CONN_Hs
