@@ -118,7 +118,7 @@ Support for other L2 protocols such as PPP(oE) and WLAN will be added.
 
 #### Sequence number syncing will fail when connecting two virtual machines on the same virtual network bridge, both with virtio-net NIC.
 
-It seems the virtio driver/implementation still considers fake TCP segment as UDP, and overwrites the "UDP checksum" field (which is now the lower 16 bits of the sequence number). This will not affect most scenarios since the VMs are on a virtualized network bridge. If you are experimenting, just switch the NIC on one of the VMs to an emulated one, like Intel 82574 (e1000e) on libvirt.
+It seems the virtio driver/implementation still considers fake TCP segment as UDP, and overwrites the "UDP checksum" field (which is now the lower 16 bits of the sequence number). This will not affect most scenarios since you probably would not need to connect the VMs on the same virtualized network bridge using VPN tunnel. If you are experimenting, just switch the NIC on one or both of the VMs to an emulated one, like Intel 82574 (e1000e) on libvirt.
 
 ## Future work
 
