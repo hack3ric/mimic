@@ -81,7 +81,34 @@ The following shows how Mimic works visually:
 
 ## Benchmark
 
-TODO
+### Environment
+
+- Host CPU Core i9-13900F, running Arch Linux (2023-11-13)
+- Two VMs running Debian 12 on libvirt QEMU/KVM, with 4 vcores each, using emulated e1000e NIC ([see below](#sequence-number-syncing-will-fail-when-connecting-two-virtual-machines-on-the-same-virtual-network-bridge-both-with-virtio-net-nic))
+- Test commands: `iperf3 -s` and `iperf3 -c <server IPv4> -t 20`
+- WireGuard tunnels run over IPv4
+
+### Speed
+
+| Connection                                           | MTU  | Recv Speed | Send CPU Usage | Recv CPU Usage |
+| ---------------------------------------------------- | ---- | ---------- | -------------- | -------------- |
+| **Direct**                                           | 1500 | 5.28 Gbps  | 4x10%          | 2x100%, 2x1%   |
+| **WireGuard**                                        | 1440 | 2.38 Gbps  | 1x100%, 3x10%  | 1x40%, 3x35%   |
+| **WireGuard + udp2raw**<br>w/ fake TCP + `--fix-gro` | 1342 | 788 Mbps   | 1x100%, 3x10%  | 1x100%, 3x20%  |
+| **WireGuard + Phantun**                              | 1428 | 980 Mbps   | 4x30%          | 4x35%          |
+| **WireGuard + Mimic**                                | 1428 | 2.23 Gbps  | 1x100%, 3x10%  | 1x40%, 3x35%   |
+
+### CPU usage
+
+`iperf3 -c <server IPv4> -t 20 -b 500M`
+
+| Connection                                           | MTU  | Recv Speed | Send CPU Usage | Recv CPU Usage |
+| ---------------------------------------------------- | ---- | ---------- | -------------- | -------------- |
+| **Direct**                                           | 1500 | 500 Mbps   | 4x<5%          | 4x<5%          |
+| **WireGuard**                                        | 1440 | 500 Mbps   | 1x35%, 4x<5%   | 4x<5%          |
+| **WireGuard + udp2raw**<br>w/ fake TCP + `--fix-gro` | 1342 | 500 Mbps   | 1x50%, 3x25%   | 1x55%, 3x10%   |
+| **WireGuard + Phantun**                              | 1428 | 500 Mbps   | 4x15%          | 4x20%          |
+| **WireGuard + Mimic**                                | 1428 | 500 Mbps   | 1x38%, 4x<5%   | 4x<5%          |
 
 ## Caveats
 
