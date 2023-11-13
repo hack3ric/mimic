@@ -85,7 +85,7 @@ TODO
 
 ## Caveats
 
-#### Currently only Ethernet packets is correctly parsed.
+#### Currently only Ethernet packets are correctly parsed.
 
 Support for other L2 protocols such as PPP(oE) and WLAN will be added.
 
