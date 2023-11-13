@@ -2,7 +2,7 @@
 
 Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP QoS and port blocking. Based on eBPF, it directly mangles data inside Traffic Control (TC) subsystem in the kernel space and restores data using XDP, achieving remarkably high performance compared to other projects, such as [udp2raw](https://github.com/wangyu-/udp2raw) or [Phantun](https://github.com/dndx/phantun).
 
-**Note:** The project is still in early development stage. Expect broken functionality.
+**Note:** The project is still in early development stage. Use with care and try at your own risk.
 
 ## Usage
 
@@ -63,7 +63,7 @@ $ make DEBUG=
 
 Mimic extends every UDP packet with 12 bytes. First 12 bytes of the data is moved to the back, and the UDP header is transformed into TCP header in place.
 
-When used with a tunnel protocol, make sure to lower the MTU bytes by 12. For example, a WireGuard tunnel over IPv6 and Ethernet would need to change its MTU from 1420 to 1408.
+When used with a tunnel protocol, make sure to lower the MTU bytes by 12. For example, a WireGuard tunnel over IPv6 and Ethernet would need to change its MTU from 1420 to 1408. For IPv4, the default value of 1420 will work, with the maximum MTU being 1428.
 
 The following shows how Mimic works visually:
 
@@ -82,6 +82,16 @@ The following shows how Mimic works visually:
 ## Benchmark
 
 TODO
+
+## Caveats
+
+#### Currently only Ethernet packets is correctly parsed.
+
+Support for other L2 protocols such as PPP(oE) and WLAN will be added.
+
+#### Sequence number syncing will fail when connecting two virtual machines on the same virtual network bridge, both with virtio-net NIC.
+
+It seems the virtio driver/implementation still considers fake TCP segment as UDP, and overwrites the "UDP checksum" field (which is now the lower 16 bits of the sequence number). This will not affect most scenarios since the VMs are on a virtualized network bridge. If you are experimenting, just switch the NIC on one of the VMs to an emulated one, like Intel 82574 (e1000e) on libvirt.
 
 ## Future work
 
