@@ -64,5 +64,4 @@ static void ip_port_fmt(__be32* v4, struct in6_addr* v6, __u16 port, char* restr
   bpf_snprintf(dest, MAX_IP_PORT_STR_LEN, fmt, args, 2 * sizeof(__u64));
 }
 
-
 #endif  // _MIMIC_BPF_UTIL_H

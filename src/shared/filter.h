@@ -35,21 +35,33 @@ struct pkt_filter {
 
 #ifndef _MIMIC_BPF
 
-// "remote=[%pI6]:%d\0"
+// max: "[%pI6]:%d\0"
+#define IP_PORT_MAX_LEN (INET6_ADDRSTRLEN + 2 + 5 + 1)
+// max: "remote=[%pI6]:%d\0"
 #define FILTER_FMT_MAX_LEN (8 + INET6_ADDRSTRLEN + 2 + 5 + 1)
 
-// `dest` must be at least `FILTER_FMT_MAX_LEN` bytes long.
-void pkt_filter_fmt(const struct pkt_filter* restrict filter, char* restrict dest) {
+static void ip_port_fmt(
+  enum ip_type protocol, union ip_value ip, __be16 port, char* restrict dest
+) {
   *dest = '\0';
-  if (filter->direction == DIR_LOCAL)
+  int af = protocol == TYPE_IPV4 ? AF_INET : AF_INET6;
+  if (protocol == TYPE_IPV6) strcat(dest, "[");
+  inet_ntop(af, &ip, dest + strlen(dest), 32);
+  if (protocol == TYPE_IPV6) strcat(dest, "]");
+  snprintf(dest + strlen(dest), 7, ":%d", ntohs(port));
+}
+
+// `dest` must be at least `FILTER_FMT_MAX_LEN` bytes long.
+static void pkt_filter_fmt(const struct pkt_filter* restrict filter, char* restrict dest) {
+  *dest = '\0';
+  if (filter->direction == DIR_LOCAL) {
     strcat(dest, "local=");
-  else if (filter->direction == DIR_REMOTE)
+    dest += 6;
+  } else if (filter->direction == DIR_REMOTE) {
     strcat(dest, "remote=");
-  int af = filter->protocol == TYPE_IPV4 ? AF_INET : AF_INET6;
-  if (filter->protocol == TYPE_IPV6) strcat(dest, "[");
-  inet_ntop(af, &filter->ip, dest + strlen(dest), 32);
-  if (filter->protocol == TYPE_IPV6) strcat(dest, "]");
-  snprintf(dest + strlen(dest), 7, ":%d", ntohs(filter->port));
+    dest += 7;
+  }
+  ip_port_fmt(filter->protocol, filter->ip, filter->port, dest);
 }
 
 #endif  // _MIMIC_BPF

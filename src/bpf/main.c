@@ -116,12 +116,7 @@ int egress_handler(struct __sk_buff* skb) {
     return TC_ACT_OK;
   }
 
-#define _DEBUG_EGRESS_MSG "egress: matched UDP packet to "
-  if (ipv4) {
-    log_debug(_DEBUG_EGRESS_MSG "%pI4:%d", &ipv4_daddr, bpf_ntohs(udp->dest));
-  } else if (ipv6) {
-    log_debug(_DEBUG_EGRESS_MSG "[%pI6]:%d", &ipv6_daddr, bpf_ntohs(udp->dest));
-  }
+  log_pkt(LOG_LEVEL_DEBUG, "egress: matched UDP packet", ipv4, ipv6, udp, NULL);
 
   struct conn_tuple conn_key = {};
   if (ipv4) {
@@ -269,7 +264,6 @@ int ingress_handler(struct xdp_md* xdp) {
   struct pkt_filter local_key = {}, remote_key = {};
   if (ipv4) {
     ipv4_saddr = ipv4->saddr, ipv4_daddr = ipv4->daddr;
-    // log_warn("saddr: %pI4, daddr: %pI4", &ipv4_saddr, &ipv4_daddr);
     local_key = pkt_filter_v4(DIR_LOCAL, ipv4_daddr, tcp->dest);
     remote_key = pkt_filter_v4(DIR_REMOTE, ipv4_saddr, tcp->source);
   } else if (ipv6) {
@@ -281,12 +275,7 @@ int ingress_handler(struct xdp_md* xdp) {
     return XDP_PASS;
   }
 
-#define _DEBUG_MSG_INGRESS "ingress: matched (fake) TCP packet from "
-  if (ipv4) {
-    log_debug(_DEBUG_MSG_INGRESS "%pI4:%d", &ipv4_saddr, bpf_ntohs(tcp->source));
-  } else if (ipv6) {
-    log_debug(_DEBUG_MSG_INGRESS "[%pI6]:%d", &ipv6_saddr, bpf_ntohs(tcp->source));
-  }
+  log_pkt(LOG_LEVEL_DEBUG, "ingress: matched (fake) TCP packet", ipv4, ipv6, NULL, tcp);
 
   struct conn_tuple conn_key = {};
   if (ipv4) {
@@ -313,12 +302,7 @@ int ingress_handler(struct xdp_md* xdp) {
 
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
-    if (LOG_ALLOW_WARN) {
-      char from[MAX_IP_PORT_STR_LEN], to[MAX_IP_PORT_STR_LEN];
-      ip_port_fmt(&ipv4_saddr, &ipv6_saddr, bpf_htons(tcp->source), from);
-      ip_port_fmt(&ipv4_daddr, &ipv6_daddr, bpf_htons(tcp->dest), to);
-      log_warn("received RST from %s to %s", from, to);
-    }
+    log_pkt(LOG_LEVEL_WARN, "received RST", ipv4, ipv6, NULL, tcp);
     return XDP_DROP;
   }
   bpf_spin_lock(&conn->lock);

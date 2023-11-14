@@ -1,6 +1,11 @@
 #ifndef _MIMIC_LOG_H
 #define _MIMIC_LOG_H
 
+#include <linux/ip.h>
+#include <linux/ipv6.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
+#include <string.h>
 #ifdef _MIMIC_BPF
 #include <bpf/bpf_helpers.h>
 #include <linux/bpf.h>
@@ -9,22 +14,49 @@
 #include <stdio.h>
 #endif
 
+#include "filter.h"
+
 #ifdef _MIMIC_BPF
 const volatile int log_verbosity = 0;
 #else
 static int log_verbosity = 2;
 #endif
 
-#define LOG_ALLOW_DEBUG (log_verbosity >= 3)
-#define LOG_ALLOW_INFO (log_verbosity >= 2)
-#define LOG_ALLOW_WARN (log_verbosity >= 1)
-#define LOG_ALLOW_ERROR (1)
+enum log_level {
+  LOG_LEVEL_ERROR = 0,
+  LOG_LEVEL_WARN = 1,
+  LOG_LEVEL_INFO = 2,
+  LOG_LEVEL_DEBUG = 3,
+};
+
+enum log_type {
+  LOG_TYPE_MSG,
+  LOG_TYPE_PKT,
+};
+
+#define LOG_ALLOW_DEBUG (log_verbosity >= LOG_LEVEL_DEBUG)
+#define LOG_ALLOW_INFO (log_verbosity >= LOG_LEVEL_INFO)
+#define LOG_ALLOW_WARN (log_verbosity >= LOG_LEVEL_WARN)
+#define LOG_ALLOW_ERROR (log_verbosity >= LOG_LEVEL_ERROR)
 
 #define LOG_RB_ITEM_LEN 128
+#define LOG_RB_MSG_LEN (LOG_RB_ITEM_LEN - 4)
+#define LOG_RB_PKT_MSG_LEN 84
+
 struct log_event {
-  __u8 level;
-  char buf[LOG_RB_ITEM_LEN - 1];
+  enum log_level level : 16;
+  enum log_type type : 16;
+  union {
+    char msg[LOG_RB_MSG_LEN];
+    struct pkt_info {
+      char msg[LOG_RB_PKT_MSG_LEN];
+      enum ip_type protocol;
+      __u16 from_port, to_port;
+      union ip_value from, to;
+    } pkt;
+  } inner;
 };
+
 _Static_assert(sizeof(struct log_event) == LOG_RB_ITEM_LEN, "log_event length mismatch");
 
 #ifdef _MIMIC_BPF
@@ -52,19 +84,53 @@ struct {
     struct log_event* e = bpf_ringbuf_reserve(&mimic_rb, LOG_RB_ITEM_LEN, 0); \
     if (e) {                                                                  \
       e->level = (_l);                                                        \
-      _log_f(e->buf, LOG_RB_ITEM_LEN - 1, _fmt, __VA_ARGS__);                 \
+      _log_f(e->inner.msg, LOG_RB_MSG_LEN, _fmt, __VA_ARGS__);                \
       bpf_ringbuf_submit(e, 0);                                               \
     }                                                                         \
   })
 
 #define log_debug(fmt, ...) \
-  if (LOG_ALLOW_DEBUG) _log_rbprintf(3, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_DEBUG) _log_rbprintf(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
 #define log_info(fmt, ...) \
-  if (LOG_ALLOW_INFO) _log_rbprintf(2, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_INFO) _log_rbprintf(LOG_LEVEL_INFO, fmt, ##__VA_ARGS__)
 #define log_warn(fmt, ...) \
-  if (LOG_ALLOW_WARN) _log_rbprintf(1, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_WARN) _log_rbprintf(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)
 #define log_error(fmt, ...) \
-  if (LOG_ALLOW_ERROR) _log_rbprintf(0, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_ERROR) _log_rbprintf(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
+
+static __always_inline void log_pkt(
+  enum log_level level, char* msg, struct iphdr* ipv4, struct ipv6hdr* ipv6, struct udphdr* udp,
+  struct tcphdr* tcp
+) {
+  if (log_verbosity < level) return;
+
+  struct log_event* e = bpf_ringbuf_reserve(&mimic_rb, LOG_RB_ITEM_LEN, 0);
+  if (!e) return;
+  e->level = level;
+  e->type = LOG_TYPE_PKT;
+  struct pkt_info* pkt = &e->inner.pkt;
+
+  if (udp) {
+    pkt->from_port = udp->source;
+    pkt->to_port = udp->dest;
+  } else if (tcp) {
+    pkt->from_port = tcp->source;
+    pkt->to_port = tcp->dest;
+  }
+
+  if (ipv4) {
+    pkt->protocol = TYPE_IPV4;
+    pkt->from.v4 = ipv4->saddr;
+    pkt->to.v4 = ipv4->daddr;
+  } else if (ipv6) {
+    pkt->protocol = TYPE_IPV6;
+    pkt->from.v6 = ipv6->saddr;
+    pkt->to.v6 = ipv6->daddr;
+  }
+
+  strncpy(pkt->msg, msg, LOG_RB_PKT_MSG_LEN);
+  bpf_ringbuf_submit(e, 0);
+}
 
 #else
 
@@ -72,6 +138,13 @@ struct {
 #define _LOG_INFO_PREFIX "   \e[1;32minfo:\e[0m "
 #define _LOG_WARN_PREFIX "   \e[1;33mwarn:\e[0m "
 #define _LOG_ERROR_PREFIX "  \e[1;31merror:\e[0m "
+
+const char* _log_prefixes[] = {
+  _LOG_ERROR_PREFIX, _LOG_WARN_PREFIX, _LOG_INFO_PREFIX, _LOG_DEBUG_PREFIX
+};
+
+#define log(_l, fmt, ...) \
+  if (log_verbosity >= (_l)) fprintf(stderr, "%s" fmt "\n", _log_prefixes[_l], ##__VA_ARGS__)
 
 #define log_debug(fmt, ...) \
   if (LOG_ALLOW_DEBUG) fprintf(stderr, _LOG_DEBUG_PREFIX fmt "\n", ##__VA_ARGS__)

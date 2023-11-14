@@ -17,7 +17,10 @@ static void sig_int(int signo) {
 }
 
 static int tc_hook_create_bind(
-  struct bpf_tc_hook* hook, struct bpf_tc_opts* opts, const struct bpf_program* prog, char* name
+  struct bpf_tc_hook* hook,
+  struct bpf_tc_opts* opts,
+  const struct bpf_program* prog,
+  char* name
 ) {
   int result = bpf_tc_hook_create(hook);
   if (result && result != -EEXIST) ret(-result, "failed to create TC %s hook: %s", name, strerrno);
@@ -33,19 +36,16 @@ static int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts) {
 
 static int handle_event(void* ctx, void* data, size_t data_sz) {
   struct log_event* e = data;
-  switch (e->level) {
-    case 0:
-      log_error("%s", e->buf);
-      break;
-    case 1:
-      log_warn("%s", e->buf);
-      break;
-    case 2:
-      log_info("%s", e->buf);
-      break;
-    case 3:
-      log_debug("%s", e->buf);
-      break;
+  if (e->type == LOG_TYPE_MSG) {
+    log(e->level, "%s", e->inner.msg);
+    return 0;
+  } else if (e->type == LOG_TYPE_PKT) {
+    char from[IP_PORT_MAX_LEN], to[IP_PORT_MAX_LEN];
+    struct pkt_info* pkt = &e->inner.pkt;
+    ip_port_fmt(pkt->protocol, pkt->from, pkt->from_port, from);
+    ip_port_fmt(pkt->protocol, pkt->to, pkt->to_port, to);
+
+    log(e->level, "%s: %s -> %s", pkt->msg, from, to);
   }
   return 0;
 }
@@ -114,7 +114,11 @@ int main(int argc, char* argv[]) {
   _Bool value = 1;
   for (int i = 0; i < args.filter_count; i++) {
     result = bpf_map__update_elem(
-      skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter), &value, sizeof(_Bool),
+      skel->maps.mimic_whitelist,
+      &filters[i],
+      sizeof(struct pkt_filter),
+      &value,
+      sizeof(_Bool),
       BPF_ANY
     );
     if (result || LOG_ALLOW_DEBUG) {

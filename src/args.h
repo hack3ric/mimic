@@ -7,6 +7,7 @@
 #include "shared/log.h"
 #include "util.h"
 
+// clang-format off
 static const struct argp_option _args_options[] = {
   {"filter", 'f', "FILTER", 0,
    "Specify what packets to process. This may be specified for multiple times."},
@@ -48,7 +49,6 @@ static error_t _args_parse_opt(int key, char* arg, struct argp_state* state) {
         log_error("currently only one interface is supported");
         exit(1);
       }
-
       break;
     default:
       return ARGP_ERR_UNKNOWN;
