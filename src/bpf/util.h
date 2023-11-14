@@ -51,4 +51,18 @@
 #define max(x, y) ((x) < (y) ? (y) : (x))
 #define cmp(x, y) ((x) > (y) - (x) < (y))
 
+#ifndef INET6_ADDRSTRLEN
+#define INET6_ADDRSTRLEN 46
+#endif
+
+// "[%pI6]:%d"
+#define MAX_IP_PORT_STR_LEN (1 + INET6_ADDRSTRLEN + 2 + 5 + 1)
+
+static void ip_port_fmt(__be32* v4, struct in6_addr* v6, __u16 port, char* restrict dest) {
+  char* fmt = *v4 ? "%pI4:%d" : "[%pI6]:%d";
+  __u64* args = *v4 ? (__u64[]){(__u64)v4, (__u64)port} : (__u64[]){(__u64)v6, (__u64)port};
+  bpf_snprintf(dest, MAX_IP_PORT_STR_LEN, fmt, args, 2 * sizeof(__u64));
+}
+
+
 #endif  // _MIMIC_BPF_UTIL_H

@@ -1,12 +1,6 @@
 CC = clang
 BPF_CFLAGS ?= -O2
 CFLAGS ?= -O2
-DEBUG ?= 1
-
-ifneq ($(DEBUG),)
-BPF_CFLAGS += -D_DEBUG
-CFLAGS += -g -D_DEBUG
-endif
 
 all: build
 build: out/mimic

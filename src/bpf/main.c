@@ -116,14 +116,12 @@ int egress_handler(struct __sk_buff* skb) {
     return TC_ACT_OK;
   }
 
-#ifdef _DEBUG
 #define _DEBUG_EGRESS_MSG "egress: matched UDP packet to "
   if (ipv4) {
-    bpf_printk(_DEBUG_EGRESS_MSG "%pI4:%d", &ipv4_daddr, bpf_ntohs(udp->dest));
+    log_debug(_DEBUG_EGRESS_MSG "%pI4:%d", &ipv4_daddr, bpf_ntohs(udp->dest));
   } else if (ipv6) {
-    bpf_printk(_DEBUG_EGRESS_MSG "[%pI6]:%d", &ipv6_daddr, bpf_ntohs(udp->dest));
+    log_debug(_DEBUG_EGRESS_MSG "[%pI6]:%d", &ipv6_daddr, bpf_ntohs(udp->dest));
   }
-#endif
 
   struct conn_tuple conn_key = {};
   if (ipv4) {
@@ -142,9 +140,7 @@ int egress_handler(struct __sk_buff* skb) {
 
   __u16 udp_len = bpf_ntohs(udp->len);
   __u16 payload_len = udp_len - sizeof(*udp);
-#ifdef _DEBUG
-  bpf_printk("egress: payload_len = %d", payload_len);
-#endif
+  log_debug("egress: payload_len = %d", payload_len);
 
   _Bool syn = 0, ack = 0, rst = 0;
   __u32 seq, ack_seq, conn_seq, conn_ack_seq;
@@ -188,10 +184,8 @@ int egress_handler(struct __sk_buff* skb) {
   conn_seq = conn->seq;
   conn_ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
-#ifdef _DEBUG
-  bpf_printk("egress: sending TCP packet: seq = %u, ack_seq = %u", seq, ack_seq);
-  bpf_printk("egress: current state: seq = %u, ack_seq = %u", conn_seq, conn_ack_seq);
-#endif
+  log_debug("egress: sending TCP packet: seq = %u, ack_seq = %u", seq, ack_seq);
+  log_debug("egress: current state: seq = %u, ack_seq = %u", conn_seq, conn_ack_seq);
 
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
@@ -275,6 +269,7 @@ int ingress_handler(struct xdp_md* xdp) {
   struct pkt_filter local_key = {}, remote_key = {};
   if (ipv4) {
     ipv4_saddr = ipv4->saddr, ipv4_daddr = ipv4->daddr;
+    // log_warn("saddr: %pI4, daddr: %pI4", &ipv4_saddr, &ipv4_daddr);
     local_key = pkt_filter_v4(DIR_LOCAL, ipv4_daddr, tcp->dest);
     remote_key = pkt_filter_v4(DIR_REMOTE, ipv4_saddr, tcp->source);
   } else if (ipv6) {
@@ -286,14 +281,12 @@ int ingress_handler(struct xdp_md* xdp) {
     return XDP_PASS;
   }
 
-#ifdef _DEBUG
 #define _DEBUG_MSG_INGRESS "ingress: matched (fake) TCP packet from "
   if (ipv4) {
-    bpf_printk(_DEBUG_MSG_INGRESS "%pI4:%d", &ipv4_saddr, bpf_ntohs(tcp->source));
+    log_debug(_DEBUG_MSG_INGRESS "%pI4:%d", &ipv4_saddr, bpf_ntohs(tcp->source));
   } else if (ipv6) {
-    bpf_printk(_DEBUG_MSG_INGRESS "[%pI6]:%d", &ipv6_saddr, bpf_ntohs(tcp->source));
+    log_debug(_DEBUG_MSG_INGRESS "[%pI6]:%d", &ipv6_saddr, bpf_ntohs(tcp->source));
   }
-#endif
 
   struct conn_tuple conn_key = {};
   if (ipv4) {
@@ -313,13 +306,19 @@ int ingress_handler(struct xdp_md* xdp) {
   __u32 buf_len = bpf_xdp_get_buff_len(xdp);
   __u32 payload_len = buf_len - ip_end - sizeof(*tcp);
   __u32 seq = 0, ack_seq = 0;
-#ifdef _DEBUG
-  bpf_printk("ingress: payload_len = %d", payload_len);
-#endif
+  log_debug("ingress: payload_len = %d", payload_len);
+
   if (tcp->rst) {
     conn_reset(conn, 0);
+
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
+    if (LOG_ALLOW_WARN) {
+      char from[MAX_IP_PORT_STR_LEN], to[MAX_IP_PORT_STR_LEN];
+      ip_port_fmt(&ipv4_saddr, &ipv6_saddr, bpf_htons(tcp->source), from);
+      ip_port_fmt(&ipv4_daddr, &ipv6_daddr, bpf_htons(tcp->dest), to);
+      log_warn("received RST from %s to %s", from, to);
+    }
     return XDP_DROP;
   }
   bpf_spin_lock(&conn->lock);
@@ -374,13 +373,11 @@ int ingress_handler(struct xdp_md* xdp) {
   seq = conn->seq;
   ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
-#ifdef _DEBUG
-  bpf_printk(
+  log_debug(
     "ingress: received TCP packet: seq = %u, ack_seq = %u", bpf_ntohl(tcp->seq),
     bpf_ntohl(tcp->ack_seq)
   );
-  bpf_printk("ingress: current state: seq = %u, ack_seq = %u", seq, ack_seq);
-#endif
+  log_debug("ingress: current state: seq = %u, ack_seq = %u", seq, ack_seq);
 
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;

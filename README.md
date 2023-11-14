@@ -53,12 +53,6 @@ Then just simply:
 $ make
 ```
 
-To build without debug information:
-
-```console
-$ make DEBUG=
-```
-
 ## Details
 
 Mimic extends every UDP packet with 12 bytes. First 12 bytes of the data is moved to the back, and the UDP header is transformed into TCP header in place.

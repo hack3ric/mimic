@@ -35,7 +35,8 @@ struct pkt_filter {
 
 #ifndef _MIMIC_BPF
 
-#define FILTER_FMT_MAX_LEN (7 + INET6_ADDRSTRLEN + 6)
+// "remote=[%pI6]:%d\0"
+#define FILTER_FMT_MAX_LEN (8 + INET6_ADDRSTRLEN + 2 + 5 + 1)
 
 // `dest` must be at least `FILTER_FMT_MAX_LEN` bytes long.
 void pkt_filter_fmt(const struct pkt_filter* restrict filter, char* restrict dest) {
