@@ -4,7 +4,7 @@
 #include <argp.h>
 #include <stdlib.h>
 
-#include "log.h"
+#include "shared/log.h"
 #include "util.h"
 
 static const struct argp_option _args_options[] = {

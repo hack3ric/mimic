@@ -6,8 +6,8 @@
 
 #include "args.h"
 #include "bpf/skel.h"
-#include "log.h"
 #include "shared/filter.h"
+#include "shared/log.h"
 #include "util.h"
 
 static volatile sig_atomic_t exiting = 0;
@@ -29,6 +29,25 @@ static int tc_hook_create_bind(
 static int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts) {
   opts->flags = opts->prog_fd = opts->prog_id = 0;
   return bpf_tc_detach(hook, opts);
+}
+
+static int handle_event(void* ctx, void* data, size_t data_sz) {
+  struct log_event* e = data;
+  switch (e->level) {
+    case 0:
+      log_error("%s", e->buf);
+      break;
+    case 1:
+      log_warn("%s", e->buf);
+      break;
+    case 2:
+      log_info("%s", e->buf);
+      break;
+    case 3:
+      log_debug("%s", e->buf);
+      break;
+  }
+  return 0;
 }
 
 int main(int argc, char* argv[]) {
@@ -88,8 +107,9 @@ int main(int argc, char* argv[]) {
 
   libbpf_set_print(libbpf_print_fn);
 
-  struct mimic_bpf* skel =
-    try_ptr(mimic_bpf__open_and_load(), "failed to open and load BPF program: %s", strerrno);
+  struct mimic_bpf* skel = try_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerrno);
+  skel->rodata->log_verbosity = log_verbosity;
+  try_or_cleanup(mimic_bpf__load(skel), "failed to load BPF program: %s", strerrno);
 
   _Bool value = 1;
   for (int i = 0; i < args.filter_count; i++) {
@@ -107,6 +127,10 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  struct ring_buffer* rb =
+    ring_buffer__new(bpf_map__fd(skel->maps.mimic_rb), handle_event, NULL, NULL);
+  if (!rb) cleanup(errno, "failed to attach BPF ring buffer: %s", strerrno);
+
   LIBBPF_OPTS(bpf_tc_hook, tc_hook_egress, .ifindex = ifindex, .attach_point = BPF_TC_EGRESS);
   LIBBPF_OPTS(bpf_tc_opts, tc_opts_egress, .handle = 1, .priority = 1);
   struct bpf_program* egress = skel->progs.egress_handler;
@@ -122,8 +146,15 @@ int main(int argc, char* argv[]) {
     pkt_filter_fmt(&filters[i], fmt);
     log_info("  * %s", fmt);
   }
+
   if (signal(SIGINT, sig_int) == SIG_ERR) cleanup(errno, "cannot set signal handler: %s", strerrno);
-  while (!exiting) sleep(1);
+  while (!exiting) {
+    int result = ring_buffer__poll(rb, 100);
+    if (result < 0) {
+      if (result == -EINTR) retcode = errno;
+      break;
+    }
+  }
 
 cleanup:
   log_info("cleaning up");

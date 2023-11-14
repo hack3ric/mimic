@@ -2,7 +2,7 @@
 #define _MIMIC_UTIL_H
 
 #include <stdio.h>
-#include "log.h"
+#include "shared/log.h"
 
 #define strerrno strerror(errno)
 

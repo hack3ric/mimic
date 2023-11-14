@@ -13,6 +13,7 @@
 #include <stddef.h>
 
 #include "../shared/filter.h"
+#include "../shared/log.h"
 #include "checksum.h"
 #include "conn.h"
 #include "util.h"
@@ -23,7 +24,6 @@ struct {
   __type(key, struct pkt_filter);
   __type(value, _Bool);
 } mimic_whitelist SEC(".maps");
-
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 32);
@@ -112,8 +112,9 @@ int egress_handler(struct __sk_buff* skb) {
     local_key = pkt_filter_v6(DIR_LOCAL, ipv6_saddr, udp->source);
     remote_key = pkt_filter_v6(DIR_REMOTE, ipv6_daddr, udp->dest);
   }
-  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
+  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key)) {
     return TC_ACT_OK;
+  }
 
 #ifdef _DEBUG
 #define _DEBUG_EGRESS_MSG "egress: matched UDP packet to "
@@ -134,8 +135,6 @@ int egress_handler(struct __sk_buff* skb) {
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
   if (!conn) {
     struct connection conn_value = {};
-    conn_value.state = STATE_IDLE;
-    conn_value.seq = conn_value.ack_seq = 0;
     try_or_shot(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
     conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
     if (!conn) return TC_ACT_SHOT;
@@ -283,8 +282,9 @@ int ingress_handler(struct xdp_md* xdp) {
     local_key = pkt_filter_v6(DIR_LOCAL, ipv6_daddr, tcp->dest);
     remote_key = pkt_filter_v6(DIR_REMOTE, ipv6_saddr, tcp->source);
   }
-  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key))
+  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key)) {
     return XDP_PASS;
+  }
 
 #ifdef _DEBUG
 #define _DEBUG_MSG_INGRESS "ingress: matched (fake) TCP packet from "
@@ -305,8 +305,6 @@ int ingress_handler(struct xdp_md* xdp) {
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
   if (!conn) {
     struct connection conn_value = {};
-    conn_value.state = STATE_IDLE;
-    conn_value.seq = conn_value.ack_seq = 0;
     try_or_drop(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
     conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
     if (!conn) return XDP_DROP;
@@ -357,7 +355,6 @@ int ingress_handler(struct xdp_md* xdp) {
         }
         if (!det) det = cmp(bpf_ntohs(tcp->dest), bpf_ntohs(tcp->source));
         if (det <= 0) conn_syn_recv(conn, tcp, payload_len);
-
       } else {
         conn_reset(conn, 1);
       }
