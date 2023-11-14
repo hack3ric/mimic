@@ -27,6 +27,7 @@ enum log_level {
   LOG_LEVEL_WARN = 1,
   LOG_LEVEL_INFO = 2,
   LOG_LEVEL_DEBUG = 3,
+  LOG_LEVEL_TRACE = 4,
 };
 
 enum log_type {
@@ -34,10 +35,11 @@ enum log_type {
   LOG_TYPE_PKT,
 };
 
-#define LOG_ALLOW_DEBUG (log_verbosity >= LOG_LEVEL_DEBUG)
-#define LOG_ALLOW_INFO (log_verbosity >= LOG_LEVEL_INFO)
-#define LOG_ALLOW_WARN (log_verbosity >= LOG_LEVEL_WARN)
 #define LOG_ALLOW_ERROR (log_verbosity >= LOG_LEVEL_ERROR)
+#define LOG_ALLOW_WARN (log_verbosity >= LOG_LEVEL_WARN)
+#define LOG_ALLOW_INFO (log_verbosity >= LOG_LEVEL_INFO)
+#define LOG_ALLOW_DEBUG (log_verbosity >= LOG_LEVEL_DEBUG)
+#define LOG_ALLOW_TRACE (log_verbosity >= LOG_LEVEL_TRACE)
 
 #define LOG_RB_ITEM_LEN 128
 #define LOG_RB_MSG_LEN (LOG_RB_ITEM_LEN - 4)
@@ -89,14 +91,16 @@ struct {
     }                                                                         \
   })
 
-#define log_debug(fmt, ...) \
-  if (LOG_ALLOW_DEBUG) _log_rbprintf(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
-#define log_info(fmt, ...) \
-  if (LOG_ALLOW_INFO) _log_rbprintf(LOG_LEVEL_INFO, fmt, ##__VA_ARGS__)
-#define log_warn(fmt, ...) \
-  if (LOG_ALLOW_WARN) _log_rbprintf(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)
 #define log_error(fmt, ...) \
   if (LOG_ALLOW_ERROR) _log_rbprintf(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define log_warn(fmt, ...) \
+  if (LOG_ALLOW_WARN) _log_rbprintf(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)
+#define log_info(fmt, ...) \
+  if (LOG_ALLOW_INFO) _log_rbprintf(LOG_LEVEL_INFO, fmt, ##__VA_ARGS__)
+#define log_debug(fmt, ...) \
+  if (LOG_ALLOW_DEBUG) _log_rbprintf(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define log_trace(fmt, ...) \
+  if (LOG_ALLOW_TRACE) _log_rbprintf(LOG_LEVEL_TRACE, fmt, ##__VA_ARGS__)
 
 static __always_inline void log_pkt(
   enum log_level level, char* msg, struct iphdr* ipv4, struct ipv6hdr* ipv6, struct udphdr* udp,
@@ -134,26 +138,29 @@ static __always_inline void log_pkt(
 
 #else
 
-#define _LOG_DEBUG_PREFIX "  \e[1;34mdebug:\e[0m "
-#define _LOG_INFO_PREFIX "   \e[1;32minfo:\e[0m "
-#define _LOG_WARN_PREFIX "   \e[1;33mwarn:\e[0m "
 #define _LOG_ERROR_PREFIX "  \e[1;31merror:\e[0m "
+#define _LOG_WARN_PREFIX "   \e[1;33mwarn:\e[0m "
+#define _LOG_INFO_PREFIX "   \e[1;32minfo:\e[0m "
+#define _LOG_DEBUG_PREFIX "  \e[1;34mdebug:\e[0m "
+#define _LOG_TRACE_PREFIX "  \e[1;30mtrace:\e[0m "
 
 const char* _log_prefixes[] = {
-  _LOG_ERROR_PREFIX, _LOG_WARN_PREFIX, _LOG_INFO_PREFIX, _LOG_DEBUG_PREFIX
+  _LOG_ERROR_PREFIX, _LOG_WARN_PREFIX, _LOG_INFO_PREFIX, _LOG_DEBUG_PREFIX, _LOG_TRACE_PREFIX,
 };
 
 #define log(_l, fmt, ...) \
   if (log_verbosity >= (_l)) fprintf(stderr, "%s" fmt "\n", _log_prefixes[_l], ##__VA_ARGS__)
 
-#define log_debug(fmt, ...) \
-  if (LOG_ALLOW_DEBUG) fprintf(stderr, _LOG_DEBUG_PREFIX fmt "\n", ##__VA_ARGS__)
-#define log_info(fmt, ...) \
-  if (LOG_ALLOW_INFO) fprintf(stderr, _LOG_INFO_PREFIX fmt "\n", ##__VA_ARGS__)
-#define log_warn(fmt, ...) \
-  if (LOG_ALLOW_WARN) fprintf(stderr, _LOG_WARN_PREFIX fmt "\n", ##__VA_ARGS__)
 #define log_error(fmt, ...) \
   if (LOG_ALLOW_ERROR) fprintf(stderr, _LOG_ERROR_PREFIX fmt "\n", ##__VA_ARGS__)
+#define log_warn(fmt, ...) \
+  if (LOG_ALLOW_WARN) fprintf(stderr, _LOG_WARN_PREFIX fmt "\n", ##__VA_ARGS__)
+#define log_info(fmt, ...) \
+  if (LOG_ALLOW_INFO) fprintf(stderr, _LOG_INFO_PREFIX fmt "\n", ##__VA_ARGS__)
+#define log_debug(fmt, ...) \
+  if (LOG_ALLOW_DEBUG) fprintf(stderr, _LOG_DEBUG_PREFIX fmt "\n", ##__VA_ARGS__)
+#define log_trace(fmt, ...) \
+  if (LOG_ALLOW_TRACE) fprintf(stderr, _LOG_TRACE_PREFIX fmt "\n", ##__VA_ARGS__)
 
 static int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list args) {
   int result1;

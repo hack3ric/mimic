@@ -35,7 +35,7 @@ static error_t _args_parse_opt(int key, char* arg, struct argp_state* state) {
       }
       break;
     case 'v':
-      if (log_verbosity < 3) log_verbosity++;
+      if (log_verbosity < 4) log_verbosity++;
       break;
     case 'q':
       if (log_verbosity > 0) log_verbosity--;

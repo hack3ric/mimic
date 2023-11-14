@@ -135,7 +135,7 @@ int egress_handler(struct __sk_buff* skb) {
 
   __u16 udp_len = bpf_ntohs(udp->len);
   __u16 payload_len = udp_len - sizeof(*udp);
-  log_debug("egress: payload_len = %d", payload_len);
+  log_trace("egress: payload_len = %d", payload_len);
 
   _Bool syn = 0, ack = 0, rst = 0;
   __u32 seq, ack_seq, conn_seq, conn_ack_seq;
@@ -179,8 +179,8 @@ int egress_handler(struct __sk_buff* skb) {
   conn_seq = conn->seq;
   conn_ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
-  log_debug("egress: sending TCP packet: seq = %u, ack_seq = %u", seq, ack_seq);
-  log_debug("egress: current state: seq = %u, ack_seq = %u", conn_seq, conn_ack_seq);
+  log_trace("egress: sending TCP packet: seq = %u, ack_seq = %u", seq, ack_seq);
+  log_trace("egress: current state: seq = %u, ack_seq = %u", conn_seq, conn_ack_seq);
 
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
@@ -295,16 +295,16 @@ int ingress_handler(struct xdp_md* xdp) {
   __u32 buf_len = bpf_xdp_get_buff_len(xdp);
   __u32 payload_len = buf_len - ip_end - sizeof(*tcp);
   __u32 seq = 0, ack_seq = 0;
-  log_debug("ingress: payload_len = %d", payload_len);
+  log_trace("ingress: payload_len = %d", payload_len);
 
   if (tcp->rst) {
     conn_reset(conn, 0);
-
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
-    log_pkt(LOG_LEVEL_WARN, "received RST", ipv4, ipv6, NULL, tcp);
+    log_pkt(LOG_LEVEL_WARN, "ingress: received RST", ipv4, ipv6, NULL, tcp);
     return XDP_DROP;
   }
+
   bpf_spin_lock(&conn->lock);
   switch (conn->state) {
     case STATE_IDLE:
@@ -357,11 +357,11 @@ int ingress_handler(struct xdp_md* xdp) {
   seq = conn->seq;
   ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
-  log_debug(
+  log_trace(
     "ingress: received TCP packet: seq = %u, ack_seq = %u", bpf_ntohl(tcp->seq),
     bpf_ntohl(tcp->ack_seq)
   );
-  log_debug("ingress: current state: seq = %u, ack_seq = %u", seq, ack_seq);
+  log_trace("ingress: current state: seq = %u, ack_seq = %u", seq, ack_seq);
 
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
