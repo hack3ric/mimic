@@ -8,7 +8,7 @@
 #include "bpf/skel.h"
 #include "shared/filter.h"
 #include "shared/log.h"
-#include "util.h"
+#include "shared/util.h"
 
 static volatile sig_atomic_t exiting = 0;
 static void sig_int(int signo) {
@@ -17,10 +17,7 @@ static void sig_int(int signo) {
 }
 
 static int tc_hook_create_bind(
-  struct bpf_tc_hook* hook,
-  struct bpf_tc_opts* opts,
-  const struct bpf_program* prog,
-  char* name
+  struct bpf_tc_hook* hook, struct bpf_tc_opts* opts, const struct bpf_program* prog, char* name
 ) {
   int result = bpf_tc_hook_create(hook);
   if (result && result != -EEXIST) ret(-result, "failed to create TC %s hook: %s", name, strerrno);
@@ -55,6 +52,7 @@ int main(int argc, char* argv[]) {
   struct arguments args = {0};
   try(argp_parse(&args_argp, argc, argv, 0, 0, &args), "error parsing arguments");
 
+  if (args.filter_count == 0) ret(1, "no filter specified");
   struct pkt_filter filters[args.filter_count];
   memset(filters, 0, args.filter_count * sizeof(*filters));
   for (int i = 0; i < args.filter_count; i++) {
@@ -109,16 +107,12 @@ int main(int argc, char* argv[]) {
 
   struct mimic_bpf* skel = try_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerrno);
   skel->rodata->log_verbosity = log_verbosity;
-  try_or_cleanup(mimic_bpf__load(skel), "failed to load BPF program: %s", strerrno);
+  try(mimic_bpf__load(skel), "failed to load BPF program: %s", strerrno);
 
   _Bool value = 1;
   for (int i = 0; i < args.filter_count; i++) {
     result = bpf_map__update_elem(
-      skel->maps.mimic_whitelist,
-      &filters[i],
-      sizeof(struct pkt_filter),
-      &value,
-      sizeof(_Bool),
+      skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter), &value, sizeof(_Bool),
       BPF_ANY
     );
     if (result || LOG_ALLOW_DEBUG) {

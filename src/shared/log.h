@@ -1,11 +1,10 @@
-#ifndef _MIMIC_LOG_H
-#define _MIMIC_LOG_H
+#ifndef _MIMIC_SHARED_LOG_H
+#define _MIMIC_SHARED_LOG_H
 
 #include <linux/ip.h>
 #include <linux/ipv6.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
-#include <string.h>
 #ifdef _MIMIC_BPF
 #include <bpf/bpf_helpers.h>
 #include <linux/bpf.h>
@@ -132,7 +131,7 @@ static __always_inline void log_pkt(
     pkt->to.v6 = ipv6->daddr;
   }
 
-  strncpy(pkt->msg, msg, LOG_RB_PKT_MSG_LEN);
+  __builtin_strncpy(pkt->msg, msg, LOG_RB_PKT_MSG_LEN);
   bpf_ringbuf_submit(e, 0);
 }
 
@@ -181,4 +180,4 @@ static int libbpf_print_fn(enum libbpf_print_level level, const char* format, va
 
 #endif  // _MIMIC_BPF
 
-#endif  // _MIMIC_LOG_H
+#endif  // _MIMIC_SHARED_LOG_H

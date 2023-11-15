@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 #include "shared/log.h"
-#include "util.h"
+#include "shared/util.h"
 
 // clang-format off
 static const struct argp_option _args_options[] = {
@@ -20,7 +20,7 @@ static char _args_doc[] = "INTERFACE";
 
 struct arguments {
   char* filters[8];
-  int filter_count;
+  unsigned int filter_count;
   char* ifname;
 };
 

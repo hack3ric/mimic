@@ -14,9 +14,9 @@
 
 #include "../shared/filter.h"
 #include "../shared/log.h"
+#include "../shared/util.h"
 #include "checksum.h"
 #include "conn.h"
-#include "util.h"
 
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
@@ -197,7 +197,7 @@ int egress_handler(struct __sk_buff* skb) {
     ipv6->nexthdr = IPPROTO_TCP;
   }
 
-  try(mangle_data(skb, ip_end + sizeof(*udp)));
+  try_sr(mangle_data(skb, ip_end + sizeof(*udp)));
   decl_or_shot(struct tcphdr, tcp, ip_end, skb);
 
   __u32 csum = 0;
@@ -378,7 +378,7 @@ int ingress_handler(struct xdp_md* xdp) {
     ipv6->nexthdr = IPPROTO_UDP;
   }
 
-  try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len));
+  try_sr_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len));
   decl_or_drop(struct udphdr, udp, ip_end, xdp);
 
   __u16 udp_len = buf_len - ip_end - TCP_UDP_HEADER_DIFF;
