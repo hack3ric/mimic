@@ -51,7 +51,7 @@ struct log_event {
     char msg[LOG_RB_MSG_LEN];
     struct pkt_info {
       char msg[LOG_RB_PKT_MSG_LEN];
-      enum ip_type protocol;
+      enum ip_proto protocol;
       __u16 from_port, to_port;
       union ip_value from, to;
     } pkt;
@@ -122,11 +122,11 @@ static __always_inline void log_pkt(
   }
 
   if (ipv4) {
-    pkt->protocol = TYPE_IPV4;
+    pkt->protocol = PROTO_IPV4;
     pkt->from.v4 = ipv4->saddr;
     pkt->to.v4 = ipv4->daddr;
   } else if (ipv6) {
-    pkt->protocol = TYPE_IPV6;
+    pkt->protocol = PROTO_IPV6;
     pkt->from.v6 = ipv6->saddr;
     pkt->to.v6 = ipv6->daddr;
   }

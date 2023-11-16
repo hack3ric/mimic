@@ -11,8 +11,8 @@
 #endif
 
 struct pkt_filter {
-  enum direction_type { DIR_LOCAL, DIR_REMOTE } direction;
-  enum ip_type { TYPE_IPV4, TYPE_IPV6 } protocol;
+  enum pkt_origin { ORIGIN_LOCAL, ORIGIN_REMOTE } origin;
+  enum ip_proto { PROTO_IPV4, PROTO_IPV6 } protocol;
   __be16 port;
   union ip_value {
     __be32 v4;
@@ -23,15 +23,15 @@ struct pkt_filter {
 #define _pkt_filter_init(_dir, _p, _p2, _ip, _port) \
   ({                                                \
     struct pkt_filter _x = {};                      \
-    _x.direction = (_dir);                          \
+    _x.origin = (_dir);                             \
     _x.protocol = (_p);                             \
     _x.port = (_port);                              \
     _x.ip._p2 = (_ip);                              \
     _x;                                             \
   })
 
-#define pkt_filter_v4(dir, ip, port) _pkt_filter_init(dir, TYPE_IPV4, v4, ip, port)
-#define pkt_filter_v6(dir, ip, port) _pkt_filter_init(dir, TYPE_IPV6, v6, ip, port)
+#define pkt_filter_v4(dir, ip, port) _pkt_filter_init(dir, PROTO_IPV4, v4, ip, port)
+#define pkt_filter_v6(dir, ip, port) _pkt_filter_init(dir, PROTO_IPV6, v6, ip, port)
 
 #ifndef _MIMIC_BPF
 
@@ -41,23 +41,23 @@ struct pkt_filter {
 #define FILTER_FMT_MAX_LEN (8 + INET6_ADDRSTRLEN + 2 + 5 + 1)
 
 static void ip_port_fmt(
-  enum ip_type protocol, union ip_value ip, __be16 port, char* restrict dest
+  enum ip_proto protocol, union ip_value ip, __be16 port, char* restrict dest
 ) {
   *dest = '\0';
-  int af = protocol == TYPE_IPV4 ? AF_INET : AF_INET6;
-  if (protocol == TYPE_IPV6) strcat(dest, "[");
+  int af = protocol == PROTO_IPV4 ? AF_INET : AF_INET6;
+  if (protocol == PROTO_IPV6) strcat(dest, "[");
   inet_ntop(af, &ip, dest + strlen(dest), 32);
-  if (protocol == TYPE_IPV6) strcat(dest, "]");
+  if (protocol == PROTO_IPV6) strcat(dest, "]");
   snprintf(dest + strlen(dest), 7, ":%d", ntohs(port));
 }
 
 // `dest` must be at least `FILTER_FMT_MAX_LEN` bytes long.
 static void pkt_filter_fmt(const struct pkt_filter* restrict filter, char* restrict dest) {
   *dest = '\0';
-  if (filter->direction == DIR_LOCAL) {
+  if (filter->origin == ORIGIN_LOCAL) {
     strcat(dest, "local=");
     dest += 6;
-  } else if (filter->direction == DIR_REMOTE) {
+  } else if (filter->origin == ORIGIN_REMOTE) {
     strcat(dest, "remote=");
     dest += 7;
   }

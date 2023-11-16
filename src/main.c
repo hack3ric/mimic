@@ -64,9 +64,9 @@ int main(int argc, char* argv[]) {
     }
 
     if (strncmp("local=", args.filters[i], 6) == 0) {
-      filter->direction = DIR_LOCAL;
+      filter->origin = ORIGIN_LOCAL;
     } else if (strncmp("remote=", args.filters[i], 7) == 0) {
-      filter->direction = DIR_REMOTE;
+      filter->origin = ORIGIN_REMOTE;
     } else {
       *delim_pos = '\0';
       ret(2, "unsupported filter type `%s`", filter_str);
@@ -87,12 +87,12 @@ int main(int argc, char* argv[]) {
       if (*value != '[' || port_str[-2] != ']') {
         ret(5, "did you forget square brackets around an IPv6 address?");
       }
-      filter->protocol = TYPE_IPV6;
+      filter->protocol = PROTO_IPV6;
       value++;
       port_str[-2] = '\0';
       af = AF_INET6;
     } else {
-      filter->protocol = TYPE_IPV4;
+      filter->protocol = PROTO_IPV4;
       af = AF_INET;
     }
     if (inet_pton(af, value, &filter->ip.v6) == 0) ret(1, "bad IP address: %s", value);

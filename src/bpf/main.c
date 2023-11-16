@@ -105,12 +105,12 @@ int egress_handler(struct __sk_buff* skb) {
   struct pkt_filter local_key = {}, remote_key = {};
   if (ipv4) {
     ipv4_saddr = ipv4->saddr, ipv4_daddr = ipv4->daddr;
-    local_key = pkt_filter_v4(DIR_LOCAL, ipv4_saddr, udp->source);
-    remote_key = pkt_filter_v4(DIR_REMOTE, ipv4_daddr, udp->dest);
+    local_key = pkt_filter_v4(ORIGIN_LOCAL, ipv4_saddr, udp->source);
+    remote_key = pkt_filter_v4(ORIGIN_REMOTE, ipv4_daddr, udp->dest);
   } else if (ipv6) {
     ipv6_saddr = ipv6->saddr, ipv6_daddr = ipv6->daddr;
-    local_key = pkt_filter_v6(DIR_LOCAL, ipv6_saddr, udp->source);
-    remote_key = pkt_filter_v6(DIR_REMOTE, ipv6_daddr, udp->dest);
+    local_key = pkt_filter_v6(ORIGIN_LOCAL, ipv6_saddr, udp->source);
+    remote_key = pkt_filter_v6(ORIGIN_REMOTE, ipv6_daddr, udp->dest);
   }
   if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key)) {
     return TC_ACT_OK;
@@ -264,12 +264,12 @@ int ingress_handler(struct xdp_md* xdp) {
   struct pkt_filter local_key = {}, remote_key = {};
   if (ipv4) {
     ipv4_saddr = ipv4->saddr, ipv4_daddr = ipv4->daddr;
-    local_key = pkt_filter_v4(DIR_LOCAL, ipv4_daddr, tcp->dest);
-    remote_key = pkt_filter_v4(DIR_REMOTE, ipv4_saddr, tcp->source);
+    local_key = pkt_filter_v4(ORIGIN_LOCAL, ipv4_daddr, tcp->dest);
+    remote_key = pkt_filter_v4(ORIGIN_REMOTE, ipv4_saddr, tcp->source);
   } else if (ipv6) {
     ipv6_saddr = ipv6->saddr, ipv6_daddr = ipv6->daddr;
-    local_key = pkt_filter_v6(DIR_LOCAL, ipv6_daddr, tcp->dest);
-    remote_key = pkt_filter_v6(DIR_REMOTE, ipv6_saddr, tcp->source);
+    local_key = pkt_filter_v6(ORIGIN_LOCAL, ipv6_daddr, tcp->dest);
+    remote_key = pkt_filter_v6(ORIGIN_REMOTE, ipv6_saddr, tcp->source);
   }
   if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key)) {
     return XDP_PASS;

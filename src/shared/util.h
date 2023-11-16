@@ -8,21 +8,20 @@
 
 #define strerrno strerror(errno)
 
-#define redecl(_type, _name, _off, _skb_xdp, _ret)                              \
-  _name = ({                                                                    \
-    _type* _ptr = (void*)(__u64)(_skb_xdp)->data + (_off);                      \
-    if ((__u64)_ptr + sizeof(_type) > (__u64)(_skb_xdp)->data_end) return _ret; \
-    _ptr;                                                                       \
+#define redecl(_type, _name, _off, _ctx, _ret)                              \
+  _name = ({                                                                \
+    _type* _ptr = (void*)(__u64)(_ctx)->data + (_off);                      \
+    if ((__u64)_ptr + sizeof(_type) > (__u64)(_ctx)->data_end) return _ret; \
+    _ptr;                                                                   \
   })
-#define decl(type, name, off, skb_xdp, ret) type* redecl(type, name, off, skb_xdp, ret)
-
 #define redecl_or_ok(type, name, off, skb) redecl(type, name, off, skb, TC_ACT_OK)
 #define redecl_or_shot(type, name, off, skb) redecl(type, name, off, skb, TC_ACT_SHOT)
-#define decl_or_ok(type, name, off, skb) decl(type, name, off, skb, TC_ACT_OK)
-#define decl_or_shot(type, name, off, skb) decl(type, name, off, skb, TC_ACT_SHOT)
-
 #define redecl_or_pass(type, name, off, xdp) redecl(type, name, off, xdp, XDP_PASS)
 #define redecl_or_drop(type, name, off, xdp) redecl(type, name, off, xdp, XDP_DROP)
+
+#define decl(type, name, off, ctx, ret) type* redecl(type, name, off, ctx, ret)
+#define decl_or_ok(type, name, off, skb) decl(type, name, off, skb, TC_ACT_OK)
+#define decl_or_shot(type, name, off, skb) decl(type, name, off, skb, TC_ACT_SHOT)
 #define decl_or_pass(type, name, off, xdp) decl(type, name, off, xdp, XDP_PASS)
 #define decl_or_drop(type, name, off, xdp) decl(type, name, off, xdp, XDP_DROP)
 
@@ -110,7 +109,6 @@
 
 #define try_or_ok(x) try_ret(x, TC_ACT_OK)
 #define try_or_shot(x) try_ret(x, TC_ACT_SHOT)
-
 #define try_or_pass(x) try_ret(x, XDP_PASS)
 #define try_or_drop(x) try_ret(x, XDP_DROP)
 

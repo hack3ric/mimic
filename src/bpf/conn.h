@@ -7,7 +7,7 @@
 #include "../shared/filter.h"
 
 struct conn_tuple {
-  enum ip_type protocol;
+  enum ip_proto protocol;
   __be16 local_port, remote_port;
   union ip_value local, remote;
 };
@@ -23,8 +23,8 @@ struct conn_tuple {
     _x;                                             \
   })
 
-#define conn_tuple_v4(l, lp, r, rp) _conn_tuple_init(TYPE_IPV4, v4, l, lp, r, rp)
-#define conn_tuple_v6(l, lp, r, rp) _conn_tuple_init(TYPE_IPV6, v6, l, lp, r, rp)
+#define conn_tuple_v4(l, lp, r, rp) _conn_tuple_init(PROTO_IPV4, v4, l, lp, r, rp)
+#define conn_tuple_v6(l, lp, r, rp) _conn_tuple_init(PROTO_IPV6, v6, l, lp, r, rp)
 
 struct connection {
   struct bpf_spin_lock lock;
