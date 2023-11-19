@@ -20,23 +20,23 @@ For IPv6, the IP field needs to be surrounded by square brackets: `local=[2001:d
 The general usage of Mimic CLI looks like:
 
 ```console
-$ mimic -f <filter1> [-f <filter2> [...]] <interface>
+# mimic -f <filter1> [-f <filter2> [...]] <interface>
 ```
 
 ## Examples
 
-Assume that you have a server with an IP of 192.0.2.253. It hosts an UDP service on 7777. The server's main interface (the one that this connection goes through) is `eth0`, while the client's is `enp1s0`.
+Assume that you have a server with an IP of 192.0.2.253. It hosts an UDP service on 7777. The server's main interface (the one that this connection goes through) is `eth0`, while the client's is `enp1s0`. Root permission is *required* in order to load BPF programs.
 
 On server side, specify that all packets in and out `eth0` with that server's IP and port is processed:
 
 ```console
-$ mimic -f local=192.0.2.253:7777 eth0
+# mimic -f local=192.0.2.253:7777 eth0
 ```
 
 On client side, `remote` filter is used to specify the server address:
 
 ```console
-$ mimic -f remote=192.0.2.253:7777 enp1s0
+# mimic -f remote=192.0.2.253:7777 enp1s0
 ```
 
 ## Building from Source
@@ -105,6 +105,16 @@ The following shows how Mimic works visually:
 | **WireGuard + Mimic**                                | 1428 | 500 Mbps   | 1x38%, 4x<5%   | 4x<5%          |
 
 ## Caveats
+
+#### Checksum offload messes up packet / checksum
+
+Sometimes with (hardware) checksum offload on, the sent packet may contain incorrectly calculated checksum. Some gateways might check checksum before forwarding the packet to the recipient, dropping incorrect ones. This could cause a lot of headache when trying to debug, therefore it is suggested to turn off TX checksum offload first if problem occurs, using [ethtool](https://www.kernel.org/pub/software/network/ethtool/):
+
+```console
+# ethtool -K <interface> tx off
+```
+
+RX checksum offload and others working on the receiving end should not affect Mimic, since XDP takes place so early in the ingress path of a packet. TCP Segmentation Offload (TSO) and Generic Segmentation Offload (GSO) may not have effect as well, based on my observation. Don't be hesitant to point out if I'm wrong!
 
 #### Currently only Ethernet packets are correctly parsed.
 
