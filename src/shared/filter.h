@@ -46,7 +46,7 @@ static void ip_port_fmt(
   *dest = '\0';
   int af = protocol == PROTO_IPV4 ? AF_INET : AF_INET6;
   if (protocol == PROTO_IPV6) strcat(dest, "[");
-  inet_ntop(af, &ip, dest + strlen(dest), 32);
+  inet_ntop(af, &ip, dest + strlen(dest), INET6_ADDRSTRLEN);
   if (protocol == PROTO_IPV6) strcat(dest, "]");
   snprintf(dest + strlen(dest), 7, ":%d", ntohs(port));
 }
