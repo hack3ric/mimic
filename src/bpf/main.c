@@ -136,6 +136,7 @@ int egress_handler(struct __sk_buff* skb) {
   }
 
   struct udphdr old_udphdr = *udp;
+  old_udphdr.check = 0;
   __be16 old_udp_csum = udp->check;
 
   __u16 udp_len = bpf_ntohs(udp->len);
@@ -161,8 +162,11 @@ int egress_handler(struct __sk_buff* skb) {
         conn->seq += payload_len + 1;  // seq=A+len+1
         conn->state = STATE_SYN_SENT;
         break;
-      case STATE_SYN_SENT:  // duplicate SYN without response: resend
+      case STATE_SYN_SENT:
+        // duplicate SYN without response: resend
         syn = 1;
+        seq = conn->seq;
+        ack_seq = conn->ack_seq;
         break;
       case STATE_SYN_RECV:
         // SYN+ACK send: seq=B -> seq=B+len+1, ack=A+len+1
@@ -216,19 +220,27 @@ int egress_handler(struct __sk_buff* skb) {
   bpf_l4_csum_replace(skb, off, 0, csum_diff, 0);
 
   __be16 newlen = bpf_htons(udp_len + TCP_UDP_HEADER_DIFF);
+  __s64 diff = 0;
   if (ipv4) {
     struct ipv4_ph_part oldph = {._pad = 0, .protocol = IPPROTO_UDP, .len = old_udphdr.len};
     struct ipv4_ph_part newph = {._pad = 0, .protocol = IPPROTO_TCP, .len = newlen};
     __u32 size = sizeof(struct ipv4_ph_part);
-    __s64 diff = bpf_csum_diff((__be32*)&oldph, size, (__be32*)&newph, size, 0);
-    bpf_l4_csum_replace(skb, off, 0, diff, BPF_F_PSEUDO_HDR);
+    diff = bpf_csum_diff((__be32*)&oldph, size, (__be32*)&newph, size, 0);
   } else if (ipv6) {
     struct ipv6_ph_part oldph = {._1 = {}, .len = old_udphdr.len, ._2 = {}, .nexthdr = IPPROTO_UDP};
     struct ipv6_ph_part newph = {._1 = {}, .len = newlen, ._2 = {}, .nexthdr = IPPROTO_TCP};
     __u32 size = sizeof(struct ipv6_ph_part);
-    __s64 diff = bpf_csum_diff((__be32*)&oldph, size, (__be32*)&newph, size, 0);
-    bpf_l4_csum_replace(skb, off, 0, diff, BPF_F_PSEUDO_HDR);
+    diff = bpf_csum_diff((__be32*)&oldph, size, (__be32*)&newph, size, 0);
   }
+  bpf_l4_csum_replace(skb, off, 0, diff, BPF_F_PSEUDO_HDR);
+
+  // XXX: No way to tell the packet is actually TCP (skb->inner_ipproto), so network drivers may
+  // change the data at the original UDP checksum (which is now the lower 16 bit of sequence
+  // number).
+  //
+  // The solution for now is to disable TX offload (ethtool -K <if> tx off). May submit a patch to
+  // Linux kernel to add a new helper to do just that, since there is a way to change L3 protocol
+  // now (bpf_skb_change_proto), why not L4?
 
   return TC_ACT_OK;
 }
