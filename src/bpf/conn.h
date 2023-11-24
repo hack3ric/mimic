@@ -1,8 +1,7 @@
 #ifndef _MIMIC_BPF_CONN_H
 #define _MIMIC_BPF_CONN_H
 
-#include <linux/in6.h>
-#include <linux/types.h>
+#include "vmlinux.h"
 
 #include "../shared/filter.h"
 

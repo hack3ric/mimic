@@ -1,15 +1,16 @@
 #ifndef _MIMIC_SHARED_LOG_H
 #define _MIMIC_SHARED_LOG_H
 
+#ifdef _MIMIC_BPF
+// clang-format off
+#include "../bpf/vmlinux.h"
+#include <bpf/bpf_helpers.h>
+#else
+#include <bpf/libbpf.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
-#ifdef _MIMIC_BPF
-#include <bpf/bpf_helpers.h>
-#include <linux/bpf.h>
-#else
-#include <bpf/libbpf.h>
 #include <stdio.h>
 #endif
 

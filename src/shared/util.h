@@ -1,8 +1,12 @@
 #ifndef _MIMIC_SHARED_UTIL
 #define _MIMIC_SHARED_UTIL
 
+#ifdef _MIMIC_BPF
+#include "../bpf/vmlinux.h"
+#else
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
+#endif
 
 #include "log.h"
 
@@ -115,5 +119,29 @@
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define max(x, y) ((x) < (y) ? (y) : (x))
 #define cmp(x, y) ((x) > (y) - (x) < (y))
+
+// Some missing declaration of vmlinux.h
+#ifdef _MIMIC_BPF
+
+// defined in linux/pkt_cls.h
+#define TC_ACT_OK 0
+#define TC_ACT_RECLASSIFY 1
+#define TC_ACT_SHOT 2
+#define TC_ACT_PIPE 3
+#define TC_ACT_STOLEN 4
+#define TC_ACT_QUEUED 5
+#define TC_ACT_REPEAT 6
+#define TC_ACT_REDIRECT 7
+
+// defined in linux/if_ether.h
+#define ETH_HLEN 14       /* Total octets in header. */
+#define ETH_DATA_LEN 1500 /* Max. octets in payload	*/
+#define ETH_P_IP 0x0800   /* Internet Protocol packet	*/
+#define ETH_P_IPV6 0x86DD /* IPv6 over bluebook	*/
+
+// defined in linux/tcp.h
+#define tcp_flag_word(tp) (((union tcp_word_hdr*)(tp))->words[3])
+
+#endif  // _MIMIC_BPF
 
 #endif  // _MIMIC_SHARED_UTIL

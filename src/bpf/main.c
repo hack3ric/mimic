@@ -1,16 +1,9 @@
 #define _MIMIC_BPF
-#include <linux/bpf.h>
+
+#include "vmlinux.h"
 
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
-#include <linux/if_ether.h>
-#include <linux/in.h>
-#include <linux/ip.h>
-#include <linux/ipv6.h>
-#include <linux/pkt_cls.h>
-#include <linux/tcp.h>
-#include <linux/udp.h>
-#include <stddef.h>
 
 #include "../shared/filter.h"
 #include "../shared/log.h"
@@ -206,8 +199,8 @@ int egress_handler(struct __sk_buff* skb) {
     update_csum_ul(&csum, bpf_ntohl(ipv4_daddr));
   } else if (ipv6) {
     for (int i = 0; i < 8; i++) {
-      update_csum(&csum, bpf_ntohs(ipv6_saddr.s6_addr16[i]));
-      update_csum(&csum, bpf_ntohs(ipv6_daddr.s6_addr16[i]));
+      update_csum(&csum, bpf_ntohs(ipv6_saddr.in6_u.u6_addr16[i]));
+      update_csum(&csum, bpf_ntohs(ipv6_daddr.in6_u.u6_addr16[i]));
     }
   }
   update_csum(&csum, IPPROTO_TCP);
@@ -332,7 +325,7 @@ int ingress_handler(struct xdp_md* xdp) {
           det = cmp(bpf_ntohl(ipv4_daddr), bpf_ntohl(ipv4_saddr));
         } else {
           for (int i = 0; i < 16; i++) {
-            det = cmp(ipv6_daddr.s6_addr[i], ipv6_saddr.s6_addr[i]);
+            det = cmp(ipv6_daddr.in6_u.u6_addr8[i], ipv6_saddr.in6_u.u6_addr8[i]);
             if (det) break;
           }
         }
@@ -390,8 +383,8 @@ int ingress_handler(struct xdp_md* xdp) {
     update_csum_ul(&csum, bpf_ntohl(ipv4_daddr));
   } else if (ipv6) {
     for (int i = 0; i < 8; i++) {
-      update_csum(&csum, bpf_ntohs(ipv6_saddr.s6_addr16[i]));
-      update_csum(&csum, bpf_ntohs(ipv6_daddr.s6_addr16[i]));
+      update_csum(&csum, bpf_ntohs(ipv6_saddr.in6_u.u6_addr16[i]));
+      update_csum(&csum, bpf_ntohs(ipv6_daddr.in6_u.u6_addr16[i]));
     }
   }
   update_csum(&csum, IPPROTO_UDP);

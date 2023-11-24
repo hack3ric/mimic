@@ -1,8 +1,7 @@
 #ifndef _MIMIC_BPF_CHECKSUM_H
 #define _MIMIC_BPF_CHECKSUM_H
 
-#include <linux/bpf.h>
-#include <stddef.h>
+#include "vmlinux.h"
 
 static inline __u16 csum_fold(__u32 csum) {
   csum = (csum & 0xffff) + (csum >> 16);

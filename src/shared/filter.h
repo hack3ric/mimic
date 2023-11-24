@@ -1,11 +1,12 @@
 #ifndef _MIMIC_SHARED_FILTER_H
 #define _MIMIC_SHARED_FILTER_H
 
-#include <linux/types.h>
 #ifdef _MIMIC_BPF
-#include <linux/in6.h>
+#include "../bpf/vmlinux.h"
 #else
 #include <arpa/inet.h>
+#include <linux/in6.h>
+#include <linux/types.h>
 #include <stdio.h>
 #include <string.h>
 #endif
