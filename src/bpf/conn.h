@@ -34,10 +34,10 @@ struct connection {
     STATE_ESTABLISHED,
   } state;
   __u32 seq, ack_seq;
-  _Bool rst;
+  bool rst;
 };
 
-static inline void conn_reset(struct connection* conn, _Bool send_rst) {
+static inline void conn_reset(struct connection* conn, bool send_rst) {
   conn->ack_seq = 0;
   conn->rst = send_rst;
   conn->state = STATE_IDLE;

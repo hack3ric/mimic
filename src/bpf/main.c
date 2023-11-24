@@ -15,8 +15,9 @@ struct {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 8);
   __type(key, struct pkt_filter);
-  __type(value, _Bool);
+  __type(value, bool);
 } mimic_whitelist SEC(".maps");
+
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 32);
@@ -46,7 +47,7 @@ static int mangle_data(struct __sk_buff* skb, __u16 offset) {
 }
 
 static __always_inline void update_tcp_header(
-  struct tcphdr* tcp, __u32* csum, __u16 udp_len, _Bool syn, _Bool ack, _Bool rst, __u32 seq,
+  struct tcphdr* tcp, __u32* csum, __u16 udp_len, bool syn, bool ack, bool rst, __u32 seq,
   __u32 ack_seq
 ) {
   update_csum_ul(csum, seq);
@@ -130,7 +131,7 @@ int egress_handler(struct __sk_buff* skb) {
   __u16 payload_len = udp_len - sizeof(*udp);
   log_trace("egress: payload_len = %d", payload_len);
 
-  _Bool syn = 0, ack = 0, rst = 0;
+  bool syn = 0, ack = 0, rst = 0;
   __u32 seq, ack_seq, conn_seq, conn_ack_seq;
   __u32 random = bpf_get_prandom_u32();
   bpf_spin_lock(&conn->lock);

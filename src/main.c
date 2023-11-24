@@ -109,10 +109,10 @@ int main(int argc, char* argv[]) {
   skel->rodata->log_verbosity = log_verbosity;
   try(mimic_bpf__load(skel), "failed to load BPF program: %s", strerrno);
 
-  _Bool value = 1;
+  bool value = 1;
   for (int i = 0; i < args.filter_count; i++) {
     result = bpf_map__update_elem(
-      skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter), &value, sizeof(_Bool),
+      skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter), &value, sizeof(bool),
       BPF_ANY
     );
     if (result || LOG_ALLOW_DEBUG) {
