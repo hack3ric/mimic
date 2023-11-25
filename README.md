@@ -2,7 +2,7 @@
 
 Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP QoS and port blocking. Based on eBPF, it directly mangles data inside Traffic Control (TC) subsystem in the kernel space and restores data using XDP, achieving remarkably high performance compared to other projects, such as [udp2raw](https://github.com/wangyu-/udp2raw) or [Phantun](https://github.com/dndx/phantun).
 
-**Note:** The project is still in early development stage. Use with care and try at your own risk.
+**Note:** The project is still in early development stage. Functions might be broken, and I may know, or may not know about it. See [Caveats](#caveats) for more detail. Use with care and try at your own risk.
 
 ## Usage
 
@@ -106,15 +106,21 @@ The following shows how Mimic works visually:
 
 ## Caveats
 
-#### Checksum offload messes up packet / checksum
+#### IMPORTANT: Checksum offload messes up packet / checksum
 
-Sometimes with (hardware) checksum offload on, the sent packet may contain incorrectly calculated checksum. Some gateways might check checksum before forwarding the packet to the recipient, dropping incorrect ones. This could cause a lot of headache when trying to debug, therefore it is suggested to turn off TX checksum offload first if problem occurs, using [ethtool](https://www.kernel.org/pub/software/network/ethtool/):
+This is under investigation. in summary: *`skb->csum_{start,offset}` still points to the old UDP field.*
+
+You could try disable TX checksum offloading on you network interface to mitigate *some* of the problems:
 
 ```console
 # ethtool -K <interface> tx off
 ```
 
-RX checksum offload and others working on the receiving end should not affect Mimic, since XDP takes place so early in the ingress path of a packet. TCP Segmentation Offload (TSO) and Generic Segmentation Offload (GSO) may not have effect as well, based on my observation. Don't be hesitant to point out if I'm wrong!
+Userspace programs like wireguard-go will work, but not the kernel WireGuard implementation, as it seems to use `CHECKSUM_PARTIAL` nonetheless.
+
+I am planning on adding a new eBPF helper in the Linux kernel that modifies these fields, or whatever would solve this (?); I will try to upstream this if the jusification is good enough (beyond just UDP -> TCP).
+
+See `exp-skb-csum-offset` branch for my current investigation progress on the eBPF side.
 
 #### Currently only Ethernet packets are correctly parsed.
 
