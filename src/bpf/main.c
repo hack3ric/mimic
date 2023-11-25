@@ -28,6 +28,8 @@ struct {
 #define IPV4_CSUM_OFF (offsetof(struct iphdr, check))
 #define TCP_UDP_HEADER_DIFF (sizeof(struct tcphdr) - sizeof(struct udphdr))
 
+void* bpf_cast_to_kern_ctx(void*) __ksym;
+
 struct ipv4_ph_part {
   __u8 _pad;
   __u8 protocol;
@@ -208,7 +210,8 @@ int egress_handler(struct __sk_buff* skb) {
 
   try_sr(mangle_data(skb, ip_end + sizeof(*udp)));
   decl_or_shot(struct tcphdr, tcp, ip_end, skb);
-  update_tcp_header(tcp, udp_len, syn, ack, rst, seq, ack_seq);
+  // update_tcp_header(tcp, udp_len, syn, ack, rst, seq, ack_seq);
+  update_tcp_header(tcp, udp_len, 1, 0, 0, 0, 0);
 
   tcp->check = 0;
   __s64 csum_diff = bpf_csum_diff(
@@ -234,13 +237,32 @@ int egress_handler(struct __sk_buff* skb) {
   }
   bpf_l4_csum_replace(skb, off, 0, diff, BPF_F_PSEUDO_HDR);
 
-  // XXX: No way to tell the packet is actually TCP (skb->inner_ipproto), so network drivers may
-  // change the data at the original UDP checksum (which is now the lower 16 bit of sequence
-  // number).
+  // XXX: skb->csum_{start,offset} still points to the old UDP field.
   //
-  // The solution for now is to disable TX offload (ethtool -K <if> tx off). May submit a patch to
-  // Linux kernel to add a new helper to do just that, since there is a way to change L3 protocol
-  // now (bpf_skb_change_proto), why not L4?
+  // The solution for now is to disable TX offload (ethtool -K <if> tx off). And it only works with
+  // packets from userspace, for kernel WireGuard this still won't work somehow.
+  //
+  // May submit a patch to Linux kernel to add a new helper to do just that, since there is a way to
+  // change L3 protocol now (bpf_skb_change_proto), why not L4?
+
+  // NOTE: It can be seen that the underlying socket is still UDP. It should be illegal to change
+  // the socket's protocol in any circumstances. Maybe it could give us some clue?
+  struct bpf_sock* sk = skb->sk;
+  if (sk) {
+    struct bpf_sock* fullsk = bpf_sk_fullsock(sk);
+    if (fullsk) log_info("sock proto: %d", fullsk->protocol);  // should be 17 (IPPROTO_UDP)
+  }
+
+  // For kskb->csum to be valid, the upper 16 bit should always be 0 (?); otherwise it would
+  // indicate where L4 header containing the checksum field starts (kskb->csum_start, relative to
+  // kskb->head) and the offset of checksum field in that header (kskb->csum_offset).
+  //
+  // bpf_cast_to_kern_ctx isn't available in Debian 12's Linux 6.1 kernel, so try using a newer
+  // kernel (like Arch Linux or Debian sid's).
+  struct sk_buff* kskb = bpf_cast_to_kern_ctx(skb);
+  log_info("kskb->csum: %x", kskb->csum);
+  log_info("kskb->csum_start: %d, csum_offset: %d", kskb->csum_start, kskb->csum_offset);
+  log_info("kskb->head: %u, kskb->data: %u", (__u64)kskb->head, (__u64)kskb->data);
 
   return TC_ACT_OK;
 }
