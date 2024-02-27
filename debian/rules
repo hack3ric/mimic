@@ -21,9 +21,10 @@ override_dh_auto_build:
 
 override_dh_auto_install:
 	dh_auto_install
-	dh_dkms
+	dh_dkms -- src/kmod/dkms.conf
 
 override_dh_dwz:
+	dh_dwz -Xmimic
 
 override_dh_auto_clean:
 	dh_auto_clean
