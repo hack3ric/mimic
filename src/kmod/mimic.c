@@ -11,7 +11,6 @@
 #include <linux/udp.h>
 
 #include "btf.h"
-#include "linux/bpf.h"
 
 __bpf_kfunc_start_defs();
 
