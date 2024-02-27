@@ -2,7 +2,8 @@ CC = clang
 BPF_CFLAGS ?= -O2
 CFLAGS ?= -O2
 
-.PHONY: build generate clean
+.PHONY: build generate clean .FORCE
+.FORCE:
 
 all: build
 build: out/mimic out/mimic.ko
@@ -24,7 +25,7 @@ src/bpf/skel.h: out/mimic.bpf.o
 out/mimic: src/bpf/skel.h
 	$(CC) $(CFLAGS) src/main.c -o $@ -lbpf
 
-out/mimic.ko:
+out/mimic.ko: .FORCE
 	$(MAKE) -C src/kmod
 	cp src/kmod/mimic.ko out/mimic.ko
 
