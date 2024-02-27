@@ -2,8 +2,10 @@ CC = clang
 BPF_CFLAGS ?= -O2
 CFLAGS ?= -O2
 
+.PHONY: build generate clean
+
 all: build
-build: out/mimic
+build: out/mimic out/mimic.ko
 generate: src/bpf/skel.h
 
 src/bpf/vmlinux.h:
@@ -22,7 +24,12 @@ src/bpf/skel.h: out/mimic.bpf.o
 out/mimic: src/bpf/skel.h
 	$(CC) $(CFLAGS) src/main.c -o $@ -lbpf
 
+out/mimic.ko:
+	$(MAKE) -C src/kmod
+	cp src/kmod/mimic.ko out/mimic.ko
+
 clean:
 	rm -rf out/
 	rm -f src/bpf/skel.h
-	rm -f src/bpf/vmlinux.h
+	# rm -f src/bpf/vmlinux.h
+	$(MAKE) -C src/kmod clean
