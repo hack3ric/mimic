@@ -33,7 +33,7 @@ struct connection {
     STATE_SYN_RECV,
     STATE_ESTABLISHED,
   } state;
-  __u32 seq, ack_seq;
+  u32 seq, ack_seq;
   bool rst;
 };
 
@@ -43,7 +43,7 @@ static inline void conn_reset(struct connection* conn, bool send_rst) {
   conn->state = STATE_IDLE;
 }
 
-static inline void conn_syn_recv(struct connection* conn, struct tcphdr* tcp, __u32 payload_len) {
+static inline void conn_syn_recv(struct connection* conn, struct tcphdr* tcp, u32 payload_len) {
   conn->seq = 0;
   conn->ack_seq = bpf_ntohl(tcp->seq) + payload_len + 1;
   conn->state = STATE_SYN_RECV;
