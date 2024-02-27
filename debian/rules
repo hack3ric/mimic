@@ -1,0 +1,30 @@
+#!/usr/bin/make -f
+
+include /usr/share/dpkg/default.mk
+
+export DH_VERBOSE = 1
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+export DEB_VERSION_UPSTREAM
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	tar xf /usr/src/linux-source-*.tar.*
+	patch -d linux-source-*/tools/bpf/resolve_btfids -Np0 \
+		< debian/resolve_btfids-link-libbpf-dynamically.patch
+	make -C linux-source-*/tools/bpf/resolve_btfids
+	dh_auto_build -- out/mimic
+
+override_dh_auto_install:
+	dh_auto_install
+	dh_dkms
+
+override_dh_dwz:
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf linux-source-*

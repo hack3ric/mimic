@@ -32,5 +32,5 @@ out/mimic.ko: .FORCE
 clean:
 	rm -rf out/
 	rm -f src/bpf/skel.h
-	# rm -f src/bpf/vmlinux.h
+#	rm -f src/bpf/vmlinux.h
 	$(MAKE) -C src/kmod clean

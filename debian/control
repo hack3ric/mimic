@@ -1,0 +1,29 @@
+Source: mimic
+Section: net
+Priority: optional
+Maintainer: Eric Long <i@hack3r.moe>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-sequence-dkms,
+ clang,
+ libbpf-dev,
+ linux-source
+Standards-Version: 4.5.1
+Homepage: https://github.com/hack3ric/mimic
+Rules-Requires-Root: no
+Vcs-Git: https://github.com/hack3ric/mimic.git
+Vcs-Browser: https://github.com/hack3ric/mimic
+
+Package: mimic
+Architecture: any
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+ pahole,
+ dkms
+Description: eBPF UDP -> TCP obfuscator
+ Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP
+ QoS and port blocking. Based on eBPF, it directly mangles data inside
+ Traffic Control (TC) subsystem in the kernel space and restores data
+ using XDP, achieving remarkably high performance compared to other
+ projects, such as udp2raw or Phantun.

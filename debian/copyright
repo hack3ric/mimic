@@ -1,0 +1,7 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: mimic
+Source: https://github.com/hack3ric/mimic
+
+Files: *
+Copyright: 2024 Eric Long <i@hack3r.moe>
+License: GPL-2
