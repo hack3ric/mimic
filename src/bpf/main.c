@@ -41,6 +41,9 @@ struct ipv6_ph_part {
   u8 nexthdr;
 } __attribute__((packed));
 
+void mimic_inspect_skbuff(struct __sk_buff*) __ksym;
+int mimic_change_csum_offset(struct __sk_buff*, u16) __ksym;
+
 // Extend socket buffer and move n bytes from front to back.
 static int mangle_data(struct __sk_buff* skb, u16 offset) {
   u16 data_len = skb->len - offset;
@@ -81,6 +84,8 @@ static __always_inline void update_tcp_header(
 
 SEC("tc")
 int egress_handler(struct __sk_buff* skb) {
+  // mimic_inspect_skbuff(skb);
+
   decl_or_ok(struct ethhdr, eth, 0, skb);
   u16 eth_proto = bpf_ntohs(eth->h_proto);
 
@@ -211,7 +216,7 @@ int egress_handler(struct __sk_buff* skb) {
   update_tcp_header(tcp, udp_len, syn, ack, rst, seq, ack_seq);
 
   tcp->check = 0;
-  __s64 csum_diff = bpf_csum_diff(
+  s64 csum_diff = bpf_csum_diff(
     (__be32*)&old_udphdr, sizeof(struct udphdr), (__be32*)tcp, sizeof(struct tcphdr), 0
   );
   tcp->check = old_udp_csum;
@@ -220,7 +225,7 @@ int egress_handler(struct __sk_buff* skb) {
   bpf_l4_csum_replace(skb, off, 0, csum_diff, 0);
 
   __be16 newlen = bpf_htons(udp_len + TCP_UDP_HEADER_DIFF);
-  __s64 diff = 0;
+  s64 diff = 0;
   if (ipv4) {
     struct ipv4_ph_part oldph = {._pad = 0, .protocol = IPPROTO_UDP, .len = old_udphdr.len};
     struct ipv4_ph_part newph = {._pad = 0, .protocol = IPPROTO_TCP, .len = newlen};
@@ -234,13 +239,8 @@ int egress_handler(struct __sk_buff* skb) {
   }
   bpf_l4_csum_replace(skb, off, 0, diff, BPF_F_PSEUDO_HDR);
 
-  // XXX: No way to tell the packet is actually TCP (skb->inner_ipproto), so network drivers may
-  // change the data at the original UDP checksum (which is now the lower 16 bit of sequence
-  // number).
-  //
-  // The solution for now is to disable TX offload (ethtool -K <if> tx off). May submit a patch to
-  // Linux kernel to add a new helper to do just that, since there is a way to change L3 protocol
-  // now (bpf_skb_change_proto), why not L4?
+  mimic_change_csum_offset(skb, IPPROTO_TCP);
+  mimic_inspect_skbuff(skb);
 
   return TC_ACT_OK;
 }
@@ -393,7 +393,7 @@ int ingress_handler(struct xdp_md* xdp) {
     ipv4->protocol = IPPROTO_UDP;
 
     u32 ipv4_csum = (u16)~bpf_ntohs(ipv4->check);
-    update_csum(&ipv4_csum, -(__s32)TCP_UDP_HEADER_DIFF);
+    update_csum(&ipv4_csum, -(s32)TCP_UDP_HEADER_DIFF);
     update_csum(&ipv4_csum, IPPROTO_UDP - IPPROTO_TCP);
     ipv4->check = bpf_htons(csum_fold(ipv4_csum));
   } else if (ipv6) {
