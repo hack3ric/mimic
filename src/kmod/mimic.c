@@ -1,3 +1,4 @@
+#include "linux/bpf.h"
 #define _MIMIC_KMOD
 
 #include <linux/bpf.h>
@@ -16,21 +17,16 @@
 
 __bpf_kfunc_start_defs();
 
-__bpf_kfunc void mimic_inspect_skbuff(struct __sk_buff* skb_bpf) {
-  struct sk_buff* skb = (struct sk_buff*)skb_bpf;
-  // pr_info("data - head = %llu", (u64)skb->data - (u64)skb->head);
-  char* ips = NULL;
-  // clang-format off
-  switch (skb->ip_summed) {
-    case CHECKSUM_NONE: ips = "CHECKSUM_NONE"; break;
-    case CHECKSUM_UNNECESSARY: ips = "CHECKSUM_UNNECESSARY"; break;
-    case CHECKSUM_COMPLETE: ips = "CHECKSUM_COMPLETE"; break;
-    case CHECKSUM_PARTIAL: ips = "CHECKSUM_PARTIAL"; break;
-    default: ips = "(unknown)";
-  }
-  pr_info("start: %d, offset: %d, ip_summed: %s", skb->csum_start, skb->csum_offset, ips);
+// Inspect kernel representation of a BPF `__sk_buff`.
+//
+// Newer versions of Linux has `bpf_cast_to_kern_ctx` kfunc. This function is meant to provide such
+// functionality for lower versions of kernel.
+__bpf_kfunc struct sk_buff* mimic_inspect_skb(struct __sk_buff* skb_bpf) {
+  return (struct sk_buff*)skb_bpf;
 }
 
+// Change checksum position in `sk_buff` to instruct hardware/driver/kernel to offset checksum
+// correctly.
 __bpf_kfunc int mimic_change_csum_offset(struct __sk_buff* skb_bpf, u16 new_proto) {
   struct sk_buff* skb = (struct sk_buff*)skb_bpf;
   if (skb->ip_summed != CHECKSUM_PARTIAL) return -1;
@@ -50,7 +46,7 @@ __bpf_kfunc int mimic_change_csum_offset(struct __sk_buff* skb_bpf, u16 new_prot
 __bpf_kfunc_end_defs();
 
 BTF_SET8_START(mimic_tc_set);
-BTF_ID_FLAGS(func, mimic_inspect_skbuff);
+BTF_ID_FLAGS(func, mimic_inspect_skb);
 BTF_ID_FLAGS(func, mimic_change_csum_offset);
 BTF_SET8_END(mimic_tc_set);
 

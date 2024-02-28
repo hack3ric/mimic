@@ -41,7 +41,7 @@ struct ipv6_ph_part {
   u8 nexthdr;
 } __attribute__((packed));
 
-void mimic_inspect_skbuff(struct __sk_buff*) __ksym;
+struct sk_buff* mimic_inspect_skb(struct __sk_buff*) __ksym;
 int mimic_change_csum_offset(struct __sk_buff*, u16) __ksym;
 
 // Extend socket buffer and move n bytes from front to back.
@@ -84,8 +84,6 @@ static __always_inline void update_tcp_header(
 
 SEC("tc")
 int egress_handler(struct __sk_buff* skb) {
-  // mimic_inspect_skbuff(skb);
-
   decl_or_ok(struct ethhdr, eth, 0, skb);
   u16 eth_proto = bpf_ntohs(eth->h_proto);
 
@@ -240,7 +238,6 @@ int egress_handler(struct __sk_buff* skb) {
   bpf_l4_csum_replace(skb, off, 0, diff, BPF_F_PSEUDO_HDR);
 
   mimic_change_csum_offset(skb, IPPROTO_TCP);
-  mimic_inspect_skbuff(skb);
 
   return TC_ACT_OK;
 }

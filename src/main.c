@@ -169,7 +169,6 @@ static inline int run_bpf(
 }
 
 int main(int argc, char** argv) {
-  int error, retcode = 0;
   struct arguments args = {0};
   try(argp_parse(&args_argp, argc, argv, 0, 0, &args), "error parsing arguments");
 
@@ -211,7 +210,8 @@ int main(int argc, char** argv) {
   struct bpf_tc_hook tc_hook_egress = {};
   struct bpf_tc_opts tc_opts_egress = {};
   libbpf_set_print(libbpf_print_fn);
-  try(run_bpf(&args, filters, ifindex, skel, &tc_hook_created, &tc_hook_egress, &tc_opts_egress));
+  int retcode =
+    run_bpf(&args, filters, ifindex, skel, &tc_hook_created, &tc_hook_egress, &tc_opts_egress);
 
   log_info("cleaning up");
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
