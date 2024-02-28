@@ -31,7 +31,7 @@ out/mimic: src/bpf/skel.h
 
 out/mimic.ko: .FORCE
 	$(MAKE) -C src/kmod
-	cp src/kmod/mimic.ko out/mimic.ko
+	cp src/kmod/mimic.ko $@
 
 clean:
 	rm -rf out/

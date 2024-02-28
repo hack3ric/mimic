@@ -407,6 +407,7 @@ int ingress_handler(struct xdp_md* xdp) {
   u16 udp_len = buf_len - ip_end - TCP_UDP_HEADER_DIFF;
   udp->len = bpf_htons(udp_len);
 
+  // TODO: Use BPF checksum helper and reuse TCP checksum
   u32 csum = 0;
   if (ipv4) {
     update_csum_ul(&csum, bpf_ntohl(ipv4_saddr));
