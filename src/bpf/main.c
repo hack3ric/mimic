@@ -320,6 +320,8 @@ int ingress_handler(struct xdp_md* xdp) {
   u32 seq = 0, ack_seq = 0;
   log_trace("ingress: payload_len = %d", payload_len);
 
+  // TODO: verify checksum
+
   if (tcp->rst) {
     conn_reset(conn, 0);
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
@@ -407,7 +409,6 @@ int ingress_handler(struct xdp_md* xdp) {
   u16 udp_len = buf_len - ip_end - TCP_UDP_HEADER_DIFF;
   udp->len = bpf_htons(udp_len);
 
-  // TODO: Use BPF checksum helper and reuse TCP checksum
   u32 csum = 0;
   if (ipv4) {
     update_csum_ul(&csum, bpf_ntohl(ipv4_saddr));

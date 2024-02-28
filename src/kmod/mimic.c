@@ -1,3 +1,5 @@
+#define _MIMIC_KMOD
+
 #include <linux/bpf.h>
 #include <linux/btf_ids.h>
 #include <linux/byteorder/generic.h>
