@@ -57,3 +57,4 @@ Mkfile.old
 compile_commands.json
 /src/kmod/build/
 /linux-source-*
+.pc

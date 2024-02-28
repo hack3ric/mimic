@@ -1,26 +1,30 @@
-CC = clang
+BPF_CC ?= clang --target=bpf
+CC ?= clang
+BPFTOOL ?= /usr/sbin/bpftool
+
 BPF_CFLAGS ?= -O2
 CFLAGS ?= -O2
 
-.PHONY: build generate clean .FORCE
+.PHONY: build generate-skel generate-vmlinux clean .FORCE
 .FORCE:
 
 all: build
 build: out/mimic out/mimic.ko
-generate: src/bpf/skel.h
+generate-skel: src/bpf/skel.h
+generate-vmlinux: src/bpf/vmlinux.h
 
 src/bpf/vmlinux.h:
-	bpftool btf dump file /sys/kernel/btf/vmlinux format c > $@
+	$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > $@
 
 out/:
 	mkdir $@
 
 # -g is required in order to obtain BTF
 out/mimic.bpf.o: src/bpf/vmlinux.h out/
-	$(CC) --target=bpf -g -mcpu=v3 $(BPF_CFLAGS) -c src/bpf/main.c -o $@
+	$(BPF_CC) -g -mcpu=v3 $(BPF_CFLAGS) -c src/bpf/main.c -o $@
 
 src/bpf/skel.h: out/mimic.bpf.o
-	bpftool gen skeleton out/mimic.bpf.o > $@
+	$(BPFTOOL) gen skeleton out/mimic.bpf.o > $@
 
 out/mimic: src/bpf/skel.h
 	$(CC) $(CFLAGS) src/main.c -o $@ -lbpf

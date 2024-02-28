@@ -22,4 +22,4 @@ endif
 
 clean:
 	rm -rf build
-	make -C $(BUILD) M=$(PWD) clean
+	if [ -d $(system_build_dir) ]; then make -C $(system_build_dir) M=$(PWD) clean; fi
