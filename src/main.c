@@ -1,8 +1,11 @@
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <net/if.h>
 #include <signal.h>
 #include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "args.h"
@@ -21,9 +24,9 @@ static int tc_hook_create_bind(
   struct bpf_tc_hook* hook, struct bpf_tc_opts* opts, const struct bpf_program* prog, char* name
 ) {
   int result = bpf_tc_hook_create(hook);
-  if (result && result != -EEXIST) ret(-result, "failed to create TC %s hook: %s", name, strerrno);
+  if (result && result != -EEXIST) ret(-errno, "failed to create TC %s hook: %s", name, strerrno);
   opts->prog_fd = bpf_program__fd(prog);
-  try(bpf_tc_attach(hook, opts), "failed to attach to TC %s hook: %s", name, strerrno);
+  try_errno(bpf_tc_attach(hook, opts), "failed to attach to TC %s hook: %s", name, strerrno);
   return 0;
 }
 
@@ -53,6 +56,9 @@ int main(int argc, char* argv[]) {
   struct arguments args = {0};
   try(argp_parse(&args_argp, argc, argv, 0, 0, &args), "error parsing arguments");
 
+  if (geteuid() != 0) ret(1, "you cannot perform run Mimic unless you are root");
+
+  // Parse filters
   if (args.filter_count == 0) ret(1, "no filter specified");
   struct pkt_filter filters[args.filter_count];
   memset(filters, 0, args.filter_count * sizeof(*filters));
@@ -104,22 +110,43 @@ int main(int argc, char* argv[]) {
   ifindex = if_nametoindex(args.ifname);
   if (!ifindex) ret(1, "no interface named `%s`", args.ifname);
 
+  // Lock file
+  struct stat st = {0};
+  if (stat("/run/mimic", &st) == -1) {
+    if (errno == ENOENT) {
+      try_errno(mkdir("/run/mimic", 0755), "failed to create /run/mimic: %s", strerrno);
+    } else {
+      ret(-errno, "failed to stat /run/mimic: %s", strerrno);
+    }
+  }
+  char lock[32];
+  snprintf(lock, 32, "/run/mimic/%d.lock", ifindex);
+  int lock_fd = open(lock, O_CREAT | O_EXCL);
+  if (lock_fd < 0) {
+    log_error("failed to lock on %s: %s", args.ifname, strerrno);
+    if (errno == EEXIST) {
+      log_error("hint: is another Mimic process running on this interface?");
+    }
+    return -errno;
+  }
+  close(lock_fd);
+
   libbpf_set_print(libbpf_print_fn);
 
-  struct mimic_bpf* skel = try_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerrno);
+  struct mimic_bpf* skel = mimic_bpf__open();
+  if (!skel) {
+    remove(lock);
+    ret(-errno, "failed to open BPF program: %s", strerrno);
+  }
   skel->rodata->log_verbosity = log_verbosity;
 
-  if ((error = mimic_bpf__load(skel))) {
+  if (mimic_bpf__load(skel)) {
+    remove(lock);
     log_error("failed to load BPF program: %s", strerrno);
-    switch (errno) {
-      case EPERM:
-        log_error("hint: are you root?");
-        break;
-      case EINVAL:
-        log_error("hint: did you load the Mimic kernel module?");
-        break;
+    if (errno == EINVAL) {
+      log_error("hint: did you load the Mimic kernel module?");
     }
-    return -error;
+    return -errno;
   }
 
   bool value = 1;
@@ -131,16 +158,17 @@ int main(int argc, char* argv[]) {
     if (error || LOG_ALLOW_DEBUG) {
       char fmt[FILTER_FMT_MAX_LEN];
       pkt_filter_fmt(&filters[i], fmt);
-      if (error)
-        cleanup(-error, "failed to add filter `%s`: %s", fmt, strerrno);
-      else if (LOG_ALLOW_DEBUG)
+      if (error) {
+        cleanup(-errno, "failed to add filter `%s`: %s", fmt, strerrno);
+      } else if (LOG_ALLOW_DEBUG) {
         log_debug("added filter: %s", fmt);
+      }
     }
   }
 
   struct ring_buffer* rb =
     ring_buffer__new(bpf_map__fd(skel->maps.mimic_rb), handle_event, NULL, NULL);
-  if (!rb) cleanup(errno, "failed to attach BPF ring buffer: %s", strerrno);
+  if (!rb) cleanup(-errno, "failed to attach BPF ring buffer: %s", strerrno);
 
   LIBBPF_OPTS(bpf_tc_hook, tc_hook_egress, .ifindex = ifindex, .attach_point = BPF_TC_EGRESS);
   LIBBPF_OPTS(bpf_tc_opts, tc_opts_egress, .handle = 1, .priority = 1);
@@ -148,7 +176,7 @@ int main(int argc, char* argv[]) {
   try_or_cleanup(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, egress, "egress"));
 
   if (!bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex)) {
-    cleanup(errno, "failed to attach XDP program: %s", strerrno);
+    cleanup(-errno, "failed to attach XDP program: %s", strerrno);
   }
 
   log_info("Mimic successfully deployed at %s with filters:", args.ifname);
@@ -158,11 +186,11 @@ int main(int argc, char* argv[]) {
     log_info("  * %s", fmt);
   }
 
-  if (signal(SIGINT, sig_int) == SIG_ERR) cleanup(errno, "cannot set signal handler: %s", strerrno);
+  if (signal(SIGINT, sig_int) == SIG_ERR) cleanup(1, "cannot set signal handler: %s", strerrno);
   while (!exiting) {
     int result = ring_buffer__poll(rb, 100);
     if (result < 0) {
-      if (result == -EINTR) retcode = errno;
+      if (result == -EINTR) retcode = 0;
       break;
     }
   }
@@ -171,5 +199,6 @@ cleanup:
   log_info("cleaning up");
   tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
   mimic_bpf__destroy(skel);
+  remove(lock);
   return retcode;
 }

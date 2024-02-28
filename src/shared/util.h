@@ -29,82 +29,99 @@
 #define decl_or_pass(type, name, off, xdp) decl(type, name, off, xdp, XDP_PASS)
 #define decl_or_drop(type, name, off, xdp) decl(type, name, off, xdp, XDP_DROP)
 
-#define ret(_ret, ...)      \
+// Returns _ret while printing error.
+#define ret(ret, ...)       \
   ({                        \
     log_error(__VA_ARGS__); \
-    return (_ret);          \
+    return (ret);           \
   })
 
+// Jumps to `cleanup`, returning _ret while printing error.
+//
 // Requires `cleanup` label, `retcode` to be defined inside function scope, and `retcode` to be
 // returned after cleanup.
-#define cleanup(e, ...)     \
+#define cleanup(ret, ...)   \
   ({                        \
     log_error(__VA_ARGS__); \
-    retcode = e;            \
+    retcode = (ret);        \
     goto cleanup;           \
   })
 
 #define _get_macro(_0, _1, _2, _3, _4, _5, NAME, ...) NAME
 
-// Tests int return value from a function. Used for functions that returns negative OS error.
-#define try(...) _get_macro(_0, ##__VA_ARGS__, _trym, _trym, _trym, _trym, _try, )(__VA_ARGS__)
-#define _try(x)         \
-  ({                    \
-    int _x = x;         \
-    if (_x) return -_x; \
+// Tests int return value from a function. Used for functions that returns non-zero error.
+#define try(...) \
+  _get_macro(_0, ##__VA_ARGS__, _try_fmt, _try_fmt, _try_fmt, _try_fmt, _try, )(__VA_ARGS__)
+#define _try(expr)         \
+  ({                       \
+    int _ret = (expr);     \
+    if (_ret) return _ret; \
   })
-#define _trym(x, ...)              \
-  ({                               \
-    int _x = x;                    \
-    if (_x) ret(-_x, __VA_ARGS__); \
-  })
-
-// Runs subroutine, whose return value are of the same usage (for example, TC return value or
-// negative OS error)
-#define try_sr(x)      \
-  ({                   \
-    int _x = (x);      \
-    if (_x) return _x; \
+#define _try_fmt(expr, ...)           \
+  ({                                  \
+    int _ret = (expr);                \
+    if (_ret) ret(_ret, __VA_ARGS__); \
   })
 
-// Same as `try_sr`, but runs XDP subroutine
-#define try_sr_xdp(x)              \
-  ({                               \
-    int _x = (x);                  \
-    if (_x != XDP_PASS) return _x; \
+// Same as `try` with one arguments, but runs XDP subroutine
+#define try_xdp(expr)                  \
+  ({                                   \
+    int _ret = (expr);                 \
+    if (_ret != XDP_PASS) return _ret; \
+  })
+
+// Same as `try`, but returns -errno
+#define try_errno(...)                                                                             \
+  _get_macro(                                                                                      \
+    _0, ##__VA_ARGS__, _try_errno_fmt, _try_errno_fmt, _try_errno_fmt, _try_errno_fmt, _try_errno, \
+  )(__VA_ARGS__)
+#define _try_errno(expr)     \
+  ({                         \
+    int _ret = (expr);       \
+    if (_ret) return -errno; \
+  })
+#define _try_errno_fmt(expr, ...)       \
+  ({                                    \
+    int _ret = (expr);                  \
+    if (_ret) ret(-errno, __VA_ARGS__); \
+  })
+
+// Similar to `try_errno`, but for function that returns a pointer.
+#define try_ptr(...)                                                                     \
+  _get_macro(                                                                            \
+    _0, ##__VA_ARGS__, _try_ptr_fmt, _try_ptr_fmt, _try_ptr_fmt, _try_ptr_fmt, _try_ptr, \
+  )(__VA_ARGS__)
+#define _try_ptr(expr)        \
+  ({                          \
+    void* _ret = (expr);      \
+    if (!_ret) return -errno; \
+    _ret;                     \
+  })
+#define _try_ptr_fmt(expr, ...)          \
+  ({                                     \
+    void* _ret = (expr);                 \
+    if (!_ret) ret(-errno, __VA_ARGS__); \
+    _ret;                                \
   })
 
 // Jump to cleanup if failed.
-#define try_or_cleanup(...) \
-  _get_macro(_0, ##__VA_ARGS__, _tryjm, _tryjm, _tryjm, _tryjm, _tryj, )(__VA_ARGS__)
-#define _tryj(x)     \
-  ({                 \
-    int _x = x;      \
-    if (_x) {        \
-      retcode = -_x; \
-      goto cleanup;  \
-    }                \
+#define try_or_cleanup(...)                                                           \
+  _get_macro(                                                                         \
+    _0, ##__VA_ARGS__, _try_or_cleanup_fmt, _try_or_cleanup_fmt, _try_or_cleanup_fmt, \
+    _try_or_cleanup_fmt, _try_or_cleanup,                                             \
+  )(__VA_ARGS__)
+#define _try_or_cleanup(expr) \
+  ({                          \
+    int _ret = (expr);        \
+    if (_ret) {               \
+      retcode = _ret;         \
+      goto cleanup;           \
+    }                         \
   })
-#define _tryjm(x, ...)                     \
-  ({                                       \
-    int _x = x;                            \
-    if (_x) cleanup(-result, __VA_ARGS__); \
-  })
-
-// Similar to `try`, but for function that returns a pointer.
-#define try_ptr(...) \
-  _get_macro(_0, ##__VA_ARGS__, _trypm, _trypm, _trypm, _trypm, _tryp, )(__VA_ARGS__)
-#define _tryp(x)       \
-  ({                   \
-    void* _x = x;      \
-    if (!_x) return 1; \
-    _x;                \
-  })
-#define _trypm(x, ...)            \
-  ({                              \
-    void* _x = x;                 \
-    if (!_x) ret(1, __VA_ARGS__); \
-    _x;                           \
+#define _try_or_cleanup_fmt(expr, ...)    \
+  ({                                      \
+    int _ret = (expr);                    \
+    if (_ret) cleanup(_ret, __VA_ARGS__); \
   })
 
 // Tests int return value from a function, but return a different value when failed.

@@ -211,7 +211,7 @@ int egress_handler(struct __sk_buff* skb) {
     ipv6->nexthdr = IPPROTO_TCP;
   }
 
-  try_sr(mangle_data(skb, ip_end + sizeof(*udp)));
+  try(mangle_data(skb, ip_end + sizeof(*udp)));
   decl_or_shot(struct tcphdr, tcp, ip_end, skb);
   update_tcp_header(tcp, udp_len, syn, ack, rst, seq, ack_seq);
 
@@ -403,7 +403,7 @@ int ingress_handler(struct xdp_md* xdp) {
     ipv6->nexthdr = IPPROTO_UDP;
   }
 
-  try_sr_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len));
+  try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len));
   decl_or_drop(struct udphdr, udp, ip_end, xdp);
 
   u16 udp_len = buf_len - ip_end - TCP_UDP_HEADER_DIFF;
