@@ -4,12 +4,37 @@ Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP QoS and po
 
 **Note:** The project is still in early development stage. Functions might be broken, and I may know, or may not know about it. See [Caveats](#caveats) for more detail. Use with care and try at your own risk.
 
-## Usage
+## Preparation
+
+Currently Mimic does not ship prebuilt binaries. You have to build it from source. See [Building from Source](#building-from-source) for more information.
 
 The following requirements need to be satisfied on every machine that would run Mimic:
 
-- Recent Linux kernel: version >= 5.15 should work
+- Recent Linux kernel: version >= 6.1 (with BPF enabled) is guaranteed to work
 - libbpf, version 1.x: `apt install libbpf1` or similar, depending on your Linux distro
+
+To use Mimic, first load the kernel module which provides lower-level access of network packages for eBPF programs. If you use packaged version of Mimic (.deb), DKMS should compile it against current kernel automatically:
+
+```console
+# modprobe mimic
+```
+
+Optionally, load Mimic kernel module at startup:
+
+```console
+# cat << EOF > /etc/modules-load.d/mimic.conf
+mimic
+EOF
+```
+
+Otherwise, refer to [Building from Source](#building-from-source) to build and load kernel packages manually:
+
+```console
+$ make out/kmod/mimic.ko
+$ sudo insmod out/kmod/mimic.ko
+```
+
+## Usage
 
 Deploying Mimic does not require changing much of your existing configuration, as it directly interacts with packets in their ingress and egress paths. You can keep the same IP and port number of the UDP sockets at both ends, and just need to make sure the binding network interface and filters are set up correctly.
 
@@ -41,17 +66,28 @@ On client side, `remote` filter is used to specify the server address:
 
 ## Building from Source
 
-The following dependencies is required:
+Debian (>= 12, bookworm or later) and Ubuntu (>= 23.04, lunar or later) users can directly build Mimic as .deb package, with DKMS support:
+
+```console
+$ debuild -B -us -uc
+```
+
+Debian < 12 (bullseye, buster or earlier) and Ubuntu < 23.04 (kinetic, jammy or earlier) are not supported due to outdated libbpf 0.x.
+
+Otherwise, the following dependencies is required:
 
 - GNU make
 - libbpf 1.x and its header files: `apt install libbpf-dev` or similar
-- Clang, version >= 14
+- Clang version >= 14 **and** GCC (for building kernel module)
+- pahole, bpftool
 
 Then just simply:
 
 ```console
 $ make
 ```
+
+to build everything, including Mimic CLI and kernel module.
 
 ## Details
 
@@ -74,6 +110,8 @@ The following shows how Mimic works visually:
 ```
 
 ## Benchmark
+
+*TODO: to be re-tested*
 
 ### Environment
 
@@ -106,22 +144,6 @@ The following shows how Mimic works visually:
 
 ## Caveats
 
-#### IMPORTANT: Checksum offload messes up packet / checksum
-
-This is under investigation. in summary: *`skb->csum_{start,offset}` still points to the old UDP field.*
-
-You could try disable TX checksum offloading on you network interface to mitigate *some* of the problems:
-
-```console
-# ethtool -K <interface> tx off
-```
-
-Userspace programs like wireguard-go will work, but not the kernel WireGuard implementation, as it seems to use `CHECKSUM_PARTIAL` nonetheless.
-
-I am planning on adding a new eBPF helper in the Linux kernel that modifies these fields, or whatever would solve this (?); I will try to upstream this if the jusification is good enough (beyond just UDP -> TCP).
-
-See `exp-skb-csum-offset` branch for my current investigation progress on the eBPF side.
-
 #### Currently only Ethernet packets are correctly parsed.
 
 Support for other L2 protocols such as PPP(oE) and WLAN will be added.
@@ -139,4 +161,4 @@ It seems the virtio driver/implementation still considers fake TCP segment as UD
 
 ## License
 
-The project is licensed under GNU General Public License version 2 (GPLv2). See LICENSE for more details.
+The project is licensed under GNU General Public License version 2 only (GPL-2.0-only). See LICENSE for more details.
