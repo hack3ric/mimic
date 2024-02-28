@@ -69,7 +69,7 @@ On client side, `remote` filter is used to specify the server address:
 Debian (>= 12, bookworm or later) and Ubuntu (>= 23.04, lunar or later) users can directly build Mimic as .deb package, with DKMS support:
 
 ```console
-$ debuild -B -us -uc
+$ debuild -b -us -uc
 ```
 
 Debian < 12 (bullseye, buster or earlier) and Ubuntu < 23.04 (kinetic, jammy or earlier) are not supported due to outdated libbpf 0.x.
