@@ -52,15 +52,17 @@
 // Tests int return value from a function. Used for functions that returns non-zero error.
 #define try(...) \
   _get_macro(_0, ##__VA_ARGS__, _try_fmt, _try_fmt, _try_fmt, _try_fmt, _try, )(__VA_ARGS__)
-#define _try(expr)         \
-  ({                       \
-    int _ret = (expr);     \
-    if (_ret) return _ret; \
+#define _try(expr)             \
+  ({                           \
+    int _ret = (expr);         \
+    if (_ret < 0) return _ret; \
+    _ret;                      \
   })
-#define _try_fmt(expr, ...)           \
-  ({                                  \
-    int _ret = (expr);                \
-    if (_ret) ret(_ret, __VA_ARGS__); \
+#define _try_fmt(expr, ...)               \
+  ({                                      \
+    int _ret = (expr);                    \
+    if (_ret < 0) ret(_ret, __VA_ARGS__); \
+    _ret;                                 \
   })
 
 // Same as `try` with one arguments, but runs XDP subroutine
@@ -68,6 +70,7 @@
   ({                                   \
     int _ret = (expr);                 \
     if (_ret != XDP_PASS) return _ret; \
+    _ret;                              \
   })
 
 // Same as `try`, but returns -errno
@@ -79,11 +82,13 @@
   ({                         \
     int _ret = (expr);       \
     if (_ret) return -errno; \
+    _ret;                    \
   })
 #define _try_errno_fmt(expr, ...)       \
   ({                                    \
     int _ret = (expr);                  \
     if (_ret) ret(-errno, __VA_ARGS__); \
+    _ret;                               \
   })
 
 // Similar to `try_errno`, but for function that returns a pointer.
@@ -102,26 +107,6 @@
     void* _ret = (expr);                 \
     if (!_ret) ret(-errno, __VA_ARGS__); \
     _ret;                                \
-  })
-
-// Jump to cleanup if failed.
-#define try_or_cleanup(...)                                                           \
-  _get_macro(                                                                         \
-    _0, ##__VA_ARGS__, _try_or_cleanup_fmt, _try_or_cleanup_fmt, _try_or_cleanup_fmt, \
-    _try_or_cleanup_fmt, _try_or_cleanup,                                             \
-  )(__VA_ARGS__)
-#define _try_or_cleanup(expr) \
-  ({                          \
-    int _ret = (expr);        \
-    if (_ret) {               \
-      retcode = _ret;         \
-      goto cleanup;           \
-    }                         \
-  })
-#define _try_or_cleanup_fmt(expr, ...)    \
-  ({                                      \
-    int _ret = (expr);                    \
-    if (_ret) cleanup(_ret, __VA_ARGS__); \
   })
 
 // Tests int return value from a function, but return a different value when failed.

@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <net/if.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -15,12 +16,12 @@
 #include "shared/util.h"
 
 static volatile sig_atomic_t exiting = 0;
-static void sig_int(int signo) {
+static inline void sig_int(int signo) {
   log_warn("SIGINT received, exiting");
   exiting = 1;
 }
 
-static int tc_hook_create_bind(
+static inline int tc_hook_create_bind(
   struct bpf_tc_hook* hook, struct bpf_tc_opts* opts, const struct bpf_program* prog, char* name
 ) {
   int result = bpf_tc_hook_create(hook);
@@ -30,7 +31,7 @@ static int tc_hook_create_bind(
   return 0;
 }
 
-static int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts) {
+static inline int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts) {
   opts->flags = opts->prog_fd = opts->prog_id = 0;
   return bpf_tc_detach(hook, opts);
 }
@@ -51,7 +52,77 @@ static int handle_event(void* ctx, void* data, size_t data_sz) {
   return 0;
 }
 
-int main(int argc, char* argv[]) {
+static inline int run_bpf(
+  struct arguments* args, struct pkt_filter* filters, int ifindex, struct mimic_bpf* skel,
+  bool* tc_hook_registered, struct bpf_tc_hook* tc_hook_egress, struct bpf_tc_opts* tc_opts_egress
+) {
+  int error;
+  skel = try_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerrno);
+  skel->rodata->log_verbosity = log_verbosity;
+
+  if (mimic_bpf__load(skel)) {
+    log_error("failed to load BPF program: %s", strerrno);
+    if (errno == EINVAL) {
+      log_error("hint: did you load the Mimic kernel module?");
+    }
+    return -errno;
+  }
+
+  bool value = 1;
+  for (int i = 0; i < args->filter_count; i++) {
+    error = bpf_map__update_elem(
+      skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter), &value, sizeof(bool),
+      BPF_ANY
+    );
+    if (error || LOG_ALLOW_DEBUG) {
+      char fmt[FILTER_FMT_MAX_LEN];
+      pkt_filter_fmt(&filters[i], fmt);
+      if (error) {
+        ret(-errno, "failed to add filter `%s`: %s", fmt, strerrno);
+      } else if (LOG_ALLOW_DEBUG) {
+        log_debug("added filter: %s", fmt);
+      }
+    }
+  }
+  int rb_map_fd =
+    try(bpf_map__fd(skel->maps.mimic_rb), "failed to attach BPF ring buffer: %s", strerrno);
+  struct ring_buffer* rb = try_ptr(
+    ring_buffer__new(rb_map_fd, handle_event, NULL, NULL), "failed to attach BPF ring buffer: %s",
+    strerrno
+  );
+
+  *tc_hook_egress = (struct bpf_tc_hook){
+    .sz = sizeof(struct bpf_tc_hook), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
+  *tc_opts_egress =
+    (struct bpf_tc_opts){.sz = sizeof(struct bpf_tc_opts), .handle = 1, .priority = 1};
+  *tc_hook_registered = true;
+  struct bpf_program* egress = skel->progs.egress_handler;
+  try(tc_hook_create_bind(tc_hook_egress, tc_opts_egress, egress, "egress"));
+
+  try_ptr(
+    bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
+    "failed to attach XDP program: %s", strerrno
+  );
+
+  log_info("Mimic successfully deployed at %s with filters:", args->ifname);
+  for (int i = 0; i < args->filter_count; i++) {
+    char fmt[FILTER_FMT_MAX_LEN];
+    pkt_filter_fmt(&filters[i], fmt);
+    log_info("  * %s", fmt);
+  }
+
+  try_errno((uintptr_t)signal(SIGINT, sig_int), "cannot set signal handler: %s", strerrno);
+  while (!exiting) {
+    int result = ring_buffer__poll(rb, 100);
+    if (result < 0) {
+      if (result == -EINTR) return 0;
+      ret(result, "failed to poll ring buffer: %s", strerrno);
+    }
+  }
+  return 1;
+}
+
+int main(int argc, char** argv) {
   int error, retcode = 0;
   struct arguments args = {0};
   try(argp_parse(&args_argp, argc, argv, 0, 0, &args), "error parsing arguments");
@@ -81,7 +152,7 @@ int main(int argc, char* argv[]) {
 
     char* value = delim_pos + 1;
     char* port_str = strrchr(value, ':');
-    if (!port_str) ret(3, "no port number specified: %s", value);
+    if (!port_str) ret(1, "no port number specified: %s", value);
     *port_str = '\0';
     port_str++;
     char* endptr;
@@ -131,74 +202,16 @@ int main(int argc, char* argv[]) {
   }
   close(lock_fd);
 
+  struct mimic_bpf* skel = NULL;
+  bool tc_hook_registered = false;
+  struct bpf_tc_hook tc_hook_egress;
+  struct bpf_tc_opts tc_opts_egress;
   libbpf_set_print(libbpf_print_fn);
+  run_bpf(&args, filters, ifindex, skel, &tc_hook_registered, &tc_hook_egress, &tc_opts_egress);
 
-  struct mimic_bpf* skel = mimic_bpf__open();
-  if (!skel) {
-    remove(lock);
-    ret(-errno, "failed to open BPF program: %s", strerrno);
-  }
-  skel->rodata->log_verbosity = log_verbosity;
-
-  if (mimic_bpf__load(skel)) {
-    remove(lock);
-    log_error("failed to load BPF program: %s", strerrno);
-    if (errno == EINVAL) {
-      log_error("hint: did you load the Mimic kernel module?");
-    }
-    return -errno;
-  }
-
-  bool value = 1;
-  for (int i = 0; i < args.filter_count; i++) {
-    error = bpf_map__update_elem(
-      skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter), &value, sizeof(bool),
-      BPF_ANY
-    );
-    if (error || LOG_ALLOW_DEBUG) {
-      char fmt[FILTER_FMT_MAX_LEN];
-      pkt_filter_fmt(&filters[i], fmt);
-      if (error) {
-        cleanup(-errno, "failed to add filter `%s`: %s", fmt, strerrno);
-      } else if (LOG_ALLOW_DEBUG) {
-        log_debug("added filter: %s", fmt);
-      }
-    }
-  }
-
-  struct ring_buffer* rb =
-    ring_buffer__new(bpf_map__fd(skel->maps.mimic_rb), handle_event, NULL, NULL);
-  if (!rb) cleanup(-errno, "failed to attach BPF ring buffer: %s", strerrno);
-
-  LIBBPF_OPTS(bpf_tc_hook, tc_hook_egress, .ifindex = ifindex, .attach_point = BPF_TC_EGRESS);
-  LIBBPF_OPTS(bpf_tc_opts, tc_opts_egress, .handle = 1, .priority = 1);
-  struct bpf_program* egress = skel->progs.egress_handler;
-  try_or_cleanup(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, egress, "egress"));
-
-  if (!bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex)) {
-    cleanup(-errno, "failed to attach XDP program: %s", strerrno);
-  }
-
-  log_info("Mimic successfully deployed at %s with filters:", args.ifname);
-  for (int i = 0; i < args.filter_count; i++) {
-    char fmt[FILTER_FMT_MAX_LEN];
-    pkt_filter_fmt(&filters[i], fmt);
-    log_info("  * %s", fmt);
-  }
-
-  if (signal(SIGINT, sig_int) == SIG_ERR) cleanup(1, "cannot set signal handler: %s", strerrno);
-  while (!exiting) {
-    int result = ring_buffer__poll(rb, 100);
-    if (result < 0) {
-      if (result == -EINTR) retcode = 0;
-      break;
-    }
-  }
-
-cleanup:
   log_info("cleaning up");
-  tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
-  mimic_bpf__destroy(skel);
+  if (tc_hook_registered) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
+  if (skel) mimic_bpf__destroy(skel);
   remove(lock);
   return retcode;
 }
