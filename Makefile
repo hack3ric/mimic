@@ -27,7 +27,7 @@ src/bpf/skel.h: out/mimic.bpf.o
 	$(BPFTOOL) gen skeleton out/mimic.bpf.o > $@
 
 out/mimic: src/bpf/skel.h
-	$(CC) $(CFLAGS) src/main.c -o $@ -lbpf
+	$(CC) $(CFLAGS) $(LDFLAGS) src/main.c -o $@ -lbpf
 
 out/mimic.ko: .FORCE
 	$(MAKE) -C src/kmod

@@ -10,13 +10,12 @@ export DEB_VERSION_UPSTREAM
 	dh $@
 
 override_dh_auto_build:
-	tar xf /usr/src/linux-source-*.tar.*
+	tar xf `bash -c '_tarballs=(/usr/src/linux-source-*.tar.*); echo $${_tarballs[0]}'`
 	patch -d linux-source-*/tools/bpf/resolve_btfids -Np0 < debian/resolve_btfids-link-libbpf-dynamically.patch
 	make -C linux-source-*/tools/bpf/resolve_btfids
 	dh_auto_build -- out/mimic
 
-override_dh_auto_install:
-	dh_auto_install
+override_dh_dkms:
 	dh_dkms -- src/kmod/dkms.conf
 
 override_dh_dwz:
