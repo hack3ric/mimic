@@ -1,4 +1,3 @@
-#include "linux/bpf.h"
 #define _MIMIC_KMOD
 
 #include <linux/bpf.h>
@@ -13,7 +12,22 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 
-#include "btf.h"
+#ifndef __bpf_kfunc
+#define __bpf_kfunc __used noinline
+#endif
+
+#ifndef __bpf_kfunc_start_defs
+#define __bpf_kfunc_start_defs()                                                  \
+  __diag_push();                                                                  \
+  __diag_ignore_all(                                                              \
+    "-Wmissing-declarations", "Global kfuncs as their definitions will be in BTF" \
+  );                                                                              \
+  __diag_ignore_all("-Wmissing-prototypes", "Global kfuncs as their definitions will be in BTF")
+#endif
+
+#ifndef __bpf_kfunc_end_defs
+#define __bpf_kfunc_end_defs() __diag_pop()
+#endif
 
 __bpf_kfunc_start_defs();
 
