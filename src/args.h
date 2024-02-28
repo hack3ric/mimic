@@ -13,7 +13,7 @@ static const struct argp_option _args_options[] = {
    "Specify what packets to process. This may be specified for multiple times."},
   {"verbose", 'v', 0, 0, "Output more information"},
   {"quiet", 'q', 0, 0, "Output less information"},
-  {0}
+  {}
 };
 
 static char _args_doc[] = "INTERFACE";

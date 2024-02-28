@@ -52,9 +52,55 @@ static int handle_event(void* ctx, void* data, size_t data_sz) {
   return 0;
 }
 
+static inline int parse_filters(struct arguments* args, struct pkt_filter* filters) {
+  for (int i = 0; i < args->filter_count; i++) {
+    struct pkt_filter* filter = &filters[i];
+    char* filter_str = args->filters[i];
+    char* delim_pos = strchr(filter_str, '=');
+    if (delim_pos == NULL || delim_pos == filter_str) {
+      ret(1, "filter format should look like `{key}={value}`: %s", filter_str);
+    }
+
+    if (strncmp("local=", args->filters[i], 6) == 0) {
+      filter->origin = ORIGIN_LOCAL;
+    } else if (strncmp("remote=", args->filters[i], 7) == 0) {
+      filter->origin = ORIGIN_REMOTE;
+    } else {
+      *delim_pos = '\0';
+      ret(1, "unsupported filter type `%s`", filter_str);
+    }
+
+    char* value = delim_pos + 1;
+    char* port_str = strrchr(value, ':');
+    if (!port_str) ret(1, "no port number specified: %s", value);
+    *port_str = '\0';
+    port_str++;
+    char* endptr;
+    long port = strtol(port_str, &endptr, 10);
+    if (port <= 0 || port > 65535 || *endptr != '\0') ret(1, "invalid port number: `%s`", port_str);
+    filter->port = htons((__u16)port);
+
+    int af;
+    if (strchr(value, ':')) {
+      if (*value != '[' || port_str[-2] != ']') {
+        ret(1, "did you forget square brackets around an IPv6 address?");
+      }
+      filter->protocol = PROTO_IPV6;
+      value++;
+      port_str[-2] = '\0';
+      af = AF_INET6;
+    } else {
+      filter->protocol = PROTO_IPV4;
+      af = AF_INET;
+    }
+    if (inet_pton(af, value, &filter->ip.v6) == 0) ret(1, "bad IP address: %s", value);
+  }
+  return 0;
+}
+
 static inline int run_bpf(
   struct arguments* args, struct pkt_filter* filters, int ifindex, struct mimic_bpf* skel,
-  bool* tc_hook_registered, struct bpf_tc_hook* tc_hook_egress, struct bpf_tc_opts* tc_opts_egress
+  bool* tc_hook_created, struct bpf_tc_hook* tc_hook_egress, struct bpf_tc_opts* tc_opts_egress
 ) {
   int error;
   skel = try_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerrno);
@@ -95,7 +141,7 @@ static inline int run_bpf(
     .sz = sizeof(struct bpf_tc_hook), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
   *tc_opts_egress =
     (struct bpf_tc_opts){.sz = sizeof(struct bpf_tc_opts), .handle = 1, .priority = 1};
-  *tc_hook_registered = true;
+  *tc_hook_created = true;
   struct bpf_program* egress = skel->progs.egress_handler;
   try(tc_hook_create_bind(tc_hook_egress, tc_opts_egress, egress, "egress"));
 
@@ -129,52 +175,10 @@ int main(int argc, char** argv) {
 
   if (geteuid() != 0) ret(1, "you cannot perform run Mimic unless you are root");
 
-  // Parse filters
   if (args.filter_count == 0) ret(1, "no filter specified");
   struct pkt_filter filters[args.filter_count];
   memset(filters, 0, args.filter_count * sizeof(*filters));
-  for (int i = 0; i < args.filter_count; i++) {
-    struct pkt_filter* filter = &filters[i];
-    char* filter_str = args.filters[i];
-    char* delim_pos = strchr(filter_str, '=');
-    if (delim_pos == NULL || delim_pos == filter_str) {
-      ret(1, "filter format should look like `{key}={value}`: %s", filter_str);
-    }
-
-    if (strncmp("local=", args.filters[i], 6) == 0) {
-      filter->origin = ORIGIN_LOCAL;
-    } else if (strncmp("remote=", args.filters[i], 7) == 0) {
-      filter->origin = ORIGIN_REMOTE;
-    } else {
-      *delim_pos = '\0';
-      ret(1, "unsupported filter type `%s`", filter_str);
-    }
-
-    char* value = delim_pos + 1;
-    char* port_str = strrchr(value, ':');
-    if (!port_str) ret(1, "no port number specified: %s", value);
-    *port_str = '\0';
-    port_str++;
-    char* endptr;
-    long port = strtol(port_str, &endptr, 10);
-    if (port <= 0 || port > 65535 || *endptr != '\0') ret(1, "invalid port number: `%s`", port_str);
-    filter->port = htons((__u16)port);
-
-    int af;
-    if (strchr(value, ':')) {
-      if (*value != '[' || port_str[-2] != ']') {
-        ret(1, "did you forget square brackets around an IPv6 address?");
-      }
-      filter->protocol = PROTO_IPV6;
-      value++;
-      port_str[-2] = '\0';
-      af = AF_INET6;
-    } else {
-      filter->protocol = PROTO_IPV4;
-      af = AF_INET;
-    }
-    if (inet_pton(af, value, &filter->ip.v6) == 0) ret(1, "bad IP address: %s", value);
-  }
+  try(parse_filters(&args, filters));
 
   int ifindex;
   if (!args.ifname) ret(1, "no interface specified");
@@ -182,7 +186,7 @@ int main(int argc, char** argv) {
   if (!ifindex) ret(1, "no interface named `%s`", args.ifname);
 
   // Lock file
-  struct stat st = {0};
+  struct stat st = {};
   if (stat("/run/mimic", &st) == -1) {
     if (errno == ENOENT) {
       try_errno(mkdir("/run/mimic", 0755), "failed to create /run/mimic: %s", strerrno);
@@ -203,14 +207,14 @@ int main(int argc, char** argv) {
   close(lock_fd);
 
   struct mimic_bpf* skel = NULL;
-  bool tc_hook_registered = false;
-  struct bpf_tc_hook tc_hook_egress;
-  struct bpf_tc_opts tc_opts_egress;
+  bool tc_hook_created = false;
+  struct bpf_tc_hook tc_hook_egress = {};
+  struct bpf_tc_opts tc_opts_egress = {};
   libbpf_set_print(libbpf_print_fn);
-  run_bpf(&args, filters, ifindex, skel, &tc_hook_registered, &tc_hook_egress, &tc_opts_egress);
+  try(run_bpf(&args, filters, ifindex, skel, &tc_hook_created, &tc_hook_egress, &tc_opts_egress));
 
   log_info("cleaning up");
-  if (tc_hook_registered) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
+  if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
   if (skel) mimic_bpf__destroy(skel);
   remove(lock);
   return retcode;
