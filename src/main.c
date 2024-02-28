@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <errno.h>
 #include <net/if.h>
 #include <signal.h>
 #include <stdio.h>
@@ -48,7 +49,7 @@ static int handle_event(void* ctx, void* data, size_t data_sz) {
 }
 
 int main(int argc, char* argv[]) {
-  int result, retcode = 0;
+  int error, retcode = 0;
   struct arguments args = {0};
   try(argp_parse(&args_argp, argc, argv, 0, 0, &args), "error parsing arguments");
 
@@ -69,7 +70,7 @@ int main(int argc, char* argv[]) {
       filter->origin = ORIGIN_REMOTE;
     } else {
       *delim_pos = '\0';
-      ret(2, "unsupported filter type `%s`", filter_str);
+      ret(1, "unsupported filter type `%s`", filter_str);
     }
 
     char* value = delim_pos + 1;
@@ -79,13 +80,13 @@ int main(int argc, char* argv[]) {
     port_str++;
     char* endptr;
     long port = strtol(port_str, &endptr, 10);
-    if (port <= 0 || port > 65535 || *endptr != '\0') ret(4, "invalid port number: `%s`", port_str);
+    if (port <= 0 || port > 65535 || *endptr != '\0') ret(1, "invalid port number: `%s`", port_str);
     filter->port = htons((__u16)port);
 
     int af;
     if (strchr(value, ':')) {
       if (*value != '[' || port_str[-2] != ']') {
-        ret(5, "did you forget square brackets around an IPv6 address?");
+        ret(1, "did you forget square brackets around an IPv6 address?");
       }
       filter->protocol = PROTO_IPV6;
       value++;
@@ -107,19 +108,31 @@ int main(int argc, char* argv[]) {
 
   struct mimic_bpf* skel = try_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerrno);
   skel->rodata->log_verbosity = log_verbosity;
-  try(mimic_bpf__load(skel), "failed to load BPF program: %s", strerrno);
+
+  if ((error = mimic_bpf__load(skel))) {
+    log_error("failed to load BPF program: %s", strerrno);
+    switch (errno) {
+      case EPERM:
+        log_error("hint: are you root?");
+        break;
+      case EINVAL:
+        log_error("hint: did you load the Mimic kernel module?");
+        break;
+    }
+    return -error;
+  }
 
   bool value = 1;
   for (int i = 0; i < args.filter_count; i++) {
-    result = bpf_map__update_elem(
+    error = bpf_map__update_elem(
       skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter), &value, sizeof(bool),
       BPF_ANY
     );
-    if (result || LOG_ALLOW_DEBUG) {
+    if (error || LOG_ALLOW_DEBUG) {
       char fmt[FILTER_FMT_MAX_LEN];
       pkt_filter_fmt(&filters[i], fmt);
-      if (result)
-        cleanup(-result, "failed to add filter `%s`: %s", fmt, strerrno);
+      if (error)
+        cleanup(-error, "failed to add filter `%s`: %s", fmt, strerrno);
       else if (LOG_ALLOW_DEBUG)
         log_debug("added filter: %s", fmt);
     }
