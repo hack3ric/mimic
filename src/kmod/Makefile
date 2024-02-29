@@ -23,7 +23,7 @@ ifdef DEBIAN_HACK_RESOLVE_BTFIDS_PATH
 	cp -rL $(system_build_dir) $(BUILD)
 	[ -f $(BUILD)/vmlinux ] || cp /sys/kernel/btf/vmlinux $(BUILD)
 	[ -f $(BUILD)/tools/bpf/resolve_btfids/resolve_btfids ] || install -Dm755 \
-		$(DEBIAN_HACK_RESOLVE_BTFIDS_PATH) $(BUILD)/tools/bpf/resolve_btfids
+		$(DEBIAN_HACK_RESOLVE_BTFIDS_PATH) $(BUILD)/tools/bpf/resolve_btfids/resolve_btfids
 endif
 	make -C $(BUILD) M=$(PWD) modules
 
