@@ -148,16 +148,16 @@ The following shows how Mimic works visually:
 
 Support for other L2 protocols such as PPP(oE) and WLAN will be added.
 
-#### Sequence number syncing will fail when connecting two virtual machines on the same virtual network bridge, both with virtio-net NIC.
+#### TCP SYN packets contains data
 
-It seems the virtio driver/implementation still considers fake TCP segment as UDP, and overwrites the "UDP checksum" field (which is now the lower 16 bits of the sequence number). This will not affect most scenarios since you probably would not need to connect the VMs on the same virtualized network bridge using VPN tunnel. If you are experimenting, just switch the NIC on one or both of the VMs to an emulated one, like Intel 82574 (e1000e) on libvirt.
+This is a known quirk. Since eBPF can only *process* packets, not sending them actively, there's no way of initiating TCP handshake actively (in eBPF) but to rely on underlying protocols' communication to exchange sequence numbers. Wireshark does recognize such as valid TCP handshake, but some firewalls might block this "unconventional" practice. I plan to implement proper, regular handshake in userspace using raw sockets, though.
 
 ## Future work
 
 - More obfuscation options: XOR, padding, etc.
 - Make fake TCP optional
 - Variable cwnd
-- State reset mechanism
+- State reset mechanism (after timeout)
 
 ## License
 
