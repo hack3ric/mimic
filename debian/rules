@@ -14,6 +14,8 @@ IS_UBUNTU := $(shell dpkg-vendor --derives-from ubuntu > /dev/null 2>&1; echo $$
 override_dh_auto_build:
 	tar xf `bash -c '_tarballs=(/usr/src/linux-source-*.tar.*); echo $${_tarballs[0]}'`
 ifeq ($(IS_UBUNTU), 0)
+	# Ubuntu's bpftool relies on current kernel, which is both inconsistent
+	# with Debian and sbuild-unfriendly. Build from kernel source instead.
 	make -C linux-source-*/tools/bpf/bpftool
 	dh_auto_build -- out/mimic BPFTOOL=linux-source-*/tools/bpf/bpftool/bpftool
 else

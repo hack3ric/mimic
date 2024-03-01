@@ -1,6 +1,7 @@
-mimic (0.1.1-1) UNRELEASED; urgency=medium
+mimic (0.1.1-1) unstable; urgency=medium
 
   * New upstream release.
+  * Split package into mimic and mimic-dkms
   * Work around Ubuntu build environment
 
  -- Eric Long <i@hack3r.moe>  Fri, 01 Mar 2024 17:35:29 +0800
