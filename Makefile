@@ -41,7 +41,8 @@ out/mimic.ko: .FORCE
 	cp src/kmod/mimic.ko $@
 
 clean:
+	$(MAKE) -C src/kmod clean
 	rm -rf out/
 	rm -f src/bpf/skel.h
+	rm -f **/*.o
 #	rm -f src/bpf/vmlinux.h
-	$(MAKE) -C src/kmod clean
