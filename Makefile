@@ -31,7 +31,9 @@ out/mimic.bpf.o: src/bpf/vmlinux.h
 src/bpf/skel.h: out/mimic.bpf.o
 	$(BPFTOOL) gen skeleton out/mimic.bpf.o > $@
 
-out/mimic: src/bpf/skel.h $(MIMIC_OBJS)
+$(MIMIC_OBJS): src/bpf/skel.h
+
+out/mimic: $(MIMIC_OBJS)
 	$(MKDIR_P)
 	$(CC) $(CFLAGS) $(MIMIC_OBJS) -o $@ $(LDFLAGS) -lbpf
 
