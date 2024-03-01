@@ -7,6 +7,7 @@ Build-Depends:
  dh-sequence-dkms,
  clang,
  llvm,
+ python3,
  libbpf-dev,
  linux-source,
  linux-headers-generic,
