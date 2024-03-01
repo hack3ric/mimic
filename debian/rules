@@ -26,9 +26,6 @@ endif
 override_dh_dkms:
 	dh_dkms -pmimic-dkms -- src/kmod/dkms.conf
 
-override_dh_dwz:
-	dh_dwz -Xmimic
-
 override_dh_auto_clean:
 	dh_auto_clean
 	rm -rf linux-source-*
