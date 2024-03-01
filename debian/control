@@ -9,7 +9,7 @@ Build-Depends:
  libbpf-dev,
  linux-source,
  linux-headers-generic,
- bpftool
+ bpftool | linux-tools-generic
 Standards-Version: 4.5.1
 Homepage: https://github.com/hack3ric/mimic
 Rules-Requires-Root: no
