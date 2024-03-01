@@ -195,7 +195,7 @@ int main(int argc, char** argv) {
   }
   char lock[32];
   snprintf(lock, 32, "/run/mimic/%d.lock", ifindex);
-  int lock_fd = open(lock, O_CREAT | O_EXCL);
+  int lock_fd = open(lock, O_CREAT | O_EXCL, 0644);
   if (lock_fd < 0) {
     log_error("failed to lock on %s: %s", args.ifname, strerrno);
     if (errno == EEXIST) {
