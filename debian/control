@@ -21,6 +21,23 @@ Architecture: any
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
+ mimic-kmod (= ${binary:Version})
+Description: eBPF UDP -> TCP obfuscator
+ Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP
+ QoS and port blocking. Based on eBPF, it directly mangles data inside
+ Traffic Control (TC) subsystem in the kernel space and restores data
+ using XDP, achieving remarkably high performance compared to other
+ projects, such as udp2raw or Phantun.
+ .
+ This package contains the Mimic CLI and eBPF packet handler.
+
+Package: mimic-dkms
+Architecture: any
+Provides: mimic-kmod (= ${binary:Version})
+Conflicts: mimic-kmod
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
  pahole
 Description: eBPF UDP -> TCP obfuscator
  Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP
@@ -28,3 +45,6 @@ Description: eBPF UDP -> TCP obfuscator
  Traffic Control (TC) subsystem in the kernel space and restores data
  using XDP, achieving remarkably high performance compared to other
  projects, such as udp2raw or Phantun.
+ .
+ This package uses DKMS to automatically build kernel module against
+ current kernel.

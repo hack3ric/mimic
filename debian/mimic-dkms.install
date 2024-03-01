@@ -1,0 +1,2 @@
+src/kmod/* usr/src/mimic-${env:DEB_VERSION_UPSTREAM}
+linux-source-*/tools/bpf/resolve_btfids/resolve_btfids usr/lib/mimic
