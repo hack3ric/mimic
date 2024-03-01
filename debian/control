@@ -6,10 +6,11 @@ Build-Depends:
  debhelper-compat (= 13),
  dh-sequence-dkms,
  clang,
+ llvm,
  libbpf-dev,
  linux-source,
  linux-headers-generic,
- bpftool | linux-tools-generic
+ bpftool
 Standards-Version: 4.5.1
 Homepage: https://github.com/hack3ric/mimic
 Rules-Requires-Root: no

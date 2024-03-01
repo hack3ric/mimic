@@ -6,14 +6,20 @@ export DH_VERBOSE = 1
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 export DEB_VERSION_UPSTREAM
 
+IS_UBUNTU := $(shell dpkg-vendor --derives-from ubuntu > /dev/null 2>&1; echo $$?)
+
 %:
 	dh $@
 
 override_dh_auto_build:
 	tar xf `bash -c '_tarballs=(/usr/src/linux-source-*.tar.*); echo $${_tarballs[0]}'`
-	patch -d linux-source-*/tools/bpf/resolve_btfids -Np0 < debian/resolve_btfids-link-libbpf-dynamically.patch
-	make -C linux-source-*/tools/bpf/resolve_btfids
+ifeq ($(IS_UBUNTU), 0)
+	make -C linux-source-*/tools/bpf/bpftool
+	dh_auto_build -- out/mimic BPFTOOL=linux-source-*/tools/bpf/bpftool/bpftool
+else
 	dh_auto_build -- out/mimic
+endif
+	make -C linux-source-*/tools/bpf/resolve_btfids
 
 override_dh_dkms:
 	dh_dkms -pmimic-dkms -- src/kmod/dkms.conf
