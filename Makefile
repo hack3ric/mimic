@@ -35,7 +35,7 @@ src/bpf/vmlinux.h:
 	$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > $@
 
 $(MIMIC_BPF_OBJS): $(MIMIC_BPF_OBJS:.o=.c) $(MIMIC_BPF_HEADERS)
-	$(BPF_CC) $(BPF_CFLAGS) -c -o $@ $<
+	$(BPF_CC) $(BPF_CFLAGS) -D_MIMIC_BPF -c -o $@ $<
 
 out/mimic.bpf.o: $(MIMIC_BPF_OBJS)
 	$(MKDIR_P)

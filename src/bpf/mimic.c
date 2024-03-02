@@ -1,5 +1,3 @@
-#define _MIMIC_BPF
-
 #include "vmlinux.h"
 
 #include <bpf/bpf_endian.h>
