@@ -2,7 +2,7 @@ BPF_CC ?= clang --target=bpf
 CC ?= clang
 BPFTOOL ?= /usr/sbin/bpftool
 
-BPF_CFLAGS ?= -O2
+BPF_CFLAGS ?= -O3
 CFLAGS ?= -O2
 
 MIMIC_OBJS := src/main.o
@@ -24,7 +24,7 @@ src/bpf/vmlinux.h:
 	$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > $@
 
 # -g is required in order to obtain BTF
-out/mimic.bpf.o: src/bpf/vmlinux.h
+out/mimic.bpf.o: src/bpf/vmlinux.h src/bpf/main.c
 	$(MKDIR_P)
 	$(BPF_CC) -g -mcpu=v3 $(BPF_CFLAGS) -c src/bpf/main.c -o $@
 
