@@ -1,8 +1,8 @@
-BPF_CC ?= clang --target=bpf
+BPF_CC ?= clang
 CC ?= clang
 BPFTOOL ?= /usr/sbin/bpftool
 
-BPF_CFLAGS ?= -O3
+BPF_CFLAGS ?= --target=bpf -mcpu=v3 -g -O3
 CFLAGS ?= -O2
 
 MIMIC_OBJS := src/main.o
@@ -26,7 +26,7 @@ src/bpf/vmlinux.h:
 # -g is required in order to obtain BTF
 out/mimic.bpf.o: src/bpf/vmlinux.h src/bpf/main.c
 	$(MKDIR_P)
-	$(BPF_CC) -g -mcpu=v3 $(BPF_CFLAGS) -c src/bpf/main.c -o $@
+	$(BPF_CC) $(BPF_CFLAGS) -c src/bpf/main.c -o $@
 
 src/bpf/skel.h: out/mimic.bpf.o
 	$(BPFTOOL) gen skeleton out/mimic.bpf.o > $@
