@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -195,14 +196,21 @@ int main(int argc, char** argv) {
   }
   char lock[32];
   snprintf(lock, 32, "/run/mimic/%d.lock", ifindex);
-  int lock_fd = open(lock, O_CREAT | O_EXCL, 0644);
+  int lock_fd = open(lock, O_CREAT | O_EXCL | O_WRONLY, 0644);
   if (lock_fd < 0) {
-    log_error("failed to lock on %s: %s", args.ifname, strerrno);
+    log_error("failed to lock on %s at %s: %s", args.ifname, lock, strerrno);
     if (errno == EEXIST) {
-      log_error("hint: is another Mimic process running on this interface?");
+      int pid = 0;
+      FILE* lock_file = fopen(lock, "r");
+      fscanf(lock_file, "%d", &pid);
+      fclose(lock_file);
+      if (pid > 0) {
+        log_error("hint: is another Mimic process (PID %d) running on this interface?", pid);
+      }
     }
     return -errno;
   }
+  dprintf(lock_fd, "%d\n", getpid());
   close(lock_fd);
 
   struct mimic_bpf* skel = NULL;
