@@ -19,7 +19,7 @@
 #ifdef _MIMIC_BPF
 const volatile int log_verbosity = 0;
 #else
-static int log_verbosity = 2;
+extern int log_verbosity;
 #endif
 
 enum log_level {

@@ -11,6 +11,8 @@ const char* argp_program_version = "mimic 0.2.0";
 
 /* mimic run */
 
+int log_verbosity = 2;
+
 static const struct argp_option run_args_options[] = {
   {"filter", 'f', "FILTER", 0,
    "Specify what packets to process. This may be specified for multiple times."},
