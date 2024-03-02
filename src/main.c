@@ -1,3 +1,4 @@
+#include <argp.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -53,7 +54,7 @@ static int handle_event(void* ctx, void* data, size_t data_sz) {
   return 0;
 }
 
-static inline int parse_filters(struct arguments* args, struct pkt_filter* filters) {
+static inline int parse_filters(struct run_arguments* args, struct pkt_filter* filters) {
   for (int i = 0; i < args->filter_count; i++) {
     struct pkt_filter* filter = &filters[i];
     char* filter_str = args->filters[i];
@@ -100,7 +101,7 @@ static inline int parse_filters(struct arguments* args, struct pkt_filter* filte
 }
 
 static inline int run_bpf(
-  struct arguments* args, struct pkt_filter* filters, int ifindex, struct mimic_bpf* skel,
+  struct run_arguments* args, struct pkt_filter* filters, int ifindex, struct mimic_bpf* skel,
   bool* tc_hook_created, struct bpf_tc_hook* tc_hook_egress, struct bpf_tc_opts* tc_opts_egress
 ) {
   int error;
@@ -169,21 +170,18 @@ static inline int run_bpf(
   return 1;
 }
 
-int main(int argc, char** argv) {
-  struct arguments args = {0};
-  try(argp_parse(&args_argp, argc, argv, 0, 0, &args), "error parsing arguments");
-
+static inline int subcmd_run(struct run_arguments* args) {
   if (geteuid() != 0) ret(1, "you cannot perform run Mimic unless you are root");
 
-  if (args.filter_count == 0) ret(1, "no filter specified");
-  struct pkt_filter filters[args.filter_count];
-  memset(filters, 0, args.filter_count * sizeof(*filters));
-  try(parse_filters(&args, filters));
+  if (args->filter_count == 0) ret(1, "no filter specified");
+  struct pkt_filter filters[args->filter_count];
+  memset(filters, 0, args->filter_count * sizeof(*filters));
+  try(parse_filters(args, filters));
 
   int ifindex;
-  if (!args.ifname) ret(1, "no interface specified");
-  ifindex = if_nametoindex(args.ifname);
-  if (!ifindex) ret(1, "no interface named `%s`", args.ifname);
+  if (!args->ifname) ret(1, "no interface specified");
+  ifindex = if_nametoindex(args->ifname);
+  if (!ifindex) ret(1, "no interface named `%s`", args->ifname);
 
   // Lock file
   struct stat st = {};
@@ -198,7 +196,7 @@ int main(int argc, char** argv) {
   snprintf(lock, 32, "/run/mimic/%d.lock", ifindex);
   int lock_fd = open(lock, O_CREAT | O_EXCL | O_WRONLY, 0644);
   if (lock_fd < 0) {
-    log_error("failed to lock on %s at %s: %s", args.ifname, lock, strerrno);
+    log_error("failed to lock on %s at %s: %s", args->ifname, lock, strerrno);
     if (errno == EEXIST) {
       int pid = 0;
       FILE* lock_file = fopen(lock, "r");
@@ -219,11 +217,24 @@ int main(int argc, char** argv) {
   struct bpf_tc_opts tc_opts_egress = {};
   libbpf_set_print(libbpf_print_fn);
   int retcode =
-    run_bpf(&args, filters, ifindex, skel, &tc_hook_created, &tc_hook_egress, &tc_opts_egress);
+    run_bpf(args, filters, ifindex, skel, &tc_hook_created, &tc_hook_egress, &tc_opts_egress);
 
   log_info("cleaning up");
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
   if (skel) mimic_bpf__destroy(skel);
   remove(lock);
   return retcode;
+}
+
+int main(int argc, char** argv) {
+  struct arguments args = {};
+  try(argp_parse(&argp, argc, argv, ARGP_IN_ORDER, NULL, &args), "error parsing arguments");
+
+  switch (args.cmd) {
+    case CMD_RUN:
+      return subcmd_run(&args.run);
+    case CMD_NULL:
+      break;
+  }
+  return 0;
 }
