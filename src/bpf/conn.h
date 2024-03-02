@@ -3,6 +3,8 @@
 
 #include "vmlinux.h"
 
+#include <bpf/bpf_endian.h>
+
 #include "../shared/filter.h"
 
 struct conn_tuple {

@@ -1,6 +1,3 @@
-#ifndef _MIMIC_BPF_EGRESS_H
-#define _MIMIC_BPF_EGRESS_H
-
 #include "vmlinux.h"
 
 #include <bpf/bpf_endian.h>
@@ -213,5 +210,3 @@ int egress_handler(struct __sk_buff* skb) {
 
   return TC_ACT_OK;
 }
-
-#endif  // _MIMIC_BPF_EGRESS_H

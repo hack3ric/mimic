@@ -7,12 +7,12 @@
 
 #include "../shared/log.h"
 
-const volatile int log_verbosity = 0;
+extern const volatile int log_verbosity;
 
-struct {
+extern struct mimic_rb_map {
   __uint(type, BPF_MAP_TYPE_RINGBUF);
   __uint(max_entries, LOG_RB_ITEM_LEN * 1024);
-} mimic_rb SEC(".maps");
+} mimic_rb;
 
 #define _log_a(_0, _1, _2, _3, N, ...) _##N
 #define _log_b_0() (u64[0]){}, 0
@@ -81,6 +81,5 @@ static __always_inline void log_pkt(
   __builtin_strncpy(pkt->msg, msg, LOG_RB_PKT_MSG_LEN);
   bpf_ringbuf_submit(e, 0);
 }
-
 
 #endif  // _MIMIC_BPF_LOG_H

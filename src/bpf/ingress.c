@@ -1,6 +1,3 @@
-#ifndef _MIMIC_BPF_INGRESS_H
-#define _MIMIC_BPF_INGRESS_H
-
 #include "vmlinux.h"
 
 #include <bpf/bpf_endian.h>
@@ -203,5 +200,3 @@ int ingress_handler(struct xdp_md* xdp) {
 
   return XDP_PASS;
 }
-
-#endif  // _MIMIC_BPF_INGRESS_H

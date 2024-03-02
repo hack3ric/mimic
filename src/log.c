@@ -1,3 +1,6 @@
+#include <bpf/libbpf.h>
+#include <stdio.h>
+
 #include "log.h"
 
 int log_verbosity = 2;

@@ -5,17 +5,16 @@ BPFTOOL ?= /usr/sbin/bpftool
 # for bpf-gcc, use -gbtf and -mco-re
 BPF_CFLAGS ?= --target=bpf -mcpu=v3 -g -O3
 CFLAGS ?= -O2
-LDFLAGS ?= -flto
 
-MIMIC_BPF_OBJS := src/bpf/mimic.o
-MIMIC_BPF_HEADERS := src/bpf/vmlinux.h \
-	$(wildcard src/bpf/*.h) \
-	$(wildcard src/shared/*.h)
+MIMIC_SHARED_HEADERS := $(wildcard src/shared/*.h)
 
-MIMIC_OBJS := src/mimic.o src/args.o src/log.o
-MIMIC_HEADERS := src/bpf_skel.h \
-	$(wildcard src/*.h) \
-	$(wildcard src/shared/*.h)
+MIMIC_BPF_SRCS := $(wildcard src/bpf/*.c)
+MIMIC_BPF_OBJS := $(MIMIC_BPF_SRCS:.c=.o)
+MIMIC_BPF_HEADERS := src/bpf/vmlinux.h $(wildcard src/bpf/*.h) $(MIMIC_SHARED_HEADERS)
+
+MIMIC_SRCS := $(wildcard src/*.c)
+MIMIC_OBJS := $(MIMIC_SRCS:.c=.o)
+MIMIC_HEADERS := src/bpf_skel.h $(wildcard src/*.h) $(MIMIC_SHARED_HEADERS)
 
 .PHONY: build build-cli build-kmod generate generate-skel generate-vmlinux clean .FORCE
 .FORCE:
@@ -33,7 +32,7 @@ MKDIR_P = mkdir -p $(@D)
 src/bpf/vmlinux.h:
 	$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > $@
 
-$(MIMIC_BPF_OBJS): $(MIMIC_BPF_OBJS:.o=.c) $(MIMIC_BPF_HEADERS)
+$(filter src/bpf/%.o, $(MIMIC_BPF_OBJS)): src/bpf/%.o: src/bpf/%.c $(MIMIC_BPF_HEADERS)
 	$(BPF_CC) $(BPF_CFLAGS) -D_MIMIC_BPF -c -o $@ $<
 
 out/mimic.bpf.o: $(MIMIC_BPF_OBJS)
@@ -43,7 +42,7 @@ out/mimic.bpf.o: $(MIMIC_BPF_OBJS)
 src/bpf_skel.h: out/mimic.bpf.o
 	$(BPFTOOL) gen skeleton out/mimic.bpf.o > $@
 
-$(MIMIC_OBJS): $(MIMIC_HEADERS)
+$(filter src/%.o, $(MIMIC_OBJS)): src/%.o: $(MIMIC_HEADERS)
 
 out/mimic: $(MIMIC_OBJS)
 	$(MKDIR_P)

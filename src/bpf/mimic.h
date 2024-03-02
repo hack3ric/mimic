@@ -5,19 +5,22 @@
 
 #include <bpf/bpf_helpers.h>
 
-struct {
+#include "../shared/filter.h"
+#include "conn.h"
+
+extern struct mimic_whitelist_map {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 8);
   __type(key, struct pkt_filter);
   __type(value, bool);
-} mimic_whitelist SEC(".maps");
+} mimic_whitelist;
 
-struct {
+extern struct mimic_conns_map {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 32);
   __type(key, struct conn_tuple);
   __type(value, struct connection);
-} mimic_conns SEC(".maps");
+} mimic_conns;
 
 #define IPV4_CSUM_OFF (offsetof(struct iphdr, check))
 #define TCP_UDP_HEADER_DIFF (sizeof(struct tcphdr) - sizeof(struct udphdr))
