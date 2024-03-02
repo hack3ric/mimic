@@ -1,5 +1,4 @@
 BPF_CC ?= clang
-CC ?= clang
 BPFTOOL ?= /usr/sbin/bpftool
 
 # -g is required (by Clang) to generate BTF
