@@ -13,7 +13,7 @@ MIMIC_BPF_HEADERS := src/bpf/vmlinux.h \
 	$(wildcard src/bpf/*.h) \
 	$(wildcard src/shared/*.h)
 
-MIMIC_OBJS := src/mimic.o src/args.o
+MIMIC_OBJS := src/mimic.o src/args.o src/log.o
 MIMIC_HEADERS := src/bpf_skel.h \
 	$(wildcard src/*.h) \
 	$(wildcard src/shared/*.h)

@@ -13,8 +13,8 @@
 
 #include "args.h"
 #include "bpf_skel.h"
+#include "log.h"
 #include "shared/filter.h"
-#include "shared/log.h"
 #include "shared/util.h"
 
 static volatile sig_atomic_t exiting = 0;

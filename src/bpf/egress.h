@@ -7,9 +7,9 @@
 #include <bpf/bpf_helpers.h>
 
 #include "../shared/filter.h"
-#include "../shared/log.h"
 #include "../shared/util.h"
 #include "conn.h"
+#include "log.h"
 #include "mimic.h"
 
 // Extend socket buffer and move n bytes from front to back.
