@@ -6,13 +6,14 @@ BPFTOOL ?= /usr/sbin/bpftool
 # for bpf-gcc, use -gbtf and -mco-re
 BPF_CFLAGS ?= --target=bpf -mcpu=v3 -g -O3
 CFLAGS ?= -O2
+LDFLAGS ?= -flto
 
 MIMIC_BPF_OBJS := src/bpf/mimic.o
 MIMIC_BPF_HEADERS := src/bpf/vmlinux.h \
 	$(wildcard src/bpf/*.h) \
 	$(wildcard src/shared/*.h)
 
-MIMIC_OBJS := src/mimic.o
+MIMIC_OBJS := src/mimic.o src/args.o
 MIMIC_HEADERS := src/bpf_skel.h \
 	$(wildcard src/*.h) \
 	$(wildcard src/shared/*.h)

@@ -231,9 +231,9 @@ int main(int argc, char** argv) {
   try(argp_parse(&argp, argc, argv, ARGP_IN_ORDER, NULL, &args), "error parsing arguments");
 
   switch (args.cmd) {
-    case CMD_RUN:
+    case CMD_run:
       return subcmd_run(&args.run);
-    case CMD_NULL:
+    default:
       break;
   }
   return 0;
