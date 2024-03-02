@@ -58,3 +58,4 @@ clean:
 	rm -rf out/
 	find . -type f -name *.o -delete
 	rm -f src/bpf_skel.h
+	rm -f src/bpf/vmlinux.h
