@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-quilt pop || :
+quilt pop || true
 
 _ver=`dpkg-parsechangelog --show-field Version`
 _ver="${_ver/-*}"
