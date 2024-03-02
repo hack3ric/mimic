@@ -3,14 +3,14 @@
 
 #ifdef _MIMIC_BPF
 #include "../bpf/vmlinux.h"
+
+#include "../bpf/log.h"
 #else
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
+
+#include "../log.h"
 #endif
-
-#include "log.h"
-
-#define strerrno strerror(errno)
 
 #define redecl(_type, _name, _off, _ctx, _ret)                              \
   _name = ({                                                                \
@@ -73,6 +73,11 @@
     _ret;                              \
   })
 
+// `errno` is not available in BPF
+#ifndef _MIMIC_BPF
+
+#define strerrno strerror(errno)
+
 // Same as `try`, but returns -errno
 #define try_errno(...)                                                                             \
   _get_macro(                                                                                      \
@@ -108,6 +113,8 @@
     if (!_ret) ret(-errno, __VA_ARGS__); \
     _ret;                                \
   })
+
+#endif
 
 // Tests int return value from a function, but return a different value when failed.
 #define try_ret(x, ret) \
