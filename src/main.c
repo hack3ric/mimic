@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #include "args.h"
-#include "bpf/skel.h"
+#include "bpf_skel.h"
 #include "shared/filter.h"
 #include "shared/log.h"
 #include "shared/util.h"

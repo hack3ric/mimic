@@ -51,7 +51,7 @@ Module.symvers
 Mkfile.old
 
 /.vscode/
-/src/bpf/skel.h
+/src/bpf_skel.h
 /out/
 /.cache
 compile_commands.json
