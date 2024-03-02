@@ -146,7 +146,7 @@ int egress_handler(struct __sk_buff* skb) {
   u16 payload_len = udp_len - sizeof(*udp);
   log_trace("egress: payload_len = %d", payload_len);
 
-  bool syn = 0, ack = 0, rst = 0;
+  bool syn = false, ack = false, rst = false, newly_estab = false;
   u32 seq, ack_seq, conn_seq, conn_ack_seq;
   u32 random = bpf_get_prandom_u32();
   bpf_spin_lock(&conn->lock);
@@ -159,7 +159,7 @@ int egress_handler(struct __sk_buff* skb) {
     switch (conn->state) {
       case STATE_IDLE:
         // SYN send: seq=A -> seq=A+len+1, ack=0
-        syn = 1;
+        syn = true;
         seq = conn->seq = random;
         ack_seq = conn->ack_seq = 0;
         conn->seq += payload_len + 1;  // seq=A+len+1
@@ -167,21 +167,22 @@ int egress_handler(struct __sk_buff* skb) {
         break;
       case STATE_SYN_SENT:
         // duplicate SYN without response: resend
-        syn = 1;
+        syn = true;
         seq = conn->seq;
         ack_seq = conn->ack_seq;
         break;
       case STATE_SYN_RECV:
         // SYN+ACK send: seq=B -> seq=B+len+1, ack=A+len+1
-        syn = ack = 1;
+        syn = ack = true;
         seq = conn->seq = random;
         ack_seq = conn->ack_seq;  // ack_seq set at ingress
         conn->seq += payload_len + 1;
         conn->state = STATE_ESTABLISHED;
+        newly_estab = true;
         break;
       case STATE_ESTABLISHED:
         // ACK send: seq=seq -> seq=seq+len, ack=ack
-        ack = 1;
+        ack = true;
         seq = conn->seq;
         ack_seq = conn->ack_seq;
         conn->seq += payload_len;
@@ -191,6 +192,9 @@ int egress_handler(struct __sk_buff* skb) {
   conn_seq = conn->seq;
   conn_ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
+  if (newly_estab) {
+    log_pkt(LOG_LEVEL_INFO, "egress: established connection", ipv4, ipv6, udp, NULL);
+  }
   log_trace("egress: sending TCP packet: seq = %u, ack_seq = %u", seq, ack_seq);
   log_trace("egress: current state: seq = %u, ack_seq = %u", conn_seq, conn_ack_seq);
 
@@ -327,6 +331,7 @@ int ingress_handler(struct xdp_md* xdp) {
     return XDP_DROP;
   }
 
+  bool newly_estab = false;
   bpf_spin_lock(&conn->lock);
   switch (conn->state) {
     case STATE_IDLE:
@@ -343,6 +348,7 @@ int ingress_handler(struct xdp_md* xdp) {
         // SYN+ACK recv: seq=A+len+1, ack=B+len+1
         conn->ack_seq = bpf_ntohl(tcp->seq) + payload_len + 1;
         conn->state = STATE_ESTABLISHED;
+        newly_estab = true;
       } else if (tcp->syn && !tcp->ack) {
         // SYN sent from both sides: decide which side is going to transition into STATE_SYN_RECV
         // Basically `if (local < remote) state = STATE_SYN_RECV`
@@ -379,6 +385,9 @@ int ingress_handler(struct xdp_md* xdp) {
   seq = conn->seq;
   ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
+  if (newly_estab) {
+    log_pkt(LOG_LEVEL_INFO, "ingress: established connection", ipv4, ipv6, NULL, tcp);
+  }
   log_trace(
     "ingress: received TCP packet: seq = %u, ack_seq = %u", bpf_ntohl(tcp->seq),
     bpf_ntohl(tcp->ack_seq)

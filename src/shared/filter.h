@@ -41,7 +41,7 @@ struct pkt_filter {
 // max: "remote=[%pI6]:%d\0"
 #define FILTER_FMT_MAX_LEN (8 + INET6_ADDRSTRLEN + 2 + 5 + 1)
 
-static void ip_port_fmt(
+static inline void ip_port_fmt(
   enum ip_proto protocol, union ip_value ip, __be16 port, char* restrict dest
 ) {
   *dest = '\0';
@@ -52,8 +52,14 @@ static void ip_port_fmt(
   snprintf(dest + strlen(dest), 7, ":%d", ntohs(port));
 }
 
+static inline void pkt_filter_ip_port_fmt(
+  const struct pkt_filter* restrict filter, char* restrict dest
+) {
+  ip_port_fmt(filter->protocol, filter->ip, filter->port, dest);
+}
+
 // `dest` must be at least `FILTER_FMT_MAX_LEN` bytes long.
-static void pkt_filter_fmt(const struct pkt_filter* restrict filter, char* restrict dest) {
+static inline void pkt_filter_fmt(const struct pkt_filter* restrict filter, char* restrict dest) {
   *dest = '\0';
   if (filter->origin == ORIGIN_LOCAL) {
     strcat(dest, "local=");
@@ -62,7 +68,7 @@ static void pkt_filter_fmt(const struct pkt_filter* restrict filter, char* restr
     strcat(dest, "remote=");
     dest += 7;
   }
-  ip_port_fmt(filter->protocol, filter->ip, filter->port, dest);
+  pkt_filter_ip_port_fmt(filter, dest);
 }
 
 #endif  // _MIMIC_BPF
