@@ -63,14 +63,9 @@ int ingress_handler(struct xdp_md* xdp) {
     return XDP_PASS;
   }
 
-  log_pkt(LOG_LEVEL_DEBUG, "ingress: matched (fake) TCP packet", ipv4, ipv6, NULL, tcp);
+  log_pkt(LOG_LEVEL_DEBUG, "ingress: matched (fake) TCP packet", QUARTET_TCP);
 
-  struct conn_tuple conn_key = {};
-  if (ipv4) {
-    conn_key = conn_tuple_v4(ipv4_daddr, tcp->dest, ipv4_saddr, tcp->source);
-  } else if (ipv6) {
-    conn_key = conn_tuple_v6(ipv6_daddr, tcp->dest, ipv6_saddr, tcp->source);
-  }
+  struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP, true);
   struct connection* conn = try_ptr_or_drop(get_conn(&conn_key));
 
   u32 buf_len = bpf_xdp_get_buff_len(xdp);
@@ -89,11 +84,11 @@ int ingress_handler(struct xdp_md* xdp) {
     bpf_spin_unlock(&conn->lock);
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
-    log_pkt(LOG_LEVEL_WARN, "ingress: received RST", ipv4, ipv6, NULL, tcp);
+    log_pkt(LOG_LEVEL_WARN, "ingress: received RST", QUARTET_TCP);
     if (rst_result == RST_ABORTED) {
-      log_pkt(LOG_LEVEL_INFO, "ingress: aborted connection", ipv4, ipv6, NULL, tcp);
+      log_pkt(LOG_LEVEL_INFO, "ingress: aborted connection", QUARTET_TCP);
     } else if (rst_result == RST_DESTROYED) {
-      log_pkt(LOG_LEVEL_INFO, "ingress: destroyed connection", ipv4, ipv6, NULL, tcp);
+      log_pkt(LOG_LEVEL_INFO, "ingress: destroyed connection", QUARTET_TCP);
     }
     return XDP_DROP;
   }
@@ -156,12 +151,12 @@ int ingress_handler(struct xdp_md* xdp) {
   ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
   if (rst_result == RST_ABORTED) {
-    log_pkt(LOG_LEVEL_INFO, "ingress: aborted connection", ipv4, ipv6, NULL, tcp);
+    log_pkt(LOG_LEVEL_INFO, "ingress: aborted connection", QUARTET_TCP);
   } else if (rst_result == RST_DESTROYED) {
-    log_pkt(LOG_LEVEL_INFO, "ingress: destroyed connection", ipv4, ipv6, NULL, tcp);
+    log_pkt(LOG_LEVEL_INFO, "ingress: destroyed connection", QUARTET_TCP);
   }
   if (newly_estab) {
-    log_pkt(LOG_LEVEL_INFO, "ingress: established connection", ipv4, ipv6, NULL, tcp);
+    log_pkt(LOG_LEVEL_INFO, "ingress: established connection", QUARTET_TCP);
   }
   log_trace(
     "ingress: received TCP packet: seq = %u, ack_seq = %u", bpf_ntohl(tcp->seq),

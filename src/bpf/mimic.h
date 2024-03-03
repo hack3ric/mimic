@@ -41,6 +41,39 @@ struct ipv6_ph_part {
 struct sk_buff* mimic_inspect_skb(struct __sk_buff*) __ksym;
 int mimic_change_csum_offset(struct __sk_buff*, u16) __ksym;
 
+// clang-format off
+#define QUARTET_DEF struct iphdr* ipv4, struct ipv6hdr* ipv6, struct udphdr* udp, struct tcphdr* tcp
+#define QUARTET_UDP ipv4, ipv6, udp, NULL
+#define QUARTET_TCP ipv4, ipv6, NULL, tcp
+// clang-format on
+
+static inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress) {
+  struct conn_tuple key = {};
+  if (udp) {
+    key.local_port = udp->source;
+    key.remote_port = udp->dest;
+  } else if (tcp) {
+    key.local_port = tcp->source;
+    key.remote_port = tcp->dest;
+  }
+  if (ipv4) {
+    key.local.v4 = ipv4->saddr;
+    key.remote.v4 = ipv4->daddr;
+  } else if (ipv6) {
+    key.local.v6 = ipv6->saddr;
+    key.remote.v6 = ipv6->daddr;
+  }
+  if (ingress) {
+    __be16 tp = key.local_port;
+    key.local_port = key.remote_port;
+    key.remote_port = tp;
+    union ip_value ti = key.local;
+    key.local = key.remote;
+    key.remote = ti;
+  }
+  return key;
+}
+
 // TODO: GC connections
 static inline struct connection* get_conn(struct conn_tuple* conn_key) {
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, conn_key);

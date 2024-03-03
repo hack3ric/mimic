@@ -86,14 +86,9 @@ int egress_handler(struct __sk_buff* skb) {
     return TC_ACT_OK;
   }
 
-  log_pkt(LOG_LEVEL_DEBUG, "egress: matched UDP packet", ipv4, ipv6, udp, NULL);
+  log_pkt(LOG_LEVEL_DEBUG, "egress: matched UDP packet", QUARTET_UDP);
 
-  struct conn_tuple conn_key = {};
-  if (ipv4) {
-    conn_key = conn_tuple_v4(ipv4_saddr, udp->source, ipv4_daddr, udp->dest);
-  } else if (ipv6) {
-    conn_key = conn_tuple_v6(ipv6_saddr, udp->source, ipv6_daddr, udp->dest);
-  }
+  struct conn_tuple conn_key = gen_conn_key(QUARTET_UDP, false);
   struct connection* conn = try_ptr_or_shot(get_conn(&conn_key));
 
   struct udphdr old_udphdr = *udp;
@@ -152,9 +147,9 @@ int egress_handler(struct __sk_buff* skb) {
   conn_seq = conn->seq;
   conn_ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
-  if (rst) log_pkt(LOG_LEVEL_WARN, "egress: sending RST", ipv4, ipv6, udp, NULL);
+  if (rst) log_pkt(LOG_LEVEL_WARN, "egress: sending RST", QUARTET_UDP);
   if (newly_estab) {
-    log_pkt(LOG_LEVEL_INFO, "egress: established connection", ipv4, ipv6, udp, NULL);
+    log_pkt(LOG_LEVEL_INFO, "egress: established connection", QUARTET_UDP);
   }
   log_trace("egress: sending TCP packet: seq = %u, ack_seq = %u", seq, ack_seq);
   log_trace("egress: current state: seq = %u, ack_seq = %u", conn_seq, conn_ack_seq);

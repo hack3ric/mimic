@@ -6,6 +6,7 @@
 #include <bpf/bpf_helpers.h>
 
 #include "../shared/log.h"
+#include "mimic.h"
 
 extern const volatile int log_verbosity;
 
@@ -48,10 +49,7 @@ extern struct mimic_rb_map {
 #define log_trace(fmt, ...) \
   if (LOG_ALLOW_TRACE) _log_rbprintf(LOG_LEVEL_TRACE, fmt, ##__VA_ARGS__)
 
-static __always_inline void log_pkt(
-  enum log_level level, char* msg, struct iphdr* ipv4, struct ipv6hdr* ipv6, struct udphdr* udp,
-  struct tcphdr* tcp
-) {
+static __always_inline void log_pkt(enum log_level level, char* msg, QUARTET_DEF) {
   if (log_verbosity < level) return;
 
   struct log_event* e = bpf_ringbuf_reserve(&mimic_rb, LOG_RB_ITEM_LEN, 0);
