@@ -116,7 +116,7 @@ int egress_handler(struct __sk_buff* skb) {
   u32 random = bpf_get_prandom_u32();
   bpf_spin_lock(&conn->lock);
   if (conn->rst) {
-    rst = 1;
+    rst = true;
     seq = conn->seq;
     ack_seq = conn->ack_seq;
     conn_reset(conn, false);
