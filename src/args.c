@@ -8,6 +8,7 @@
 #include "shared/util.h"
 
 const char* argp_program_version = "mimic 0.2.0";
+const char* argp_program_bug_address = "https://github.com/hack3ric/mimic/issues";
 
 /* mimic run */
 
@@ -42,8 +43,6 @@ static inline error_t run_args_parse_opt(int key, char* arg, struct argp_state* 
         args->ifname = arg;
       } else {
         return ARGP_ERR_UNKNOWN;
-        log_error("currently only one interface is supported");
-        exit(1);
       }
       break;
     default:
@@ -64,14 +63,20 @@ static inline error_t show_args_parse_opt(int key, char* arg, struct argp_state*
     case ARGP_KEY_NO_ARGS:
       argp_usage(state);
       break;
-    // case ARGP_KEY_ARG:
+    case ARGP_KEY_ARG:
+      if (!args->ifname) {
+        args->ifname = arg;
+      } else {
+        return ARGP_ERR_UNKNOWN;
+      }
+      break;
     default:
       return ARGP_ERR_UNKNOWN;
   }
   return 0;
 }
 
-static const struct argp show_argp = {show_args_options, show_args_parse_opt, NULL, NULL};
+static const struct argp show_argp = {show_args_options, show_args_parse_opt, "INTERFACE", NULL};
 
 /* mimic (global options) */
 
@@ -82,11 +87,9 @@ static const char args_doc[] =
   "\n"
   "  run                        Run Mimic on an network interface\n"
   "  show                       View details of a currently running instance\n"
-  "  config                     Configure filters and preferences on the fly\n"
+  "  edit                       Configure filters and preferences on the fly\n"
   "\n"
-  "Options:"
-  "\v"
-  "Additional Info";
+  "Options:";
 
 static inline error_t argp_parse_cmd(
   struct argp_state* state, const char* cmdname, const struct argp* cmd_argp, void* args
@@ -122,6 +125,7 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
     case ARGP_KEY_ARG:
       gen_cmd_parse(run);
       gen_cmd_parse(show);
+      // gen_cmd_parse(edit);
       log_error("unknown command '%s'", arg);
       exit(1);
       break;

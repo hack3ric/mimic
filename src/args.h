@@ -6,7 +6,7 @@ struct arguments {
     CMD_NULL = 0,
     CMD_run,
     CMD_show,
-    CMD_config,
+    CMD_edit,
   } cmd;
   union {
     struct run_arguments {
@@ -15,7 +15,7 @@ struct arguments {
       char* ifname;
     } run;
     struct show_arguments {
-      // TODO
+      char* ifname;
     } show;
   };
 };
