@@ -87,68 +87,86 @@ int ingress_handler(struct xdp_md* xdp) {
 
   // TODO: verify checksum
 
+  enum rst_result rst_result = RST_NONE;
+  bool newly_estab = false;
+
   if (tcp->rst) {
-    conn_reset(conn, 0);
+    bpf_spin_lock(&conn->lock);
+    rst_result = conn_reset(conn, 0);
+    bpf_spin_unlock(&conn->lock);
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
     log_pkt(LOG_LEVEL_WARN, "ingress: received RST", ipv4, ipv6, NULL, tcp);
+    if (rst_result == RST_ABORTED) {
+      log_pkt(LOG_LEVEL_INFO, "ingress: aborted connection", ipv4, ipv6, NULL, tcp);
+    } else if (rst_result == RST_DESTROYED) {
+      log_pkt(LOG_LEVEL_INFO, "ingress: destroyed connection", ipv4, ipv6, NULL, tcp);
+    }
     return XDP_DROP;
   }
 
-  bool newly_estab = false;
   bpf_spin_lock(&conn->lock);
-  switch (conn->state) {
-    case STATE_IDLE:
-    case STATE_SYN_RECV:  // duplicate SYN received: always use last one
-      if (tcp->syn && !tcp->ack) {
-        // SYN recv: seq=0, ack=A+len+1
-        conn_syn_recv(conn, tcp, payload_len);
-      } else {
-        conn_reset(conn, true);
-      }
-      break;
-    case STATE_SYN_SENT:
-      if (tcp->syn && tcp->ack) {
-        // SYN+ACK recv: seq=A+len+1, ack=B+len+1
-        conn->ack_seq = bpf_ntohl(tcp->seq) + payload_len + 1;
-        conn->state = STATE_ESTABLISHED;
-        newly_estab = true;
-      } else if (tcp->syn && !tcp->ack) {
-        // SYN sent from both sides: decide which side is going to transition into STATE_SYN_RECV
-        // Basically `if (local < remote) state = STATE_SYN_RECV`
-        //
-        // Edge case: source and destination addresses are the same; this should be VERY rare, but
-        // to handle it safely, both sides yield and transition to STATE_SYN_RECV.
-        int det;
-        if (ipv4) {
-          det = cmp(bpf_ntohl(ipv4_daddr), bpf_ntohl(ipv4_saddr));
+  // Do not update state before sending RST
+  if (!conn->rst) {
+    switch (conn->state) {
+      case STATE_IDLE:
+      case STATE_SYN_RECV:  // duplicate SYN received: always use last one
+        if (tcp->syn && !tcp->ack) {
+          // SYN recv: seq=0, ack=A+len+1
+          conn_syn_recv(conn, tcp, payload_len);
         } else {
-          for (int i = 0; i < 16; i++) {
-            det = cmp(ipv6_daddr.in6_u.u6_addr8[i], ipv6_saddr.in6_u.u6_addr8[i]);
-            if (det) break;
-          }
+          // TODO: avoid frequent sending of RST
+          rst_result = conn_reset(conn, true);
         }
-        if (!det) det = cmp(bpf_ntohs(tcp->dest), bpf_ntohs(tcp->source));
-        if (det <= 0) conn_syn_recv(conn, tcp, payload_len);
-      } else {
-        conn_reset(conn, true);
-      }
-      break;
-    case STATE_ESTABLISHED:
-      if (!tcp->syn && tcp->ack) {
-        // ACK recv: seq=seq, ack=ack+len
-        conn->ack_seq += payload_len;
-      } else if (tcp->syn && !tcp->ack) {
-        // SYN again: reset state
-        conn_syn_recv(conn, tcp, payload_len);
-      } else {
-        conn_reset(conn, true);
-      }
-      break;
+        break;
+      case STATE_SYN_SENT:
+        if (tcp->syn && tcp->ack) {
+          // SYN+ACK recv: seq=A+len+1, ack=B+len+1
+          conn->ack_seq = bpf_ntohl(tcp->seq) + payload_len + 1;
+          conn->state = STATE_ESTABLISHED;
+          newly_estab = true;
+        } else if (tcp->syn && !tcp->ack) {
+          // SYN sent from both sides: decide which side is going to transition into STATE_SYN_RECV
+          // Basically `if (local < remote) state = STATE_SYN_RECV`
+          //
+          // Edge case: source and destination addresses are the same; this should be VERY rare, but
+          // to handle it safely, both sides yield and transition to STATE_SYN_RECV.
+          int det;
+          if (ipv4) {
+            det = cmp(bpf_ntohl(ipv4_daddr), bpf_ntohl(ipv4_saddr));
+          } else {
+            for (int i = 0; i < 16; i++) {
+              det = cmp(ipv6_daddr.in6_u.u6_addr8[i], ipv6_saddr.in6_u.u6_addr8[i]);
+              if (det) break;
+            }
+          }
+          if (!det) det = cmp(bpf_ntohs(tcp->dest), bpf_ntohs(tcp->source));
+          if (det <= 0) conn_syn_recv(conn, tcp, payload_len);
+        } else {
+          rst_result = conn_reset(conn, true);
+        }
+        break;
+      case STATE_ESTABLISHED:
+        if (!tcp->syn && tcp->ack) {
+          // ACK recv: seq=seq, ack=ack+len
+          conn->ack_seq += payload_len;
+        } else if (tcp->syn && !tcp->ack) {
+          // SYN again: reset state
+          conn_syn_recv(conn, tcp, payload_len);
+        } else {
+          rst_result = conn_reset(conn, true);
+        }
+        break;
+    }
   }
   seq = conn->seq;
   ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
+  if (rst_result == RST_ABORTED) {
+    log_pkt(LOG_LEVEL_INFO, "ingress: aborted connection", ipv4, ipv6, NULL, tcp);
+  } else if (rst_result == RST_DESTROYED) {
+    log_pkt(LOG_LEVEL_INFO, "ingress: destroyed connection", ipv4, ipv6, NULL, tcp);
+  }
   if (newly_estab) {
     log_pkt(LOG_LEVEL_INFO, "ingress: established connection", ipv4, ipv6, NULL, tcp);
   }

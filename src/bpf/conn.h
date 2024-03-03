@@ -39,10 +39,26 @@ struct connection {
   bool rst;
 };
 
-static inline void conn_reset(struct connection* conn, bool send_rst) {
+enum rst_result {
+  RST_NONE,
+  RST_ABORTED,
+  RST_DESTROYED,
+};
+
+static inline enum rst_result conn_reset(struct connection* conn, bool send_rst) {
+  enum rst_result result;
+  if (conn->state == STATE_ESTABLISHED) {
+    result = RST_DESTROYED;
+  } else if (conn->state == STATE_IDLE) {
+    result = RST_NONE;
+  } else {
+    result = RST_ABORTED;
+  }
+
   conn->ack_seq = 0;
   conn->rst = send_rst;
   conn->state = STATE_IDLE;
+  return result;
 }
 
 static inline void conn_syn_recv(struct connection* conn, struct tcphdr* tcp, u32 payload_len) {

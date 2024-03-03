@@ -119,7 +119,8 @@ int egress_handler(struct __sk_buff* skb) {
     rst = true;
     seq = conn->seq;
     ack_seq = conn->ack_seq;
-    conn_reset(conn, false);
+    // No need to reset twice
+    // conn_reset(conn, false);
   } else {
     switch (conn->state) {
       case STATE_IDLE:
@@ -157,6 +158,7 @@ int egress_handler(struct __sk_buff* skb) {
   conn_seq = conn->seq;
   conn_ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
+  if (rst) log_pkt(LOG_LEVEL_WARN, "egress: sending RST", ipv4, ipv6, udp, NULL);
   if (newly_estab) {
     log_pkt(LOG_LEVEL_INFO, "egress: established connection", ipv4, ipv6, udp, NULL);
   }
