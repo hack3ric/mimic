@@ -111,7 +111,14 @@ static inline int run_bpf(
   if (mimic_bpf__load(skel)) {
     log_error("failed to load BPF program: %s", strerrno);
     if (errno == EINVAL) {
+      FILE* modules = fopen("/proc/modules", "r");
+      char buf[256];
+      while (fgets(buf, 256, modules)) {
+        if (strncmp("mimic", buf, 5) == 0) goto einval_end;
+      }
       log_error("hint: did you load the Mimic kernel module?");
+    einval_end:
+      fclose(modules);
     }
     return -errno;
   }
