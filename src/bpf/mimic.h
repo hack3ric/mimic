@@ -47,6 +47,35 @@ int mimic_change_csum_offset(struct __sk_buff*, u16) __ksym;
 #define QUARTET_TCP ipv4, ipv6, NULL, tcp
 // clang-format on
 
+static inline bool matches_whitelist(QUARTET_DEF, bool ingress) {
+  struct pkt_filter local = {.origin = ORIGIN_LOCAL}, remote = {.origin = ORIGIN_REMOTE};
+  if (udp) {
+    local.port = udp->source;
+    remote.port = udp->dest;
+  } else if (tcp) {
+    local.port = tcp->source;
+    remote.port = tcp->dest;
+  }
+  if (ipv4) {
+    local.protocol = remote.protocol = PROTO_IPV4;
+    local.ip.v4 = ipv4->saddr;
+    remote.ip.v4 = ipv4->daddr;
+  } else if (ipv6) {
+    local.protocol = remote.protocol = PROTO_IPV6;
+    local.ip.v6 = ipv6->saddr;
+    remote.ip.v6 = ipv6->daddr;
+  }
+  if (ingress) {
+    struct pkt_filter t = local;
+    local = remote;
+    remote = t;
+    local.origin = ORIGIN_LOCAL;
+    remote.origin = ORIGIN_REMOTE;
+  }
+  return bpf_map_lookup_elem(&mimic_whitelist, &local) ||
+         bpf_map_lookup_elem(&mimic_whitelist, &remote);
+}
+
 static inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress) {
   struct conn_tuple key = {};
   if (udp) {

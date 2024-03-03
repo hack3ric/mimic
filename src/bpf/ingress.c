@@ -47,22 +47,7 @@ int ingress_handler(struct xdp_md* xdp) {
   if (ip_proto != IPPROTO_TCP) return XDP_PASS;
   decl_or_pass(struct tcphdr, tcp, ip_end, xdp);
 
-  __be32 ipv4_saddr = 0, ipv4_daddr = 0;
-  struct in6_addr ipv6_saddr = {}, ipv6_daddr = {};
-  struct pkt_filter local_key = {}, remote_key = {};
-  if (ipv4) {
-    ipv4_saddr = ipv4->saddr, ipv4_daddr = ipv4->daddr;
-    local_key = pkt_filter_v4(ORIGIN_LOCAL, ipv4_daddr, tcp->dest);
-    remote_key = pkt_filter_v4(ORIGIN_REMOTE, ipv4_saddr, tcp->source);
-  } else if (ipv6) {
-    ipv6_saddr = ipv6->saddr, ipv6_daddr = ipv6->daddr;
-    local_key = pkt_filter_v6(ORIGIN_LOCAL, ipv6_daddr, tcp->dest);
-    remote_key = pkt_filter_v6(ORIGIN_REMOTE, ipv6_saddr, tcp->source);
-  }
-  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key)) {
-    return XDP_PASS;
-  }
-
+  if (!matches_whitelist(QUARTET_TCP, true)) return XDP_PASS;
   log_pkt(LOG_LEVEL_DEBUG, "ingress: matched (fake) TCP packet", QUARTET_TCP);
 
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP, true);
@@ -121,10 +106,10 @@ int ingress_handler(struct xdp_md* xdp) {
           // to handle it safely, both sides yield and transition to STATE_SYN_RECV.
           int det;
           if (ipv4) {
-            det = cmp(bpf_ntohl(ipv4_daddr), bpf_ntohl(ipv4_saddr));
+            det = cmp(bpf_ntohl(ipv4->daddr), bpf_ntohl(ipv4->saddr));
           } else {
             for (int i = 0; i < 16; i++) {
-              det = cmp(ipv6_daddr.in6_u.u6_addr8[i], ipv6_saddr.in6_u.u6_addr8[i]);
+              det = cmp(ipv6->daddr.in6_u.u6_addr8[i], ipv6->saddr.in6_u.u6_addr8[i]);
               if (det) break;
             }
           }
@@ -164,7 +149,10 @@ int ingress_handler(struct xdp_md* xdp) {
   );
   log_trace("ingress: current state: seq = %u, ack_seq = %u", seq, ack_seq);
 
+  __be32 ipv4_saddr = 0, ipv4_daddr = 0;
+  struct in6_addr ipv6_saddr = {}, ipv6_daddr = {};
   if (ipv4) {
+    ipv4_saddr = ipv4->saddr, ipv4_daddr = ipv4->daddr;
     __be16 old_len = ipv4->tot_len;
     __be16 new_len = bpf_htons(bpf_ntohs(old_len) - TCP_UDP_HEADER_DIFF);
     ipv4->tot_len = new_len;
@@ -175,6 +163,7 @@ int ingress_handler(struct xdp_md* xdp) {
     update_csum(&ipv4_csum, IPPROTO_UDP - IPPROTO_TCP);
     ipv4->check = bpf_htons(csum_fold(ipv4_csum));
   } else if (ipv6) {
+    ipv6_saddr = ipv6->saddr, ipv6_daddr = ipv6->daddr;
     ipv6->payload_len = bpf_htons(bpf_ntohs(ipv6->payload_len) - TCP_UDP_HEADER_DIFF);
     ipv6->nexthdr = IPPROTO_UDP;
   }

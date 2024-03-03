@@ -70,22 +70,7 @@ int egress_handler(struct __sk_buff* skb) {
   if (ip_proto != IPPROTO_UDP) return TC_ACT_OK;
   decl_or_ok(struct udphdr, udp, ip_end, skb);
 
-  __be32 ipv4_saddr = 0, ipv4_daddr = 0;
-  struct in6_addr ipv6_saddr = {}, ipv6_daddr = {};
-  struct pkt_filter local_key = {}, remote_key = {};
-  if (ipv4) {
-    ipv4_saddr = ipv4->saddr, ipv4_daddr = ipv4->daddr;
-    local_key = pkt_filter_v4(ORIGIN_LOCAL, ipv4_saddr, udp->source);
-    remote_key = pkt_filter_v4(ORIGIN_REMOTE, ipv4_daddr, udp->dest);
-  } else if (ipv6) {
-    ipv6_saddr = ipv6->saddr, ipv6_daddr = ipv6->daddr;
-    local_key = pkt_filter_v6(ORIGIN_LOCAL, ipv6_saddr, udp->source);
-    remote_key = pkt_filter_v6(ORIGIN_REMOTE, ipv6_daddr, udp->dest);
-  }
-  if (!bpf_map_lookup_elem(&mimic_whitelist, &local_key) && !bpf_map_lookup_elem(&mimic_whitelist, &remote_key)) {
-    return TC_ACT_OK;
-  }
-
+  if (!matches_whitelist(QUARTET_UDP, false)) return TC_ACT_OK;
   log_pkt(LOG_LEVEL_DEBUG, "egress: matched UDP packet", QUARTET_UDP);
 
   struct conn_tuple conn_key = gen_conn_key(QUARTET_UDP, false);

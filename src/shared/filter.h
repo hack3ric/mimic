@@ -21,19 +21,6 @@ struct pkt_filter {
   } ip;
 };
 
-#define _pkt_filter_init(_dir, _p, _p2, _ip, _port) \
-  ({                                                \
-    struct pkt_filter _x = {};                      \
-    _x.origin = (_dir);                             \
-    _x.protocol = (_p);                             \
-    _x.port = (_port);                              \
-    _x.ip._p2 = (_ip);                              \
-    _x;                                             \
-  })
-
-#define pkt_filter_v4(dir, ip, port) _pkt_filter_init(dir, PROTO_IPV4, v4, ip, port)
-#define pkt_filter_v6(dir, ip, port) _pkt_filter_init(dir, PROTO_IPV6, v6, ip, port)
-
 #ifndef _MIMIC_BPF
 
 // max: "[%pI6]:%d\0"

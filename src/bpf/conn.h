@@ -13,20 +13,6 @@ struct conn_tuple {
   union ip_value local, remote;
 };
 
-#define _conn_tuple_init(_p, _p2, _l, _lp, _r, _rp) \
-  ({                                                \
-    struct conn_tuple _x = {};                      \
-    _x.protocol = (_p);                             \
-    _x.local_port = (_lp);                          \
-    _x.remote_port = (_rp);                         \
-    _x.local._p2 = (_l);                            \
-    _x.remote._p2 = (_r);                           \
-    _x;                                             \
-  })
-
-#define conn_tuple_v4(l, lp, r, rp) _conn_tuple_init(PROTO_IPV4, v4, l, lp, r, rp)
-#define conn_tuple_v6(l, lp, r, rp) _conn_tuple_init(PROTO_IPV6, v6, l, lp, r, rp)
-
 struct connection {
   struct bpf_spin_lock lock;
   enum conn_state {
