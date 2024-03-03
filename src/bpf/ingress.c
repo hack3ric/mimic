@@ -71,14 +71,7 @@ int ingress_handler(struct xdp_md* xdp) {
   } else if (ipv6) {
     conn_key = conn_tuple_v6(ipv6_daddr, tcp->dest, ipv6_saddr, tcp->source);
   }
-
-  struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
-  if (!conn) {
-    struct connection conn_value = {};
-    try_or_drop(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
-    conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
-    if (!conn) return XDP_DROP;
-  }
+  struct connection* conn = try_ptr_or_drop(get_conn(&conn_key));
 
   u32 buf_len = bpf_xdp_get_buff_len(xdp);
   u32 payload_len = buf_len - ip_end - sizeof(*tcp);
@@ -92,7 +85,7 @@ int ingress_handler(struct xdp_md* xdp) {
 
   if (tcp->rst) {
     bpf_spin_lock(&conn->lock);
-    rst_result = conn_reset(conn, 0);
+    rst_result = conn_reset(conn, false);
     bpf_spin_unlock(&conn->lock);
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.

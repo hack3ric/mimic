@@ -41,4 +41,16 @@ struct ipv6_ph_part {
 struct sk_buff* mimic_inspect_skb(struct __sk_buff*) __ksym;
 int mimic_change_csum_offset(struct __sk_buff*, u16) __ksym;
 
+// TODO: GC connections
+static inline struct connection* get_conn(struct conn_tuple* conn_key) {
+  struct connection* conn = bpf_map_lookup_elem(&mimic_conns, conn_key);
+  if (!conn) {
+    struct connection conn_value = {};
+    if (bpf_map_update_elem(&mimic_conns, conn_key, &conn_value, BPF_ANY)) return NULL;
+    conn = bpf_map_lookup_elem(&mimic_conns, conn_key);
+    if (!conn) return NULL;
+  }
+  return conn;
+}
+
 #endif  // _MIMIC_BPF_MIMIC_H

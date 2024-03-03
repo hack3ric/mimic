@@ -118,12 +118,28 @@
 
 // Tests int return value from a function, but return a different value when failed.
 #define try_ret(x, ret) \
-  if (x) return ret
+  ({                    \
+    if (x) return ret;  \
+    0;                  \
+  })
 
 #define try_or_ok(x) try_ret(x, TC_ACT_OK)
 #define try_or_shot(x) try_ret(x, TC_ACT_SHOT)
 #define try_or_pass(x) try_ret(x, XDP_PASS)
 #define try_or_drop(x) try_ret(x, XDP_DROP)
+
+// Tests pointer return value from a function, but return a different value when failed.
+#define try_ptr_ret(x, ret) \
+  ({                        \
+    void* _ptr = (x);       \
+    if (!_ptr) return ret;  \
+    _ptr;                   \
+  })
+
+#define try_ptr_or_ok(x) try_ptr_ret(x, TC_ACT_OK)
+#define try_ptr_or_shot(x) try_ptr_ret(x, TC_ACT_SHOT)
+#define try_ptr_or_pass(x) try_ptr_ret(x, XDP_PASS)
+#define try_ptr_or_drop(x) try_ptr_ret(x, XDP_DROP)
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define max(x, y) ((x) < (y) ? (y) : (x))

@@ -94,14 +94,7 @@ int egress_handler(struct __sk_buff* skb) {
   } else if (ipv6) {
     conn_key = conn_tuple_v6(ipv6_saddr, udp->source, ipv6_daddr, udp->dest);
   }
-
-  struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
-  if (!conn) {
-    struct connection conn_value = {};
-    try_or_shot(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
-    conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
-    if (!conn) return TC_ACT_SHOT;
-  }
+  struct connection* conn = try_ptr_or_shot(get_conn(&conn_key));
 
   struct udphdr old_udphdr = *udp;
   old_udphdr.check = 0;
@@ -119,6 +112,7 @@ int egress_handler(struct __sk_buff* skb) {
     rst = true;
     seq = conn->seq;
     ack_seq = conn->ack_seq;
+    conn->rst = false;
     // No need to reset twice
     // conn_reset(conn, false);
   } else {
