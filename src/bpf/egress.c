@@ -119,7 +119,7 @@ int egress_handler(struct __sk_buff* skb) {
     rst = 1;
     seq = conn->seq;
     ack_seq = conn->ack_seq;
-    conn_reset(conn, 0);
+    conn_reset(conn, false);
   } else {
     switch (conn->state) {
       case STATE_IDLE:

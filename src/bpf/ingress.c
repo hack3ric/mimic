@@ -16,7 +16,7 @@ static inline int restore_data(struct xdp_md* xdp, u16 offset, u32 buf_len) {
   u16 data_len = buf_len - offset;
   u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
   if (copy_len > 0) {
-    if (copy_len < 2) copy_len = 1;  // HACK: see above
+    if (copy_len < 2) copy_len = 1;  // HACK: see egress.c
     try_or_drop(bpf_xdp_load_bytes(xdp, buf_len - copy_len, buf, copy_len));
     try_or_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf, copy_len));
   }
@@ -104,7 +104,7 @@ int ingress_handler(struct xdp_md* xdp) {
         // SYN recv: seq=0, ack=A+len+1
         conn_syn_recv(conn, tcp, payload_len);
       } else {
-        conn_reset(conn, 1);
+        conn_reset(conn, true);
       }
       break;
     case STATE_SYN_SENT:
@@ -131,7 +131,7 @@ int ingress_handler(struct xdp_md* xdp) {
         if (!det) det = cmp(bpf_ntohs(tcp->dest), bpf_ntohs(tcp->source));
         if (det <= 0) conn_syn_recv(conn, tcp, payload_len);
       } else {
-        conn_reset(conn, 1);
+        conn_reset(conn, true);
       }
       break;
     case STATE_ESTABLISHED:
@@ -142,7 +142,7 @@ int ingress_handler(struct xdp_md* xdp) {
         // SYN again: reset state
         conn_syn_recv(conn, tcp, payload_len);
       } else {
-        conn_reset(conn, 1);
+        conn_reset(conn, true);
       }
       break;
   }
