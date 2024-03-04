@@ -1,9 +1,7 @@
 #include <argp.h>
 
-#include "args.h"
-#include "run.h"
+#include "mimic.h"
 #include "shared/util.h"
-#include "show.h"
 
 int main(int argc, char** argv) {
   struct arguments args = {};

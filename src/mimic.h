@@ -1,9 +1,9 @@
-#ifndef _MIMIC_ARGS_H
-#define _MIMIC_ARGS_H
+#ifndef _MIMIC_MIMIC_H
+#define _MIMIC_MIMIC_H
 
 struct arguments {
   enum argument_cmd {
-    CMD_NULL = 0,
+    CMD_NULL,
     CMD_run,
     CMD_show,
     CMD_edit,
@@ -21,5 +21,10 @@ struct arguments {
 };
 
 extern const struct argp argp;
+extern const struct argp run_argp;
+extern const struct argp show_argp;
 
-#endif
+int subcmd_run(struct run_arguments* args);
+int subcmd_show(struct show_arguments* args);
+
+#endif  // _MIMIC_MIMIC_H

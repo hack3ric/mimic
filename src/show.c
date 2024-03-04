@@ -1,6 +1,6 @@
 #include <argp.h>
 
-#include "args.h"
+#include "mimic.h"
 
 static const struct argp_option show_args_options[] = {{}};
 

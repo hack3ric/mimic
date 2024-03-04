@@ -3,11 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "args.h"
+#include "mimic.h"
 #include "log.h"
-#include "run.h"
 #include "shared/util.h"
-#include "show.h"
 
 const char* argp_program_version = "0.2.0";
 const char* argp_program_bug_address = "https://github.com/hack3ric/mimic/issues";

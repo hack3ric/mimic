@@ -5,9 +5,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "args.h"
 #include "bpf_skel.h"
 #include "log.h"
+#include "mimic.h"
 #include "shared/filter.h"
 #include "shared/util.h"
 
