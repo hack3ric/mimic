@@ -5,78 +5,12 @@
 
 #include "args.h"
 #include "log.h"
+#include "run.h"
 #include "shared/util.h"
+#include "show.h"
 
-const char* argp_program_version = "mimic 0.2.0";
+const char* argp_program_version = "0.2.0";
 const char* argp_program_bug_address = "https://github.com/hack3ric/mimic/issues";
-
-/* mimic run */
-
-static const struct argp_option run_args_options[] = {
-  {"filter", 'f', "FILTER", 0,
-   "Specify what packets to process. This may be specified for multiple times."},
-  {"verbose", 'v', NULL, 0, "Output more information"},
-  {"quiet", 'q', NULL, 0, "Output less information"},
-  {}};
-
-static inline error_t run_args_parse_opt(int key, char* arg, struct argp_state* state) {
-  struct run_arguments* args = (struct run_arguments*)state->input;
-  switch (key) {
-    case 'f':
-      args->filters[args->filter_count] = arg;
-      if (args->filter_count++ > 8) {
-        log_error("currently only maximum of 8 filters is supported");
-        exit(1);
-      }
-      break;
-    case 'v':
-      if (log_verbosity < 4) log_verbosity++;
-      break;
-    case 'q':
-      if (log_verbosity > 0) log_verbosity--;
-      break;
-    case ARGP_KEY_NO_ARGS:
-      argp_usage(state);
-      break;
-    case ARGP_KEY_ARG:
-      if (!args->ifname) {
-        args->ifname = arg;
-      } else {
-        return ARGP_ERR_UNKNOWN;
-      }
-      break;
-    default:
-      return ARGP_ERR_UNKNOWN;
-  }
-  return 0;
-}
-
-static const struct argp run_argp = {run_args_options, run_args_parse_opt, "INTERFACE", NULL};
-
-/* mimic show */
-
-static const struct argp_option show_args_options[] = {{}};
-
-static inline error_t show_args_parse_opt(int key, char* arg, struct argp_state* state) {
-  struct show_arguments* args = (struct show_arguments*)state->input;
-  switch (key) {
-    case ARGP_KEY_NO_ARGS:
-      argp_usage(state);
-      break;
-    case ARGP_KEY_ARG:
-      if (!args->ifname) {
-        args->ifname = arg;
-      } else {
-        return ARGP_ERR_UNKNOWN;
-      }
-      break;
-    default:
-      return ARGP_ERR_UNKNOWN;
-  }
-  return 0;
-}
-
-static const struct argp show_argp = {show_args_options, show_args_parse_opt, "INTERFACE", NULL};
 
 /* mimic (global options) */
 

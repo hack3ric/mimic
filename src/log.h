@@ -8,8 +8,9 @@
 #include <linux/udp.h>
 #include <stdio.h>
 
-extern int log_verbosity;
 #include "shared/log.h"
+
+extern int log_verbosity;
 
 #define _LOG_ERROR_PREFIX "\r  \x1B[1;31merror:\x1B[0m "
 #define _LOG_WARN_PREFIX "\r   \x1B[1;33mwarn:\x1B[0m "
