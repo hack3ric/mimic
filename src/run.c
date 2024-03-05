@@ -142,11 +142,17 @@ static inline int parse_filters(struct run_arguments* args, struct pkt_filter* f
 }
 
 static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters, int lock_fd,
-                          int ifindex, struct mimic_bpf* skel, bool* tc_hook_created,
-                          struct bpf_tc_hook* tc_hook_egress, struct bpf_tc_opts* tc_opts_egress) {
-  int error;
+                          int ifindex) {
+  int retcode = 0;
   struct lock_content lock_content = {.pid = getpid()};
-  skel = try_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerrno);
+  struct mimic_bpf* skel = NULL;
+  bool tc_hook_created = false;
+  struct bpf_tc_hook tc_hook_egress = {};
+  struct bpf_tc_opts tc_opts_egress = {};
+  struct bpf_link* xdp_ingress = NULL;
+  struct ring_buffer* rb = NULL;
+
+  skel = try2_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerrno);
   skel->rodata->log_verbosity = log_verbosity;
 
   if (mimic_bpf__load(skel)) {
@@ -161,7 +167,8 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
     einval_end:
       fclose(modules);
     }
-    return -errno;
+    retcode = -errno;
+    goto cleanup;
   }
 
   // Save state to lock file
@@ -169,17 +176,17 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   struct bpf_prog_info prog_info = {};
   struct bpf_map_info map_info = {};
   __u32 prog_len = sizeof(prog_info), map_len = sizeof(map_info);
-  int egress_handler_fd, ingress_handler_fd;
-  int mimic_whitelist_fd, mimic_conns_fd, mimic_rb_fd;
+  int egress_handler_fd = 0, ingress_handler_fd = 0;
+  int mimic_whitelist_fd = 0, mimic_conns_fd, mimic_rb_fd = 0;
 
-#define _get_id(_Type, _TypeFull, _Name)                                               \
-  ({                                                                                   \
-    _Name##_fd = try(bpf_##_TypeFull##__fd(skel->_Type##s._Name),                      \
-                     "failed to get fd of " #_TypeFull " '" #_Name "': %s", strerrno); \
-    memset(&_Type##_info, 0, _Type##_len);                                             \
-    try(bpf_obj_get_info_by_fd(_Name##_fd, &_Type##_info, &_Type##_len),               \
-        "failed to get info of " #_TypeFull " '" #_Name "': %s", strerrno);            \
-    _Type##_info.id;                                                                   \
+#define _get_id(_Type, _TypeFull, _Name)                                                \
+  ({                                                                                    \
+    _Name##_fd = try2(bpf_##_TypeFull##__fd(skel->_Type##s._Name),                      \
+                      "failed to get fd of " #_TypeFull " '" #_Name "': %s", strerrno); \
+    memset(&_Type##_info, 0, _Type##_len);                                              \
+    try2(bpf_obj_get_info_by_fd(_Name##_fd, &_Type##_info, &_Type##_len),               \
+         "failed to get info of " #_TypeFull " '" #_Name "': %s", strerrno);            \
+    _Type##_info.id;                                                                    \
   })
 
 #define _get_prog_id(_name) _get_id(prog, program, _name)
@@ -192,17 +199,17 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   lock_content.conns_id = _get_map_id(mimic_conns);
   lock_content.rb_id = _get_map_id(mimic_rb);
 
-  try(lock_write(lock_fd, &lock_content));
+  try2(lock_write(lock_fd, &lock_content));
 
   bool value = 1;
   for (int i = 0; i < args->filter_count; i++) {
-    error = bpf_map__update_elem(skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter),
-                                 &value, sizeof(bool), BPF_ANY);
-    if (error || LOG_ALLOW_DEBUG) {
+    retcode = bpf_map__update_elem(skel->maps.mimic_whitelist, &filters[i],
+                                   sizeof(struct pkt_filter), &value, sizeof(bool), BPF_ANY);
+    if (retcode || LOG_ALLOW_DEBUG) {
       char fmt[FILTER_FMT_MAX_LEN];
       pkt_filter_fmt(&filters[i], fmt);
-      if (error) {
-        ret(-errno, "failed to add filter `%s`: %s", fmt, strerrno);
+      if (retcode) {
+        cleanup(-errno, "failed to add filter `%s`: %s", fmt, strerrno);
       } else if (LOG_ALLOW_DEBUG) {
         log_debug("added filter: %s", fmt);
       }
@@ -210,20 +217,20 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   }
 
   // Get ring buffer in advance so we can return earlier if error
-  struct ring_buffer* rb = try_ptr(ring_buffer__new(mimic_rb_fd, handle_event, NULL, NULL),
-                                   "failed to attach BPF ring buffer: %s", strerrno);
+  rb = try2_ptr(ring_buffer__new(mimic_rb_fd, handle_event, NULL, NULL),
+                "failed to attach BPF ring buffer: %s", strerrno);
 
   // TC and XDP
-  *tc_hook_egress = (struct bpf_tc_hook){
+  tc_hook_egress = (struct bpf_tc_hook){
     .sz = sizeof(struct bpf_tc_hook), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
-  *tc_opts_egress =
+  tc_opts_egress =
     (struct bpf_tc_opts){.sz = sizeof(struct bpf_tc_opts), .handle = 1, .priority = 1};
-  *tc_hook_created = true;
-  try(tc_hook_create_bind(tc_hook_egress, tc_opts_egress, skel->progs.egress_handler, "egress"));
-  try_ptr(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
-          "failed to attach XDP program: %s", strerrno);
+  tc_hook_created = true;
+  try2(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler, "egress"));
+  xdp_ingress = try2_ptr(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
+                         "failed to attach XDP program: %s", strerrno);
 
-  try_errno((uintptr_t)signal(SIGINT, sig_int), "cannot set signal handler: %s", strerrno);
+  try2_errno((uintptr_t)signal(SIGINT, sig_int), "cannot set signal handler: %s", strerrno);
 
   log_info("Mimic successfully deployed at %s with filters:", args->ifname);
   for (int i = 0; i < args->filter_count; i++) {
@@ -235,11 +242,20 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   while (!exiting) {
     int result = ring_buffer__poll(rb, 100);
     if (result < 0) {
-      if (result == -EINTR) return 0;
-      ret(result, "failed to poll ring buffer: %s", strerrno);
+      if (result == -EINTR) {
+        retcode = 0;
+        goto cleanup;
+      }
+      cleanup(result, "failed to poll ring buffer: %s", strerrno);
     }
   }
-  return 1;
+cleanup:
+  log_info("cleaning up");
+  if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
+  if (xdp_ingress) bpf_link__destroy(xdp_ingress);
+  if (rb) ring_buffer__free(rb);
+  if (skel) mimic_bpf__destroy(skel);
+  return retcode;
 }
 
 int subcmd_run(struct run_arguments* args) {
@@ -278,21 +294,14 @@ int subcmd_run(struct run_arguments* args) {
       } else {
         log_error("hint: check %s", lock);
       }
+      fclose(lock_file);
     }
     return -errno;
   }
 
-  struct mimic_bpf* skel = NULL;
-  bool tc_hook_created = false;
-  struct bpf_tc_hook tc_hook_egress = {};
-  struct bpf_tc_opts tc_opts_egress = {};
   libbpf_set_print(libbpf_print_fn);
-  int retcode = run_bpf(args, filters, lock_fd, ifindex, skel, &tc_hook_created, &tc_hook_egress,
-                        &tc_opts_egress);
+  int retcode = run_bpf(args, filters, lock_fd, ifindex);
 
-  log_info("cleaning up");
-  if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
-  if (skel) mimic_bpf__destroy(skel);
   close(lock_fd);
   remove(lock);
   return retcode;

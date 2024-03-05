@@ -73,16 +73,34 @@
     _ret;                              \
   })
 
+// `try` but `cleanup`.
+#define try2(...) \
+  _get_macro(_0, ##__VA_ARGS__, _try2_fmt, _try2_fmt, _try2_fmt, _try2_fmt, _try2, )(__VA_ARGS__)
+#define _try2(expr)    \
+  ({                   \
+    int _ret = (expr); \
+    if (_ret < 0) {    \
+      retcode = _ret;  \
+      goto cleanup;    \
+    }                  \
+    _ret;              \
+  })
+#define _try2_fmt(expr, ...)                  \
+  ({                                          \
+    int _ret = (expr);                        \
+    if (_ret < 0) cleanup(_ret, __VA_ARGS__); \
+    _ret;                                     \
+  })
+
 // `errno` is not available in BPF
 #ifndef _MIMIC_BPF
 
 #define strerrno strerror(errno)
 
 // Same as `try`, but returns -errno
-#define try_errno(...)                                                                             \
-  _get_macro(                                                                                      \
-    _0, ##__VA_ARGS__, _try_errno_fmt, _try_errno_fmt, _try_errno_fmt, _try_errno_fmt, _try_errno, \
-  )(__VA_ARGS__)
+#define try_errno(...)                                                                          \
+  _get_macro(_0, ##__VA_ARGS__, _try_errno_fmt, _try_errno_fmt, _try_errno_fmt, _try_errno_fmt, \
+             _try_errno, )(__VA_ARGS__)
 #define _try_errno(expr)     \
   ({                         \
     int _ret = (expr);       \
@@ -96,11 +114,30 @@
     _ret;                               \
   })
 
+// `try_errno` but `cleanup`.
+#define try2_errno(...)                                                            \
+  _get_macro(_0, ##__VA_ARGS__, _try2_errno_fmt, _try2_errno_fmt, _try2_errno_fmt, \
+             _try2_errno_fmt, _try2_errno, )(__VA_ARGS__)
+#define _try2_errno(expr) \
+  ({                      \
+    int _ret = (expr);    \
+    if (_ret < 0) {       \
+      retcode = -errno;   \
+      goto cleanup;       \
+    }                     \
+    _ret;                 \
+  })
+#define _try2_errno_fmt(expr, ...)              \
+  ({                                            \
+    int _ret = (expr);                          \
+    if (_ret < 0) cleanup(-errno, __VA_ARGS__); \
+    _ret;                                       \
+  })
+
 // Similar to `try_errno`, but for function that returns a pointer.
-#define try_ptr(...)                                                                     \
-  _get_macro(                                                                            \
-    _0, ##__VA_ARGS__, _try_ptr_fmt, _try_ptr_fmt, _try_ptr_fmt, _try_ptr_fmt, _try_ptr, \
-  )(__VA_ARGS__)
+#define try_ptr(...)                                                                    \
+  _get_macro(_0, ##__VA_ARGS__, _try_ptr_fmt, _try_ptr_fmt, _try_ptr_fmt, _try_ptr_fmt, \
+             _try_ptr, )(__VA_ARGS__)
 #define _try_ptr(expr)        \
   ({                          \
     void* _ret = (expr);      \
@@ -114,7 +151,27 @@
     _ret;                                \
   })
 
-#endif
+// Tests int return value from a function. Used for functions that returns non-zero error.
+#define try2_ptr(...)                                                                       \
+  _get_macro(_0, ##__VA_ARGS__, _try2_ptr_fmt, _try2_ptr_fmt, _try2_ptr_fmt, _try2_ptr_fmt, \
+             _try2_ptr, )(__VA_ARGS__)
+#define _try2_ptr(expr)  \
+  ({                     \
+    void* _ret = (expr); \
+    if (!_ret) {         \
+      retcode = -errno;  \
+      goto cleanup;      \
+    }                    \
+    _ret;                \
+  })
+#define _try2_ptr_fmt(expr, ...)             \
+  ({                                         \
+    void* _ret = (expr);                     \
+    if (!_ret) cleanup(-errno, __VA_ARGS__); \
+    _ret;                                    \
+  })
+
+#endif  // _MIMIC_BPF
 
 // Tests int return value from a function, but return a different value when failed.
 #define try_ret(x, ret) \

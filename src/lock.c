@@ -74,6 +74,7 @@ int lock_write(int fd, const struct lock_content* c) {
   const char* buf = json_object_to_json_string(lock_json);
   size_t buf_len = strlen(buf);
   int result = write(fd, buf, buf_len);
+  json_object_put(lock_json);
   if (result < 0) {
     ret(1, "failed to write lock file: %s", strerrno);
   } else if (result < buf_len) {
@@ -142,18 +143,30 @@ struct lock_content lock_deserialize(const struct json_object* obj, struct lock_
 }
 
 int lock_read(FILE* file, struct lock_content* c) {
-  char buf[1024];
+  char buf[1024] = {};
   int result = try(fread(buf, 1, sizeof(buf), file), "failed to read lock file: %s", strerrno);
   if (result > 1023) ret(1, "failed to read lock file: file size too big (> 1023)");
   buf[result + 1] = '\0';
 
   enum json_tokener_error parse_error = json_tokener_success;
-  struct json_object* obj =
-    try_ptr(json_tokener_parse_verbose(buf, &parse_error), "failed to parse lock file: %s",
-            json_tokener_error_desc(parse_error));
+  struct json_object* obj = ({
+    void* _ret = (json_tokener_parse_verbose(buf, &parse_error));
+    if (!_ret)
+      ({
+        if ((log_verbosity >= LOG_LEVEL_ERROR))
+          fprintf(stderr,
+                  "\r  \x1B[1;31merror:\x1B[0m "
+                  "failed to parse lock file: %s"
+                  "\n",
+                  json_tokener_error_desc(parse_error));
+        return (-(*__errno_location()));
+      });
+    _ret;
+  });
 
   struct lock_error lock_error = {};
   *c = lock_deserialize(obj, &lock_error);
+  json_object_put(obj);
   if (lock_error.kind != ERR_NULL) {
     lock_error_fmt(&lock_error, buf, 1023);
     ret(1, "failed to parse lock file: %s", buf);
