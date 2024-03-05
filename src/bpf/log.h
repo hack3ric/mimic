@@ -23,10 +23,9 @@ extern struct mimic_rb_map {
 #define _log_c(...) _log_a(__VA_ARGS__, 3, 2, 1, 0)
 #define _log_d(_x, _y) _x##_y
 #define _log_e(_x, _y) _log_d(_x, _y)
-#define _log_f(_str, _size, _fmt, ...)                                                          \
-  bpf_snprintf(                                                                                 \
-    (_str), (_size), (_fmt), _log_e(_log_b, _log_c(_0 __VA_OPT__(, ) __VA_ARGS__))(__VA_ARGS__) \
-  )
+#define _log_f(_str, _size, _fmt, ...)  \
+  bpf_snprintf((_str), (_size), (_fmt), \
+               _log_e(_log_b, _log_c(_0 __VA_OPT__(, ) __VA_ARGS__))(__VA_ARGS__))
 
 #define _log_rbprintf(_l, _fmt, ...)                                          \
   ({                                                                          \

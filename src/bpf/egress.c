@@ -27,9 +27,8 @@ static int mangle_data(struct __sk_buff* skb, u16 offset) {
   return TC_ACT_OK;
 }
 
-static __always_inline void update_tcp_header(
-  struct tcphdr* tcp, u16 udp_len, bool syn, bool ack, bool rst, u32 seq, u32 ack_seq
-) {
+static __always_inline void update_tcp_header(struct tcphdr* tcp, u16 udp_len, bool syn, bool ack,
+                                              bool rst, u32 seq, u32 ack_seq) {
   tcp->seq = bpf_htonl(seq);
   tcp->ack_seq = bpf_htonl(ack_seq);
 
@@ -146,9 +145,8 @@ int egress_handler(struct __sk_buff* skb) {
     ipv4->protocol = IPPROTO_TCP;
 
     try_or_shot(bpf_l3_csum_replace(skb, ETH_HLEN + IPV4_CSUM_OFF, old_len, new_len, 2));
-    try_or_shot(bpf_l3_csum_replace(
-      skb, ETH_HLEN + IPV4_CSUM_OFF, bpf_htons(IPPROTO_UDP), bpf_htons(IPPROTO_TCP), 2
-    ));
+    try_or_shot(bpf_l3_csum_replace(skb, ETH_HLEN + IPV4_CSUM_OFF, bpf_htons(IPPROTO_UDP),
+                                    bpf_htons(IPPROTO_TCP), 2));
   } else if (ipv6) {
     ipv6->payload_len = bpf_htons(bpf_ntohs(ipv6->payload_len) + TCP_UDP_HEADER_DIFF);
     ipv6->nexthdr = IPPROTO_TCP;
@@ -159,9 +157,8 @@ int egress_handler(struct __sk_buff* skb) {
   update_tcp_header(tcp, udp_len, syn, ack, rst, seq, ack_seq);
 
   tcp->check = 0;
-  s64 csum_diff = bpf_csum_diff(
-    (__be32*)&old_udphdr, sizeof(struct udphdr), (__be32*)tcp, sizeof(struct tcphdr), 0
-  );
+  s64 csum_diff = bpf_csum_diff((__be32*)&old_udphdr, sizeof(struct udphdr), (__be32*)tcp,
+                                sizeof(struct tcphdr), 0);
   tcp->check = old_udp_csum;
 
   u32 off = ip_end + offsetof(struct tcphdr, check);

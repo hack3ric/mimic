@@ -27,14 +27,14 @@ static inline void update_csum_ul_neg(u32* csum, u32 new) {
 // u32* csum, u32 off)`.
 //
 // void update_csum_data(void* ctx, u32* csum, u32 off)
-#define update_csum_data(_x, csum, off)                                                     \
-  ({                                                                                        \
+#define update_csum_data(_x, csum, off)                                                   \
+  ({                                                                                      \
     u16* data = (void*)(size_t)_x->data + off;                                            \
-    int i = 0;                                                                              \
+    int i = 0;                                                                            \
     for (; i < ETH_DATA_LEN / sizeof(u16); i++) {                                         \
-      if ((size_t)(data + i + 1) > (size_t)_x->data_end) break;                             \
-      *csum += bpf_ntohs(data[i]);                                                          \
-    }                                                                                       \
+      if ((size_t)(data + i + 1) > (size_t)_x->data_end) break;                           \
+      *csum += bpf_ntohs(data[i]);                                                        \
+    }                                                                                     \
     __u8* remainder = (__u8*)data + i * sizeof(u16);                                      \
     if ((size_t)(remainder + 1) <= (size_t)_x->data_end) *csum += (u16)(*remainder << 8); \
   })

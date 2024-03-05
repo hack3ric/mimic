@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "mimic.h"
 #include "log.h"
+#include "mimic.h"
 #include "shared/util.h"
 
 const char* argp_program_version = "0.2.0";
@@ -23,9 +23,8 @@ static const char args_doc[] =
   "\n"
   "Options:";
 
-static inline error_t argp_parse_cmd(
-  struct argp_state* state, const char* cmdname, const struct argp* cmd_argp, void* args
-) {
+static inline error_t argp_parse_cmd(struct argp_state* state, const char* cmdname,
+                                     const struct argp* cmd_argp, void* args) {
   int argc = state->argc - state->next + 1;
   char** argv = &state->argv[state->next - 1];
   char* argv0 = argv[0];

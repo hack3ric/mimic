@@ -1,4 +1,5 @@
 #include <argp.h>
+#include <bpf/libbpf.h>
 #include <net/if.h>
 #include <signal.h>
 #include <sys/file.h>
@@ -58,9 +59,8 @@ static inline void sig_int(int signo) {
   exiting = 1;
 }
 
-static inline int tc_hook_create_bind(
-  struct bpf_tc_hook* hook, struct bpf_tc_opts* opts, const struct bpf_program* prog, char* name
-) {
+static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts,
+                                      const struct bpf_program* prog, char* name) {
   int result = bpf_tc_hook_create(hook);
   if (result && result != -EEXIST) ret(-errno, "failed to create TC %s hook: %s", name, strerrno);
   opts->prog_fd = bpf_program__fd(prog);
@@ -135,10 +135,9 @@ static inline int parse_filters(struct run_arguments* args, struct pkt_filter* f
   return 0;
 }
 
-static inline int run_bpf(
-  struct run_arguments* args, struct pkt_filter* filters, int ifindex, struct mimic_bpf* skel,
-  bool* tc_hook_created, struct bpf_tc_hook* tc_hook_egress, struct bpf_tc_opts* tc_opts_egress
-) {
+static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters, int ifindex,
+                          struct mimic_bpf* skel, bool* tc_hook_created,
+                          struct bpf_tc_hook* tc_hook_egress, struct bpf_tc_opts* tc_opts_egress) {
   int error;
   skel = try_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerrno);
   skel->rodata->log_verbosity = log_verbosity;
@@ -160,10 +159,8 @@ static inline int run_bpf(
 
   bool value = 1;
   for (int i = 0; i < args->filter_count; i++) {
-    error = bpf_map__update_elem(
-      skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter), &value, sizeof(bool),
-      BPF_ANY
-    );
+    error = bpf_map__update_elem(skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter),
+                                 &value, sizeof(bool), BPF_ANY);
     if (error || LOG_ALLOW_DEBUG) {
       char fmt[FILTER_FMT_MAX_LEN];
       pkt_filter_fmt(&filters[i], fmt);
@@ -176,10 +173,8 @@ static inline int run_bpf(
   }
   int rb_map_fd =
     try(bpf_map__fd(skel->maps.mimic_rb), "failed to attach BPF ring buffer: %s", strerrno);
-  struct ring_buffer* rb = try_ptr(
-    ring_buffer__new(rb_map_fd, handle_event, NULL, NULL), "failed to attach BPF ring buffer: %s",
-    strerrno
-  );
+  struct ring_buffer* rb = try_ptr(ring_buffer__new(rb_map_fd, handle_event, NULL, NULL),
+                                   "failed to attach BPF ring buffer: %s", strerrno);
 
   *tc_hook_egress = (struct bpf_tc_hook){
     .sz = sizeof(struct bpf_tc_hook), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
@@ -189,10 +184,8 @@ static inline int run_bpf(
   struct bpf_program* egress = skel->progs.egress_handler;
   try(tc_hook_create_bind(tc_hook_egress, tc_opts_egress, egress, "egress"));
 
-  try_ptr(
-    bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
-    "failed to attach XDP program: %s", strerrno
-  );
+  try_ptr(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
+          "failed to attach XDP program: %s", strerrno);
 
   log_info("Mimic successfully deployed at %s with filters:", args->ifname);
   for (int i = 0; i < args->filter_count; i++) {
