@@ -92,11 +92,11 @@
 #define strerrno strerror(errno)
 
 // Same as `try`, but returns -errno
-#define try_errno(expr, ...)              \
-  ({                                      \
-    int _ret = (expr);                    \
-    if (_ret) ret(-errno, ##__VA_ARGS__); \
-    _ret;                                 \
+#define try_errno(expr, ...)                  \
+  ({                                          \
+    int _ret = (expr);                        \
+    if (_ret < 0) ret(-errno, ##__VA_ARGS__); \
+    _ret;                                     \
   })
 
 // `try_errno` but `cleanup`.
@@ -126,10 +126,11 @@
 #endif  // _MIMIC_BPF
 
 // Tests int return value from a function, but return a different value when failed.
-#define try_ret(x, ret) \
-  ({                    \
-    if (x) return ret;  \
-    0;                  \
+#define try_ret(expr, ret)       \
+  ({                          \
+    int _val = (expr);           \
+    if (_val < 0) return ret; \
+    _val;                     \
   })
 
 #define try_or_ok(x) try_ret(x, TC_ACT_OK)
@@ -138,9 +139,9 @@
 #define try_or_drop(x) try_ret(x, XDP_DROP)
 
 // Tests pointer return value from a function, but return a different value when failed.
-#define try_ptr_ret(x, ret) \
+#define try_ptr_ret(expr, ret) \
   ({                        \
-    void* _ptr = (x);       \
+    void* _ptr = (expr);       \
     if (!_ptr) return ret;  \
     _ptr;                   \
   })
