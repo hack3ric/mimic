@@ -45,7 +45,7 @@ For IPv6, the IP field needs to be surrounded by square brackets: `local=[2001:d
 The general usage of Mimic CLI looks like:
 
 ```console
-# mimic -f <filter1> [-f <filter2> [...]] <interface>
+# mimic run -f <filter1> [-f <filter2> [...]] <interface>
 ```
 
 ## Examples
@@ -55,13 +55,13 @@ Assume that you have a server with an IP of 192.0.2.253. It hosts an UDP service
 On server side, specify that all packets in and out `eth0` with that server's IP and port is processed:
 
 ```console
-# mimic -f local=192.0.2.253:7777 eth0
+# mimic run -f local=192.0.2.253:7777 eth0
 ```
 
 On client side, `remote` filter is used to specify the server address:
 
 ```console
-# mimic -f remote=192.0.2.253:7777 enp1s0
+# mimic run -f remote=192.0.2.253:7777 enp1s0
 ```
 
 ## Building from Source
