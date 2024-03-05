@@ -68,7 +68,11 @@ static inline void sig_int(int signo) {
 static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts,
                                       const struct bpf_program* prog, char* name) {
   int result = bpf_tc_hook_create(hook);
+
+  // EEXIST causes libbpf_print_fn to log harmless 'libbpf: Kernel error message: Exclusivity flag
+  // on, cannot modify'
   if (result && result != -EEXIST) ret(-errno, "failed to create TC %s hook: %s", name, strerrno);
+
   opts->prog_fd = bpf_program__fd(prog);
   try_errno(bpf_tc_attach(hook, opts), "failed to attach to TC %s hook: %s", name, strerrno);
   return 0;
@@ -76,7 +80,8 @@ static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_op
 
 static inline int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts) {
   opts->flags = opts->prog_fd = opts->prog_id = 0;
-  return bpf_tc_detach(hook, opts);
+  int ret = bpf_tc_detach(hook, opts);
+  return ret ?: bpf_tc_hook_destroy(hook);
 }
 
 static int handle_event(void* ctx, void* data, size_t data_sz) {
@@ -260,15 +265,13 @@ cleanup:
 int subcmd_run(struct run_arguments* args) {
   if (geteuid() != 0) ret(1, "you cannot perform run Mimic unless you are root");
 
+  int ifindex = if_nametoindex(args->ifname);
+  if (!ifindex) ret(1, "no interface named '%s'", args->ifname);
+
   if (args->filter_count == 0) ret(1, "no filter specified");
   struct pkt_filter filters[args->filter_count];
   memset(filters, 0, args->filter_count * sizeof(*filters));
   try(parse_filters(args, filters));
-
-  int ifindex;
-  if (!args->ifname) ret(1, "no interface specified");
-  ifindex = if_nametoindex(args->ifname);
-  if (!ifindex) ret(1, "no interface named `%s`", args->ifname);
 
   // Lock file
   struct stat st = {};
@@ -280,20 +283,22 @@ int subcmd_run(struct run_arguments* args) {
     }
   }
   char lock[32];
-  snprintf(lock, 32, "/run/mimic/%d.lock", ifindex);
+  snprintf(lock, sizeof(lock), "/run/mimic/%d.lock", ifindex);
   int lock_fd = open(lock, O_CREAT | O_EXCL | O_WRONLY, 0644);
   if (lock_fd < 0) {
     log_error("failed to lock on %s at %s: %s", args->ifname, lock, strerrno);
     if (errno == EEXIST) {
       FILE* lock_file = fopen(lock, "r");
-      struct lock_content lock_content;
-      if (lock_read(lock_file, &lock_content) == 0) {
-        log_error("hint: is another Mimic process (PID %d) running on this interface?",
-                  lock_content.pid);
-      } else {
-        log_error("hint: check %s", lock);
+      if (lock_file) {
+        struct lock_content lock_content;
+        if (lock_read(lock_file, &lock_content) == 0) {
+          log_error("hint: is another Mimic process (PID %d) running on this interface?",
+                    lock_content.pid);
+        } else {
+          log_error("hint: check %s", lock);
+        }
+        fclose(lock_file);
       }
-      fclose(lock_file);
     }
     return -errno;
   }

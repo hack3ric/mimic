@@ -73,11 +73,9 @@ int lock_write(int fd, const struct lock_content* c) {
   struct json_object* lock_json = lock_serialize(c);
   const char* buf = json_object_to_json_string(lock_json);
   size_t buf_len = strlen(buf);
-  int result = write(fd, buf, buf_len);
+  int result = try_errno(write(fd, buf, buf_len), "failed to write lock file: %s", strerrno);
   json_object_put(lock_json);
-  if (result < 0) {
-    ret(1, "failed to write lock file: %s", strerrno);
-  } else if (result < buf_len) {
+  if (result < buf_len) {
     ret(1, "failed to write lock file: not enough bytes written (expected %lu, got %d)", buf_len,
         result);
   }
@@ -144,7 +142,8 @@ struct lock_content lock_deserialize(const struct json_object* obj, struct lock_
 
 int lock_read(FILE* file, struct lock_content* c) {
   char buf[1024] = {};
-  int result = try(fread(buf, 1, sizeof(buf), file), "failed to read lock file: %s", strerrno);
+  int result =
+    try_errno(fread(buf, 1, sizeof(buf), file), "failed to read lock file: %s", strerrno);
   if (result > 1023) ret(1, "failed to read lock file: file size too big (> 1023)");
   buf[result + 1] = '\0';
 
