@@ -9,6 +9,7 @@ Build-Depends:
  llvm,
  python3,
  libbpf-dev,
+ libjson-c-dev,
  linux-source,
  linux-headers-generic,
  bpftool

@@ -46,7 +46,7 @@ $(filter src/%.o, $(MIMIC_OBJS)): src/%.o: $(MIMIC_HEADERS)
 
 out/mimic: $(MIMIC_OBJS)
 	$(MKDIR_P)
-	$(CC) $(CFLAGS) $(MIMIC_OBJS) -o $@ $(LDFLAGS) -lbpf
+	$(CC) $(CFLAGS) $(MIMIC_OBJS) -o $@ $(LDFLAGS) -lbpf -ljson-c
 
 out/mimic.ko: .FORCE
 	$(MKDIR_P)

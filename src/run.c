@@ -1,7 +1,13 @@
 #include <argp.h>
+#include <bpf/bpf.h>
+#include <bpf/btf.h>
 #include <bpf/libbpf.h>
+#include <json-c/json_object.h>
+#include <json-c/json_types.h>
+#include <linux/bpf.h>
 #include <net/if.h>
 #include <signal.h>
+#include <stdio.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -135,10 +141,11 @@ static inline int parse_filters(struct run_arguments* args, struct pkt_filter* f
   return 0;
 }
 
-static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters, int ifindex,
-                          struct mimic_bpf* skel, bool* tc_hook_created,
+static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters, int lock_fd,
+                          int ifindex, struct mimic_bpf* skel, bool* tc_hook_created,
                           struct bpf_tc_hook* tc_hook_egress, struct bpf_tc_opts* tc_opts_egress) {
   int error;
+  struct lock_content lock_content = {.pid = getpid()};
   skel = try_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerrno);
   skel->rodata->log_verbosity = log_verbosity;
 
@@ -147,7 +154,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
     if (errno == EINVAL) {
       FILE* modules = fopen("/proc/modules", "r");
       char buf[256];
-      while (fgets(buf, 256, modules)) {
+      while (fgets(buf, sizeof(buf), modules)) {
         if (strncmp("mimic", buf, 5) == 0) goto einval_end;
       }
       log_error("hint: did you load the Mimic kernel module?");
@@ -156,6 +163,36 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
     }
     return -errno;
   }
+
+  // Save state to lock file
+
+  struct bpf_prog_info prog_info = {};
+  struct bpf_map_info map_info = {};
+  __u32 prog_len = sizeof(prog_info), map_len = sizeof(map_info);
+  int egress_handler_fd, ingress_handler_fd;
+  int mimic_whitelist_fd, mimic_conns_fd, mimic_rb_fd;
+
+#define _get_id(_Type, _TypeFull, _Name)                                               \
+  ({                                                                                   \
+    _Name##_fd = try(bpf_##_TypeFull##__fd(skel->_Type##s._Name),                      \
+                     "failed to get fd of " #_TypeFull " '" #_Name "': %s", strerrno); \
+    memset(&_Type##_info, 0, _Type##_len);                                             \
+    try(bpf_obj_get_info_by_fd(_Name##_fd, &_Type##_info, &_Type##_len),               \
+        "failed to get info of " #_TypeFull " '" #_Name "': %s", strerrno);            \
+    _Type##_info.id;                                                                   \
+  })
+
+#define _get_prog_id(_name) _get_id(prog, program, _name)
+#define _get_map_id(_name) _get_id(map, map, _name)
+
+  lock_content.egress_id = _get_prog_id(egress_handler);
+  lock_content.ingress_id = _get_prog_id(ingress_handler);
+
+  lock_content.whitelist_id = _get_map_id(mimic_whitelist);
+  lock_content.conns_id = _get_map_id(mimic_conns);
+  lock_content.rb_id = _get_map_id(mimic_rb);
+
+  try(lock_write(lock_fd, &lock_content));
 
   bool value = 1;
   for (int i = 0; i < args->filter_count; i++) {
@@ -171,21 +208,22 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
       }
     }
   }
-  int rb_map_fd =
-    try(bpf_map__fd(skel->maps.mimic_rb), "failed to attach BPF ring buffer: %s", strerrno);
-  struct ring_buffer* rb = try_ptr(ring_buffer__new(rb_map_fd, handle_event, NULL, NULL),
+
+  // Get ring buffer in advance so we can return earlier if error
+  struct ring_buffer* rb = try_ptr(ring_buffer__new(mimic_rb_fd, handle_event, NULL, NULL),
                                    "failed to attach BPF ring buffer: %s", strerrno);
 
+  // TC and XDP
   *tc_hook_egress = (struct bpf_tc_hook){
     .sz = sizeof(struct bpf_tc_hook), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
   *tc_opts_egress =
     (struct bpf_tc_opts){.sz = sizeof(struct bpf_tc_opts), .handle = 1, .priority = 1};
   *tc_hook_created = true;
-  struct bpf_program* egress = skel->progs.egress_handler;
-  try(tc_hook_create_bind(tc_hook_egress, tc_opts_egress, egress, "egress"));
-
+  try(tc_hook_create_bind(tc_hook_egress, tc_opts_egress, skel->progs.egress_handler, "egress"));
   try_ptr(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
           "failed to attach XDP program: %s", strerrno);
+
+  try_errno((uintptr_t)signal(SIGINT, sig_int), "cannot set signal handler: %s", strerrno);
 
   log_info("Mimic successfully deployed at %s with filters:", args->ifname);
   for (int i = 0; i < args->filter_count; i++) {
@@ -194,7 +232,6 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
     log_info("  * %s", fmt);
   }
 
-  try_errno((uintptr_t)signal(SIGINT, sig_int), "cannot set signal handler: %s", strerrno);
   while (!exiting) {
     int result = ring_buffer__poll(rb, 100);
     if (result < 0) {
@@ -233,30 +270,30 @@ int subcmd_run(struct run_arguments* args) {
   if (lock_fd < 0) {
     log_error("failed to lock on %s at %s: %s", args->ifname, lock, strerrno);
     if (errno == EEXIST) {
-      int pid = 0;
       FILE* lock_file = fopen(lock, "r");
-      fscanf(lock_file, "%d", &pid);
-      fclose(lock_file);
-      if (pid > 0) {
-        log_error("hint: is another Mimic process (PID %d) running on this interface?", pid);
+      struct lock_content lock_content;
+      if (lock_read(lock_file, &lock_content) == 0) {
+        log_error("hint: is another Mimic process (PID %d) running on this interface?",
+                  lock_content.pid);
+      } else {
+        log_error("hint: check %s", lock);
       }
     }
     return -errno;
   }
-  dprintf(lock_fd, "%d\n", getpid());
-  close(lock_fd);
 
   struct mimic_bpf* skel = NULL;
   bool tc_hook_created = false;
   struct bpf_tc_hook tc_hook_egress = {};
   struct bpf_tc_opts tc_opts_egress = {};
   libbpf_set_print(libbpf_print_fn);
-  int retcode =
-    run_bpf(args, filters, ifindex, skel, &tc_hook_created, &tc_hook_egress, &tc_opts_egress);
+  int retcode = run_bpf(args, filters, lock_fd, ifindex, skel, &tc_hook_created, &tc_hook_egress,
+                        &tc_opts_egress);
 
   log_info("cleaning up");
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
   if (skel) mimic_bpf__destroy(skel);
+  close(lock_fd);
   remove(lock);
   return retcode;
 }
