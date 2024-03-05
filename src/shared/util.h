@@ -29,8 +29,13 @@
 #define decl_or_pass(type, name, off, xdp) decl(type, name, off, xdp, XDP_PASS)
 #define decl_or_drop(type, name, off, xdp) decl(type, name, off, xdp, XDP_DROP)
 
+#define _get_macro(_0, _1, _2, _3, _4, _5, NAME, ...) NAME
+
 // Returns _ret while printing error.
-#define ret(ret, ...)       \
+#define ret(...) \
+  _get_macro(_0, ##__VA_ARGS__, _ret_fmt, _ret_fmt, _ret_fmt, _ret_fmt, _ret, )(__VA_ARGS__)
+#define _ret(ret) return (ret)
+#define _ret_fmt(ret, ...)  \
   ({                        \
     log_error(__VA_ARGS__); \
     return (ret);           \
@@ -40,29 +45,29 @@
 //
 // Requires `cleanup` label, `retcode` to be defined inside function scope, and `retcode` to be
 // returned after cleanup.
-#define cleanup(ret, ...)   \
-  ({                        \
-    log_error(__VA_ARGS__); \
-    retcode = (ret);        \
-    goto cleanup;           \
+#define cleanup(...)                                                                    \
+  _get_macro(_0, ##__VA_ARGS__, _cleanup_fmt, _cleanup_fmt, _cleanup_fmt, _cleanup_fmt, \
+             _cleanup, )(__VA_ARGS__)
+#define _cleanup(ret) \
+  ({                  \
+    retcode = (ret);  \
+    goto cleanup;     \
+  })
+#define _cleanup_fmt(ret, ...) \
+  ({                           \
+    log_error(__VA_ARGS__);    \
+    retcode = (ret);           \
+    goto cleanup;              \
   })
 
 #define _get_macro(_0, _1, _2, _3, _4, _5, NAME, ...) NAME
 
 // Tests int return value from a function. Used for functions that returns non-zero error.
-#define try(...) \
-  _get_macro(_0, ##__VA_ARGS__, _try_fmt, _try_fmt, _try_fmt, _try_fmt, _try, )(__VA_ARGS__)
-#define _try(expr)             \
-  ({                           \
-    int _ret = (expr);         \
-    if (_ret < 0) return _ret; \
-    _ret;                      \
-  })
-#define _try_fmt(expr, ...)               \
-  ({                                      \
-    int _ret = (expr);                    \
-    if (_ret < 0) ret(_ret, __VA_ARGS__); \
-    _ret;                                 \
+#define try(expr, ...)                      \
+  ({                                        \
+    int _ret = (expr);                      \
+    if (_ret < 0) ret(_ret, ##__VA_ARGS__); \
+    _ret;                                   \
   })
 
 // Same as `try` with one arguments, but runs XDP subroutine
@@ -74,22 +79,11 @@
   })
 
 // `try` but `cleanup`.
-#define try2(...) \
-  _get_macro(_0, ##__VA_ARGS__, _try2_fmt, _try2_fmt, _try2_fmt, _try2_fmt, _try2, )(__VA_ARGS__)
-#define _try2(expr)    \
-  ({                   \
-    int _ret = (expr); \
-    if (_ret < 0) {    \
-      retcode = _ret;  \
-      goto cleanup;    \
-    }                  \
-    _ret;              \
-  })
-#define _try2_fmt(expr, ...)                  \
-  ({                                          \
-    int _ret = (expr);                        \
-    if (_ret < 0) cleanup(_ret, __VA_ARGS__); \
-    _ret;                                     \
+#define try2(expr, ...)                         \
+  ({                                            \
+    int _ret = (expr);                          \
+    if (_ret < 0) cleanup(_ret, ##__VA_ARGS__); \
+    _ret;                                       \
   })
 
 // `errno` is not available in BPF
@@ -98,77 +92,35 @@
 #define strerrno strerror(errno)
 
 // Same as `try`, but returns -errno
-#define try_errno(...)                                                                          \
-  _get_macro(_0, ##__VA_ARGS__, _try_errno_fmt, _try_errno_fmt, _try_errno_fmt, _try_errno_fmt, \
-             _try_errno, )(__VA_ARGS__)
-#define _try_errno(expr)     \
-  ({                         \
-    int _ret = (expr);       \
-    if (_ret) return -errno; \
-    _ret;                    \
-  })
-#define _try_errno_fmt(expr, ...)       \
-  ({                                    \
-    int _ret = (expr);                  \
-    if (_ret) ret(-errno, __VA_ARGS__); \
-    _ret;                               \
+#define try_errno(expr, ...)              \
+  ({                                      \
+    int _ret = (expr);                    \
+    if (_ret) ret(-errno, ##__VA_ARGS__); \
+    _ret;                                 \
   })
 
 // `try_errno` but `cleanup`.
-#define try2_errno(...)                                                            \
-  _get_macro(_0, ##__VA_ARGS__, _try2_errno_fmt, _try2_errno_fmt, _try2_errno_fmt, \
-             _try2_errno_fmt, _try2_errno, )(__VA_ARGS__)
-#define _try2_errno(expr) \
-  ({                      \
-    int _ret = (expr);    \
-    if (_ret < 0) {       \
-      retcode = -errno;   \
-      goto cleanup;       \
-    }                     \
-    _ret;                 \
-  })
-#define _try2_errno_fmt(expr, ...)              \
-  ({                                            \
-    int _ret = (expr);                          \
-    if (_ret < 0) cleanup(-errno, __VA_ARGS__); \
-    _ret;                                       \
+#define try2_errno(expr, ...)                     \
+  ({                                              \
+    int _ret = (expr);                            \
+    if (_ret < 0) cleanup(-errno, ##__VA_ARGS__); \
+    _ret;                                         \
   })
 
 // Similar to `try_errno`, but for function that returns a pointer.
-#define try_ptr(...)                                                                    \
-  _get_macro(_0, ##__VA_ARGS__, _try_ptr_fmt, _try_ptr_fmt, _try_ptr_fmt, _try_ptr_fmt, \
-             _try_ptr, )(__VA_ARGS__)
-#define _try_ptr(expr)        \
-  ({                          \
-    void* _ret = (expr);      \
-    if (!_ret) return -errno; \
-    _ret;                     \
-  })
-#define _try_ptr_fmt(expr, ...)          \
-  ({                                     \
-    void* _ret = (expr);                 \
-    if (!_ret) ret(-errno, __VA_ARGS__); \
-    _ret;                                \
+#define try_ptr(expr, ...)                 \
+  ({                                       \
+    void* _ret = (expr);                   \
+    if (!_ret) ret(-errno, ##__VA_ARGS__); \
+    _ret;                                  \
   })
 
 // Tests int return value from a function. Used for functions that returns non-zero error.
-#define try2_ptr(...)                                                                       \
-  _get_macro(_0, ##__VA_ARGS__, _try2_ptr_fmt, _try2_ptr_fmt, _try2_ptr_fmt, _try2_ptr_fmt, \
-             _try2_ptr, )(__VA_ARGS__)
-#define _try2_ptr(expr)  \
-  ({                     \
-    void* _ret = (expr); \
-    if (!_ret) {         \
-      retcode = -errno;  \
-      goto cleanup;      \
-    }                    \
-    _ret;                \
-  })
-#define _try2_ptr_fmt(expr, ...)             \
-  ({                                         \
-    void* _ret = (expr);                     \
-    if (!_ret) cleanup(-errno, __VA_ARGS__); \
-    _ret;                                    \
+#define try2_ptr(expr, ...)                    \
+  ({                                           \
+    void* _ret = (expr);                       \
+    if (!_ret) cleanup(-errno, ##__VA_ARGS__); \
+    _ret;                                      \
   })
 
 #endif  // _MIMIC_BPF

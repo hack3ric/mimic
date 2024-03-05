@@ -167,8 +167,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
     einval_end:
       fclose(modules);
     }
-    retcode = -errno;
-    goto cleanup;
+    cleanup(-errno);
   }
 
   // Save state to lock file
@@ -243,12 +242,12 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
     int result = ring_buffer__poll(rb, 100);
     if (result < 0) {
       if (result == -EINTR) {
-        retcode = 0;
-        goto cleanup;
+        cleanup(0);
       }
       cleanup(result, "failed to poll ring buffer: %s", strerrno);
     }
   }
+
 cleanup:
   log_info("cleaning up");
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
