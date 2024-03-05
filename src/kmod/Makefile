@@ -1,6 +1,8 @@
 obj-m += mimic.o
 
-system_build_dir := /lib/modules/$(shell uname -r)/build
+KERNEL_UNAME ?= $(shell uname -r)
+
+system_build_dir := /lib/modules/$(KERNEL_UNAME)/build
 PWD := $(CURDIR)
 
 # Notes on Debian hack:

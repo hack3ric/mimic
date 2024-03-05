@@ -6,6 +6,18 @@ BPFTOOL ?= /usr/sbin/bpftool
 BPF_CFLAGS ?= --target=bpf -mcpu=v3 -g -O3
 CFLAGS ?= -O2
 
+ifeq ($(KERNEL_UNAME),)
+KERNEL_VMLINUX = /sys/kernel/btf/vmlinux
+else ifeq ($(KERNEL_UNAME),$(shell uname -r))
+KERNEL_VMLINUX = /sys/kernel/btf/vmlinux
+else ifneq ($(wildcard /usr/lib/debug/lib/modules/$(KERNEL_UNAME)/vmlinux),)
+KERNEL_VMLINUX = /usr/lib/debug/lib/modules/$(KERNEL_UNAME)/vmlinux
+else ifneq ($(wildcard /lib/modules/$(KERNEL_UNAME)/build/vmlinux),)
+KERNEL_VMLINUX = /lib/modules/$(KERNEL_UNAME)/build/vmlinux
+else
+$(error vmlinux file not found)
+endif
+
 MIMIC_SHARED_HEADERS := $(wildcard src/shared/*.h)
 
 MIMIC_BPF_SRCS := $(wildcard src/bpf/*.c)
@@ -30,7 +42,7 @@ generate-vmlinux: src/bpf/vmlinux.h
 MKDIR_P = mkdir -p $(@D)
 
 src/bpf/vmlinux.h:
-	$(BPFTOOL) btf dump file /sys/kernel/btf/vmlinux format c > $@
+	$(BPFTOOL) btf dump file $(KERNEL_VMLINUX) format c > $@
 
 $(filter src/bpf/%.o, $(MIMIC_BPF_OBJS)): src/bpf/%.o: src/bpf/%.c $(MIMIC_BPF_HEADERS)
 	$(BPF_CC) $(BPF_CFLAGS) -D_MIMIC_BPF -c -o $@ $<
