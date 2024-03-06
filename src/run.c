@@ -71,10 +71,12 @@ static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_op
 
   // EEXIST causes libbpf_print_fn to log harmless 'libbpf: Kernel error message: Exclusivity flag
   // on, cannot modify'
-  if (result && result != -EEXIST) ret(-errno, "failed to create TC %s hook: %s", name, strerrno);
+  if (result && result != -EEXIST) {
+    ret(result, "failed to create TC %s hook: %s", name, strerror(-result));
+  }
 
   opts->prog_fd = bpf_program__fd(prog);
-  try_errno(bpf_tc_attach(hook, opts), "failed to attach to TC %s hook: %s", name, strerrno);
+  try_errno(bpf_tc_attach(hook, opts), "failed to attach to TC %s hook: %s", name, strerror(-_ret));
   return 0;
 }
 
@@ -183,14 +185,14 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   int egress_handler_fd = 0, ingress_handler_fd = 0;
   int mimic_whitelist_fd = 0, mimic_conns_fd, mimic_rb_fd = 0;
 
-#define _get_id(_Type, _TypeFull, _Name)                                                \
-  ({                                                                                    \
-    _Name##_fd = try2(bpf_##_TypeFull##__fd(skel->_Type##s._Name),                      \
-                      "failed to get fd of " #_TypeFull " '" #_Name "': %s", strerrno); \
-    memset(&_Type##_info, 0, _Type##_len);                                              \
-    try2(bpf_obj_get_info_by_fd(_Name##_fd, &_Type##_info, &_Type##_len),               \
-         "failed to get info of " #_TypeFull " '" #_Name "': %s", strerrno);            \
-    _Type##_info.id;                                                                    \
+#define _get_id(_Type, _TypeFull, _Name)                                                       \
+  ({                                                                                           \
+    _Name##_fd = try2(bpf_##_TypeFull##__fd(skel->_Type##s._Name),                             \
+                      "failed to get fd of " #_TypeFull " '" #_Name "': %s", strerror(-_ret)); \
+    memset(&_Type##_info, 0, _Type##_len);                                                     \
+    try2(bpf_obj_get_info_by_fd(_Name##_fd, &_Type##_info, &_Type##_len),                      \
+         "failed to get info of " #_TypeFull " '" #_Name "': %s", strerror(-_ret));            \
+    _Type##_info.id;                                                                           \
   })
 
 #define _get_prog_id(_name) _get_id(prog, program, _name)
@@ -213,7 +215,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
       char fmt[FILTER_FMT_MAX_LEN];
       pkt_filter_fmt(&filters[i], fmt);
       if (retcode) {
-        cleanup(-errno, "failed to add filter `%s`: %s", fmt, strerrno);
+        cleanup(retcode, "failed to add filter `%s`: %s", fmt, strerror(-retcode));
       } else if (LOG_ALLOW_DEBUG) {
         log_debug("added filter: %s", fmt);
       }
@@ -244,12 +246,10 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   }
 
   while (!exiting) {
-    int result = ring_buffer__poll(rb, 100);
-    if (result < 0) {
-      if (result == -EINTR) {
-        cleanup(0);
-      }
-      cleanup(result, "failed to poll ring buffer: %s", strerrno);
+    retcode = ring_buffer__poll(rb, 100);
+    if (retcode < 0) {
+      if (retcode == -EINTR) cleanup(0);
+      cleanup(retcode, "failed to poll ring buffer: %s", strerror(-retcode));
     }
   }
 

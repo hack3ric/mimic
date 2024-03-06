@@ -6,7 +6,7 @@
 #include <bpf/bpf_helpers.h>
 
 #include "../shared/filter.h"
-#include "conn.h"
+#include "../shared/conn.h"
 
 extern struct mimic_whitelist_map {
   __uint(type, BPF_MAP_TYPE_HASH);

@@ -3,9 +3,9 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
 
+#include "../shared/conn.h"
 #include "../shared/filter.h"
 #include "../shared/util.h"
-#include "conn.h"
 #include "log.h"
 #include "mimic.h"
 
