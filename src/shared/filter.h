@@ -3,6 +3,8 @@
 
 #ifdef _MIMIC_BPF
 #include "../bpf/vmlinux.h"
+#define AF_INET 2
+#define AF_INET6 10
 #else
 #include <arpa/inet.h>
 #include <linux/in6.h>
@@ -21,6 +23,10 @@ struct pkt_filter {
   } ip;
 };
 
+static inline int proto_to_af(enum ip_proto protocol) {
+  return protocol == PROTO_IPV4 ? AF_INET : AF_INET6;
+}
+
 #ifndef _MIMIC_BPF
 
 // max: "[%pI6]:%d\0"
@@ -28,20 +34,18 @@ struct pkt_filter {
 // max: "remote=[%pI6]:%d\0"
 #define FILTER_FMT_MAX_LEN (8 + INET6_ADDRSTRLEN + 2 + 5 + 1)
 
-static inline void ip_port_fmt(
-  enum ip_proto protocol, union ip_value ip, __be16 port, char* restrict dest
-) {
+static inline void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __be16 port,
+                               char* restrict dest) {
   *dest = '\0';
-  int af = protocol == PROTO_IPV4 ? AF_INET : AF_INET6;
+  int af = proto_to_af(protocol);
   if (protocol == PROTO_IPV6) strcat(dest, "[");
   inet_ntop(af, &ip, dest + strlen(dest), INET6_ADDRSTRLEN);
   if (protocol == PROTO_IPV6) strcat(dest, "]");
   snprintf(dest + strlen(dest), 7, ":%d", ntohs(port));
 }
 
-static inline void pkt_filter_ip_port_fmt(
-  const struct pkt_filter* restrict filter, char* restrict dest
-) {
+static inline void pkt_filter_ip_port_fmt(const struct pkt_filter* restrict filter,
+                                          char* restrict dest) {
   ip_port_fmt(filter->protocol, filter->ip, filter->port, dest);
 }
 
