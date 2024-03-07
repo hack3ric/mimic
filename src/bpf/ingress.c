@@ -65,11 +65,14 @@ int ingress_handler(struct xdp_md* xdp) {
 
   if (tcp->rst) {
     bpf_spin_lock(&conn->lock);
-    conn->rst = true;
+    rst_result = conn_reset(conn);
     bpf_spin_unlock(&conn->lock);
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
     log_pkt(LOG_LEVEL_WARN, "ingress: received RST", QUARTET_TCP);
+    if (rst_result == RST_DESTROYED) {
+      log_pkt(LOG_LEVEL_WARN, "ingress: destroyed connection", QUARTET_TCP);
+    }
     return XDP_DROP;
   }
 
@@ -84,7 +87,7 @@ int ingress_handler(struct xdp_md* xdp) {
           conn_syn_recv(conn, tcp, payload_len);
         } else {
           // TODO: avoid frequent sending of RST
-          rst_result = conn_reset(conn, true);
+          conn_pre_reset(conn, tcp, payload_len);
         }
         break;
       case STATE_SYN_SENT:
@@ -111,7 +114,7 @@ int ingress_handler(struct xdp_md* xdp) {
           if (!det) det = cmp(bpf_ntohs(tcp->dest), bpf_ntohs(tcp->source));
           if (det <= 0) conn_syn_recv(conn, tcp, payload_len);
         } else {
-          rst_result = conn_reset(conn, true);
+          conn_pre_reset(conn, tcp, payload_len);
         }
         break;
       case STATE_ESTABLISHED:
@@ -122,7 +125,7 @@ int ingress_handler(struct xdp_md* xdp) {
           // SYN again: reset state
           conn_syn_recv(conn, tcp, payload_len);
         } else {
-          rst_result = conn_reset(conn, true);
+          conn_pre_reset(conn, tcp, payload_len);
         }
         break;
     }
@@ -130,9 +133,6 @@ int ingress_handler(struct xdp_md* xdp) {
   seq = conn->seq;
   ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
-  if (rst_result == RST_DESTROYED) {
-    log_pkt(LOG_LEVEL_WARN, "ingress: destroyed connection", QUARTET_TCP);
-  }
   if (newly_estab) {
     log_pkt(LOG_LEVEL_INFO, "ingress: established connection", QUARTET_TCP);
   }

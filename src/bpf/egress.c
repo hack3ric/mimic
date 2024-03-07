@@ -89,10 +89,10 @@ int egress_handler(struct __sk_buff* skb) {
   enum rst_result rst_result = RST_NONE;
   bpf_spin_lock(&conn->lock);
   if (conn->rst) {
-    rst = true;
+    rst = ack = true;
     seq = conn->seq;
     ack_seq = conn->ack_seq;
-    rst_result = conn_reset(conn, false);
+    rst_result = conn_reset(conn);
   } else {
     switch (conn->state) {
       case STATE_IDLE:
