@@ -36,12 +36,14 @@ struct connection {
 
 static inline const char* conn_state_to_str(enum conn_state s) {
   switch (s) {
-    // clang-format off
-    case STATE_IDLE: return "idle";
-    case STATE_SYN_SENT: return "SYN sent";
-    case STATE_SYN_RECV: return "SYN received";
-    case STATE_ESTABLISHED: return "established";
-      // clang-format on
+    case STATE_IDLE:
+      return "idle";
+    case STATE_SYN_SENT:
+      return "SYN sent";
+    case STATE_SYN_RECV:
+      return "SYN received";
+    case STATE_ESTABLISHED:
+      return "established";
   }
 }
 

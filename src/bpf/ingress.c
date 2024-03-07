@@ -65,16 +65,11 @@ int ingress_handler(struct xdp_md* xdp) {
 
   if (tcp->rst) {
     bpf_spin_lock(&conn->lock);
-    rst_result = conn_reset(conn, false);
+    conn->rst = true;
     bpf_spin_unlock(&conn->lock);
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
     log_pkt(LOG_LEVEL_WARN, "ingress: received RST", QUARTET_TCP);
-    if (rst_result == RST_ABORTED) {
-      log_pkt(LOG_LEVEL_INFO, "ingress: aborted connection", QUARTET_TCP);
-    } else if (rst_result == RST_DESTROYED) {
-      log_pkt(LOG_LEVEL_INFO, "ingress: destroyed connection", QUARTET_TCP);
-    }
     return XDP_DROP;
   }
 
@@ -135,10 +130,8 @@ int ingress_handler(struct xdp_md* xdp) {
   seq = conn->seq;
   ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
-  if (rst_result == RST_ABORTED) {
-    log_pkt(LOG_LEVEL_INFO, "ingress: aborted connection", QUARTET_TCP);
-  } else if (rst_result == RST_DESTROYED) {
-    log_pkt(LOG_LEVEL_INFO, "ingress: destroyed connection", QUARTET_TCP);
+  if (rst_result == RST_DESTROYED) {
+    log_pkt(LOG_LEVEL_WARN, "ingress: destroyed connection", QUARTET_TCP);
   }
   if (newly_estab) {
     log_pkt(LOG_LEVEL_INFO, "ingress: established connection", QUARTET_TCP);
