@@ -148,20 +148,9 @@ int lock_read(FILE* file, struct lock_content* c) {
   buf[result + 1] = '\0';
 
   enum json_tokener_error parse_error = json_tokener_success;
-  struct json_object* obj = ({
-    void* _ret = (json_tokener_parse_verbose(buf, &parse_error));
-    if (!_ret)
-      ({
-        if ((log_verbosity >= LOG_LEVEL_ERROR))
-          fprintf(stderr,
-                  "\r  \x1B[1;31merror:\x1B[0m "
-                  "failed to parse lock file: %s"
-                  "\n",
-                  json_tokener_error_desc(parse_error));
-        return (-(*__errno_location()));
-      });
-    _ret;
-  });
+  struct json_object* obj =
+    try_ptr(json_tokener_parse_verbose(buf, &parse_error), "failed to parse lock file: %s",
+            json_tokener_error_desc(parse_error));
 
   struct lock_error lock_error = {};
   *c = lock_deserialize(obj, &lock_error);
