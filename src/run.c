@@ -61,6 +61,8 @@ const struct argp run_argp = {run_args_options, run_args_parse_opt, "INTERFACE",
 
 static volatile sig_atomic_t exiting = 0;
 static inline void sig_int(int signo) {
+  // Print carriage return to get rid of '^C'
+  fprintf(stderr, "\r");
   log_warn("SIGINT received, exiting");
   exiting = 1;
 }
