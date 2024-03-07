@@ -2,6 +2,7 @@
 #define _MIMIC_MIMIC_H
 
 #include <json-c/json_types.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <sys/types.h>
 
@@ -20,6 +21,8 @@ struct arguments {
     } run;
     struct show_arguments {
       char* ifname;
+      bool show_process, show_command;
+      bool json;
     } show;
   };
 };
