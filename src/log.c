@@ -12,15 +12,15 @@ int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list a
     // Get rid of harmless warning when tc qdisc already exists
     // This is dirty, but there is no other way to filter it
     // See https://www.spinics.net/lists/bpf/msg44842.html
+    va_list backup_args;
+    va_copy(backup_args, args);
     char buf[128];
-    ret = vsnprintf(buf, sizeof(buf), format, args);
+    ret = vsnprintf(buf, sizeof(buf), format, backup_args);
     if (ret < 0) return ret;
     if (strstr(buf, "Exclusivity flag on, cannot modify")) {
       return 0;
     } else {
       ret = fprintf(stderr, _LOG_WARN_PREFIX);
-      ret = ret < 0 ? ret : fprintf(stderr, "%s", buf);
-      return ret < 0 ? ret : 0;
     }
   } else if (level == LIBBPF_INFO && LOG_ALLOW_INFO) {
     ret = fprintf(stderr, _LOG_INFO_PREFIX);
