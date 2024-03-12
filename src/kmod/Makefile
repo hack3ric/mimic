@@ -31,8 +31,8 @@ ifdef DEBIAN_HACK_RESOLVE_BTFIDS_PATH
 		install -Dm755 $(DEBIAN_HACK_RESOLVE_BTFIDS_PATH) $(BUILD)/tools/bpf/resolve_btfids/resolve_btfids; \
 	fi
 endif
-	make -C $(BUILD) M=$(PWD) modules
+	$(MAKE) -C $(BUILD) M=$(PWD) modules
 
 clean:
 	rm -rf build
-	[ ! -d $(system_build_dir) ] || make -C $(system_build_dir) M=$(PWD) clean
+	[ ! -d $(system_build_dir) ] || $(MAKE) -C $(system_build_dir) M=$(PWD) clean
