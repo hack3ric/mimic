@@ -26,9 +26,6 @@ static inline int restore_data(struct xdp_md* xdp, u16 offset, u32 buf_len) {
 
 SEC("xdp")
 int ingress_handler(struct xdp_md* xdp) {
-  u32 vkey = SETTINGS_LOG_VERBOSITY;
-  u32 log_verbosity = *(u32*)try_ptr_or_drop(bpf_map_lookup_elem(&mimic_settings, &vkey));
-
   decl_or_pass(struct ethhdr, eth, 0, xdp);
   u16 eth_proto = bpf_ntohs(eth->h_proto);
 
@@ -51,6 +48,10 @@ int ingress_handler(struct xdp_md* xdp) {
   decl_or_pass(struct tcphdr, tcp, ip_end, xdp);
 
   if (!matches_whitelist(QUARTET_TCP, true)) return XDP_PASS;
+
+  u32 vkey = SETTINGS_LOG_VERBOSITY;
+  u32 log_verbosity = *(u32*)try_ptr_or_drop(bpf_map_lookup_elem(&mimic_settings, &vkey));
+
   log_pkt(log_verbosity, LOG_LEVEL_DEBUG, "ingress: matched (fake) TCP packet", QUARTET_TCP);
 
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP, true);
