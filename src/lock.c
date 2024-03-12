@@ -83,23 +83,23 @@ int lock_write(int fd, const struct lock_content* c) {
   return 0;
 }
 
-#define _lock_parse_field(_type, _type_val, obj, key, error, errored)                            \
-  struct json_object* field;                                                                     \
-  if (!json_object_object_get_ex(obj, key, &field)) {                                            \
-    if (error) *error = (struct lock_error){.kind = ERR_NOT_FOUND, .not_found = {.field = key}}; \
-    *errored = true;                                                                             \
-    return 0;                                                                                    \
-  }                                                                                              \
-  json_type field_type = json_object_get_type(field);                                            \
-  if (field_type != _type_val) {                                                                 \
-    if (error) {                                                                                 \
-      *error = (struct lock_error){                                                              \
-        .kind = ERR_INVALID_TYPE,                                                                \
-        .invalid_type = {.field = key, .expected = _type_val, .got = field_type}};               \
-    }                                                                                            \
-    *errored = true;                                                                             \
-    return 0;                                                                                    \
-  }                                                                                              \
+#define _lock_parse_field(_type, _type_val, obj, key, error, errored)                       \
+  struct json_object* field;                                                                \
+  if (!json_object_object_get_ex(obj, key, &field)) {                                       \
+    if (error) *error = (struct lock_error){.kind = ERR_NOT_FOUND, .not_found.field = key}; \
+    *errored = true;                                                                        \
+    return 0;                                                                               \
+  }                                                                                         \
+  json_type field_type = json_object_get_type(field);                                       \
+  if (field_type != _type_val) {                                                            \
+    if (error) {                                                                            \
+      *error = (struct lock_error){                                                         \
+        .kind = ERR_INVALID_TYPE,                                                           \
+        .invalid_type = {.field = key, .expected = _type_val, .got = field_type}};          \
+    }                                                                                       \
+    *errored = true;                                                                        \
+    return 0;                                                                               \
+  }                                                                                         \
   return json_object_get_##_type(field);
 
 static inline const char* lock_parse_field_string(const struct json_object* obj, const char* key,
@@ -127,8 +127,7 @@ struct lock_content lock_deserialize(const struct json_object* obj, struct lock_
   const char* version = lock_parse_field_string(obj, "version", error, &errored);
   if (!errored && strcmp(version, argp_program_version) != 0) {
     if (error) {
-      *error =
-        (struct lock_error){.kind = ERR_VERSION_MISMATCH, .version_mismatch = {.got = version}};
+      *error = (struct lock_error){.kind = ERR_VERSION_MISMATCH, .version_mismatch.got = version};
     }
     return c;
   }
