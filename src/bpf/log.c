@@ -4,6 +4,6 @@
 
 #include "log.h"
 
-struct mimic_rb_map mimic_rb SEC(".maps");
+struct mimic_log_rb_map mimic_log_rb SEC(".maps");
 
 const volatile int log_verbosity = 0;

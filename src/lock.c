@@ -60,7 +60,7 @@ static inline struct json_object* lock_serialize(const struct lock_content* c) {
   ret = ret ?: json_object_object_add(obj, "ingress_id", json_object_new_int(c->ingress_id));
   ret = ret ?: json_object_object_add(obj, "whitelist_id", json_object_new_int(c->whitelist_id));
   ret = ret ?: json_object_object_add(obj, "conns_id", json_object_new_int(c->conns_id));
-  ret = ret ?: json_object_object_add(obj, "rb_id", json_object_new_int(c->rb_id));
+  ret = ret ?: json_object_object_add(obj, "log_rb_id", json_object_new_int(c->log_rb_id));
 
   if (ret) {
     json_object_put(obj);
@@ -136,7 +136,7 @@ struct lock_content lock_deserialize(const struct json_object* obj, struct lock_
   if (!errored) c.ingress_id = lock_parse_field_int(obj, "ingress_id", error, &errored);
   if (!errored) c.whitelist_id = lock_parse_field_int(obj, "whitelist_id", error, &errored);
   if (!errored) c.conns_id = lock_parse_field_int(obj, "conns_id", error, &errored);
-  if (!errored) c.rb_id = lock_parse_field_int(obj, "rb_id", error, &errored);
+  if (!errored) c.log_rb_id = lock_parse_field_int(obj, "log_rb_id", error, &errored);
   return c;
 }
 

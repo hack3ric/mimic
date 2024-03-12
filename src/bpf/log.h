@@ -10,10 +10,10 @@
 
 extern const volatile int log_verbosity;
 
-extern struct mimic_rb_map {
+extern struct mimic_log_rb_map {
   __uint(type, BPF_MAP_TYPE_RINGBUF);
   __uint(max_entries, LOG_RB_ITEM_LEN * 1024);
-} mimic_rb;
+} mimic_log_rb;
 
 #define _log_a(_0, _1, _2, _3, N, ...) _##N
 #define _log_b_0() (u64[0]){}, 0
@@ -29,7 +29,7 @@ extern struct mimic_rb_map {
 
 #define _log_rbprintf(_l, _fmt, ...)                                          \
   ({                                                                          \
-    struct log_event* e = bpf_ringbuf_reserve(&mimic_rb, LOG_RB_ITEM_LEN, 0); \
+    struct log_event* e = bpf_ringbuf_reserve(&mimic_log_rb, LOG_RB_ITEM_LEN, 0); \
     if (e) {                                                                  \
       e->level = (_l);                                                        \
       _log_f(e->inner.msg, LOG_RB_MSG_LEN, _fmt, __VA_ARGS__);                \
@@ -51,7 +51,7 @@ extern struct mimic_rb_map {
 static __always_inline void log_pkt(enum log_level level, char* msg, QUARTET_DEF) {
   if (log_verbosity < level) return;
 
-  struct log_event* e = bpf_ringbuf_reserve(&mimic_rb, LOG_RB_ITEM_LEN, 0);
+  struct log_event* e = bpf_ringbuf_reserve(&mimic_log_rb, LOG_RB_ITEM_LEN, 0);
   if (!e) return;
   e->level = level;
   e->type = LOG_TYPE_PKT;

@@ -3,19 +3,6 @@
 
 #include "filter.h"
 
-enum log_level {
-  LOG_LEVEL_ERROR = 0,
-  LOG_LEVEL_WARN = 1,
-  LOG_LEVEL_INFO = 2,
-  LOG_LEVEL_DEBUG = 3,
-  LOG_LEVEL_TRACE = 4,
-};
-
-enum log_type {
-  LOG_TYPE_MSG,
-  LOG_TYPE_PKT,
-};
-
 // need to define `log_verbosity` besides including this file.
 #define LOG_ALLOW_ERROR (log_verbosity >= LOG_LEVEL_ERROR)
 #define LOG_ALLOW_WARN (log_verbosity >= LOG_LEVEL_WARN)
@@ -28,8 +15,17 @@ enum log_type {
 #define LOG_RB_PKT_MSG_LEN 84
 
 struct log_event {
-  enum log_level level : 16;
-  enum log_type type : 16;
+  enum log_level {
+    LOG_LEVEL_ERROR,
+    LOG_LEVEL_WARN,
+    LOG_LEVEL_INFO,
+    LOG_LEVEL_DEBUG,
+    LOG_LEVEL_TRACE,
+  } level : 16;
+  enum log_type {
+    LOG_TYPE_MSG,
+    LOG_TYPE_PKT,
+  } type : 16;
   union {
     char msg[LOG_RB_MSG_LEN];
     struct pkt_info {

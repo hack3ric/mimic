@@ -167,7 +167,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   struct bpf_tc_hook tc_hook_egress = {};
   struct bpf_tc_opts tc_opts_egress = {};
   struct bpf_link* xdp_ingress = NULL;
-  struct ring_buffer* rb = NULL;
+  struct ring_buffer* log_rb = NULL;
 
   skel = try2_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerrno);
   skel->rodata->log_verbosity = log_verbosity;
@@ -193,7 +193,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   struct bpf_map_info map_info = {};
   __u32 prog_len = sizeof(prog_info), map_len = sizeof(map_info);
   int egress_handler_fd = 0, ingress_handler_fd = 0;
-  int mimic_whitelist_fd = 0, mimic_conns_fd, mimic_rb_fd = 0;
+  int mimic_whitelist_fd = 0, mimic_conns_fd, mimic_log_rb_fd = 0;
 
 #define _get_id(_Type, _TypeFull, _Name)                                                       \
   ({                                                                                           \
@@ -213,7 +213,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
 
   lock_content.whitelist_id = _get_map_id(mimic_whitelist);
   lock_content.conns_id = _get_map_id(mimic_conns);
-  lock_content.rb_id = _get_map_id(mimic_rb);
+  lock_content.log_rb_id = _get_map_id(mimic_log_rb);
 
   try2(lock_write(lock_fd, &lock_content));
 
@@ -233,8 +233,8 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   }
 
   // Get ring buffer in advance so we can return earlier if error
-  rb = try2_ptr(ring_buffer__new(mimic_rb_fd, handle_event, NULL, NULL),
-                "failed to attach BPF ring buffer: %s", strerrno);
+  log_rb = try2_ptr(ring_buffer__new(mimic_log_rb_fd, handle_event, NULL, NULL),
+                    "failed to attach BPF ring buffer: %s", strerrno);
 
   // TC and XDP
   tc_hook_egress = (struct bpf_tc_hook){
@@ -256,7 +256,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   }
 
   while (!exiting) {
-    retcode = ring_buffer__poll(rb, 100);
+    retcode = ring_buffer__poll(log_rb, 100);
     if (retcode < 0) {
       if (retcode == -EINTR) cleanup(0);
       cleanup(retcode, "failed to poll ring buffer: %s", strerror(-retcode));
@@ -267,7 +267,7 @@ cleanup:
   log_info("cleaning up");
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
   if (xdp_ingress) bpf_link__destroy(xdp_ingress);
-  if (rb) ring_buffer__free(rb);
+  if (log_rb) ring_buffer__free(log_rb);
   if (skel) mimic_bpf__destroy(skel);
   return retcode;
 }
