@@ -178,4 +178,7 @@
 
 #endif  // _MIMIC_BPF
 
+// mimic_settings keys
+#define SETTINGS_LOG_VERBOSITY 0x0001
+
 #endif  // _MIMIC_SHARED_UTIL

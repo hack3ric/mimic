@@ -22,6 +22,13 @@ extern struct mimic_conns_map {
   __type(value, struct connection);
 } mimic_conns;
 
+extern struct mimic_settings_map {
+  __uint(type, BPF_MAP_TYPE_HASH);
+  __uint(max_entries, 2);
+  __type(key, u32);
+  __type(value, u32);
+} mimic_settings;
+
 #define IPV4_CSUM_OFF (offsetof(struct iphdr, check))
 #define TCP_UDP_HEADER_DIFF (sizeof(struct tcphdr) - sizeof(struct udphdr))
 

@@ -48,6 +48,9 @@ static __always_inline void update_tcp_header(struct tcphdr* tcp, u16 udp_len, b
 
 SEC("tc")
 int egress_handler(struct __sk_buff* skb) {
+  u32 vkey = SETTINGS_LOG_VERBOSITY;
+  u32 log_verbosity = *(u32*)try_ptr_or_shot(bpf_map_lookup_elem(&mimic_settings, &vkey));
+
   decl_or_ok(struct ethhdr, eth, 0, skb);
   u16 eth_proto = bpf_ntohs(eth->h_proto);
 
@@ -70,7 +73,7 @@ int egress_handler(struct __sk_buff* skb) {
   decl_or_ok(struct udphdr, udp, ip_end, skb);
 
   if (!matches_whitelist(QUARTET_UDP, false)) return TC_ACT_OK;
-  log_pkt(LOG_LEVEL_DEBUG, "egress: matched UDP packet", QUARTET_UDP);
+  log_pkt(log_verbosity, LOG_LEVEL_DEBUG, "egress: matched UDP packet", QUARTET_UDP);
 
   struct conn_tuple conn_key = gen_conn_key(QUARTET_UDP, false);
   struct connection* conn = try_ptr_or_shot(get_conn(&conn_key));
@@ -131,13 +134,13 @@ int egress_handler(struct __sk_buff* skb) {
   conn_ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
   if (rst) {
-    log_pkt(LOG_LEVEL_WARN, "egress: sending RST", QUARTET_UDP);
+    log_pkt(log_verbosity, LOG_LEVEL_WARN, "egress: sending RST", QUARTET_UDP);
     if (rst_result == RST_DESTROYED) {
-      log_pkt(LOG_LEVEL_WARN, "egress: destroyed connection", QUARTET_UDP);
+      log_pkt(log_verbosity, LOG_LEVEL_WARN, "egress: destroyed connection", QUARTET_UDP);
     }
   }
   if (newly_estab) {
-    log_pkt(LOG_LEVEL_INFO, "egress: established connection", QUARTET_UDP);
+    log_pkt(log_verbosity, LOG_LEVEL_INFO, "egress: established connection", QUARTET_UDP);
   }
   log_trace("egress: sending TCP packet: seq = %u, ack_seq = %u", seq, ack_seq);
   log_trace("egress: current state: seq = %u, ack_seq = %u", conn_seq, conn_ack_seq);

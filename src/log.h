@@ -21,6 +21,9 @@ static const char* _log_prefixes[] = {
 #define log(_l, fmt, ...) \
   if (log_verbosity >= (_l)) fprintf(stderr, "%s" fmt "\n", _log_prefixes[_l], ##__VA_ARGS__)
 
+#define log_anyway(_l, fmt, ...) \
+  fprintf(stderr, "%s" fmt "\n", _log_prefixes[_l], ##__VA_ARGS__)
+
 #define log_error(fmt, ...) \
   if (LOG_ALLOW_ERROR) fprintf(stderr, _LOG_ERROR_PREFIX fmt "\n", ##__VA_ARGS__)
 #define log_warn(fmt, ...) \

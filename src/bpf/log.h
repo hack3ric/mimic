@@ -8,8 +8,6 @@
 #include "../shared/log.h"
 #include "mimic.h"
 
-extern const volatile int log_verbosity;
-
 extern struct mimic_log_rb_map {
   __uint(type, BPF_MAP_TYPE_RINGBUF);
   __uint(max_entries, LOG_RB_ITEM_LEN * 1024);
@@ -27,14 +25,14 @@ extern struct mimic_log_rb_map {
   bpf_snprintf((_str), (_size), (_fmt), \
                _log_e(_log_b, _log_c(_0 __VA_OPT__(, ) __VA_ARGS__))(__VA_ARGS__))
 
-#define _log_rbprintf(_l, _fmt, ...)                                          \
-  ({                                                                          \
+#define _log_rbprintf(_l, _fmt, ...)                                              \
+  ({                                                                              \
     struct log_event* e = bpf_ringbuf_reserve(&mimic_log_rb, LOG_RB_ITEM_LEN, 0); \
-    if (e) {                                                                  \
-      e->level = (_l);                                                        \
-      _log_f(e->inner.msg, LOG_RB_MSG_LEN, _fmt, __VA_ARGS__);                \
-      bpf_ringbuf_submit(e, 0);                                               \
-    }                                                                         \
+    if (e) {                                                                      \
+      e->level = (_l);                                                            \
+      _log_f(e->inner.msg, LOG_RB_MSG_LEN, _fmt, __VA_ARGS__);                    \
+      bpf_ringbuf_submit(e, 0);                                                   \
+    }                                                                             \
   })
 
 #define log_error(fmt, ...) \
@@ -48,7 +46,8 @@ extern struct mimic_log_rb_map {
 #define log_trace(fmt, ...) \
   if (LOG_ALLOW_TRACE) _log_rbprintf(LOG_LEVEL_TRACE, fmt, ##__VA_ARGS__)
 
-static __always_inline void log_pkt(enum log_level level, char* msg, QUARTET_DEF) {
+static __always_inline void log_pkt(u32 log_verbosity, enum log_level level, char* msg,
+                                    QUARTET_DEF) {
   if (log_verbosity < level) return;
 
   struct log_event* e = bpf_ringbuf_reserve(&mimic_log_rb, LOG_RB_ITEM_LEN, 0);

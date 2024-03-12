@@ -37,7 +37,7 @@ int subcmd_show(struct show_arguments* args);
 struct lock_content {
   pid_t pid;
   int egress_id, ingress_id;
-  int whitelist_id, conns_id, log_rb_id;
+  int whitelist_id, conns_id, settings_id, log_rb_id;
 };
 
 int lock_write(int fd, const struct lock_content* c);

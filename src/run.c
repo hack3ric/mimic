@@ -107,7 +107,7 @@ static int handle_event(void* ctx, void* data, size_t data_sz) {
     ip_port_fmt(pkt->protocol, pkt->from, pkt->from_port, from);
     ip_port_fmt(pkt->protocol, pkt->to, pkt->to_port, to);
 
-    log(e->level, "%s: %s -> %s", pkt->msg, from, to);
+    log_anyway(e->level, "%s: %s -> %s", pkt->msg, from, to);
   }
   return 0;
 }
@@ -170,7 +170,6 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   struct ring_buffer* log_rb = NULL;
 
   skel = try2_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerrno);
-  skel->rodata->log_verbosity = log_verbosity;
 
   if (mimic_bpf__load(skel)) {
     log_error("failed to load BPF program: %s", strerrno);
@@ -192,8 +191,8 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   struct bpf_prog_info prog_info = {};
   struct bpf_map_info map_info = {};
   __u32 prog_len = sizeof(prog_info), map_len = sizeof(map_info);
-  int egress_handler_fd = 0, ingress_handler_fd = 0;
-  int mimic_whitelist_fd = 0, mimic_conns_fd, mimic_log_rb_fd = 0;
+  int egress_handler_fd, ingress_handler_fd;
+  int mimic_whitelist_fd, mimic_conns_fd, mimic_settings_fd, mimic_log_rb_fd;
 
 #define _get_id(_Type, _TypeFull, _Name)                                                       \
   ({                                                                                           \
@@ -213,9 +212,15 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
 
   lock_content.whitelist_id = _get_map_id(mimic_whitelist);
   lock_content.conns_id = _get_map_id(mimic_conns);
+  lock_content.settings_id = _get_map_id(mimic_settings);
   lock_content.log_rb_id = _get_map_id(mimic_log_rb);
 
   try2(lock_write(lock_fd, &lock_content));
+
+  __u32 vkey = SETTINGS_LOG_VERBOSITY, vvalue = log_verbosity;
+  try2(bpf_map__update_elem(skel->maps.mimic_settings, &vkey, sizeof(__u32), &vvalue, sizeof(__u32),
+                            BPF_ANY),
+       "failed to set BPF log verbosity: %s", strerror(-_ret));
 
   bool value = 1;
   for (int i = 0; i < args->filter_count; i++) {
