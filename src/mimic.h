@@ -1,7 +1,7 @@
 #ifndef _MIMIC_MIMIC_H
 #define _MIMIC_MIMIC_H
 
-#include <json-c/json_types.h>
+#include <argp.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <sys/types.h>

@@ -1,12 +1,14 @@
 #define _MIMIC_KMOD
 
 #include <linux/bpf.h>
+#include <linux/btf.h>
 #include <linux/btf_ids.h>
-#include <linux/byteorder/generic.h>
+#include <linux/compiler_attributes.h>
+#include <linux/compiler_types.h>
+#include <linux/export.h>
 #include <linux/in.h>
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/printk.h>
 #include <linux/skbuff.h>
 #include <linux/stddef.h>
 #include <linux/tcp.h>

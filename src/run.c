@@ -1,16 +1,20 @@
 #include <argp.h>
+#include <arpa/inet.h>
+#include <bits/types/sig_atomic_t.h>
 #include <bpf/bpf.h>
-#include <bpf/bpf_endian.h>
-#include <bpf/btf.h>
 #include <bpf/libbpf.h>
-#include <json-c/json_object.h>
-#include <json-c/json_types.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <linux/bpf.h>
+#include <linux/types.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <signal.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
-#include <sys/file.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -18,8 +22,8 @@
 #include "bpf_skel.h"
 #include "log.h"
 #include "mimic.h"
-#include "shared/checksum.h"
 #include "shared/filter.h"
+#include "shared/log.h"
 #include "shared/util.h"
 
 static const struct argp_option run_args_options[] = {

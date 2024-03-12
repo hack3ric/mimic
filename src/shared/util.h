@@ -1,16 +1,15 @@
 #ifndef _MIMIC_SHARED_UTIL
 #define _MIMIC_SHARED_UTIL
 
+// clang-format off
 #ifdef _MIMIC_BPF
 #include "../bpf/vmlinux.h"
-
 #include "../bpf/log.h"
 #else
-#include <linux/bpf.h>
 #include <linux/pkt_cls.h>
-
 #include "../log.h"
 #endif
+// clang-format on
 
 #define redecl(_type, _name, _off, _ctx, _ret)                              \
   _name = ({                                                                \
@@ -126,9 +125,9 @@
 #endif  // _MIMIC_BPF
 
 // Tests int return value from a function, but return a different value when failed.
-#define try_ret(expr, ret)       \
+#define try_ret(expr, ret)    \
   ({                          \
-    int _val = (expr);           \
+    int _val = (expr);        \
     if (_val < 0) return ret; \
     _val;                     \
   })
@@ -140,10 +139,10 @@
 
 // Tests pointer return value from a function, but return a different value when failed.
 #define try_ptr_ret(expr, ret) \
-  ({                        \
+  ({                           \
     void* _ptr = (expr);       \
-    if (!_ptr) return ret;  \
-    _ptr;                   \
+    if (!_ptr) return ret;     \
+    _ptr;                      \
   })
 
 #define try_ptr_or_ok(x) try_ptr_ret(x, TC_ACT_OK)

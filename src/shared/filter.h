@@ -8,11 +8,11 @@
 #define ntohl bpf_ntohl
 #else
 #include <arpa/inet.h>
-#include <linux/in6.h>
 #include <linux/types.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/socket.h>
 #endif
 
 struct pkt_filter {

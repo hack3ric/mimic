@@ -2,10 +2,6 @@
 #define _MIMIC_LOG_H
 
 #include <bpf/libbpf.h>
-#include <linux/ip.h>
-#include <linux/ipv6.h>
-#include <linux/tcp.h>
-#include <linux/udp.h>
 #include <stdio.h>
 
 #include "shared/log.h"

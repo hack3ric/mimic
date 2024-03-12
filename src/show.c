@@ -1,13 +1,12 @@
 #include <argp.h>
-#include <asm-generic/errno-base.h>
 #include <bpf/bpf.h>
+#include <errno.h>
 #include <net/if.h>
+#include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-#include "log.h"
 #include "mimic.h"
 #include "shared/conn.h"
 #include "shared/filter.h"
