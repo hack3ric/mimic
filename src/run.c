@@ -316,35 +316,3 @@ int subcmd_run(struct run_arguments* args) {
   remove(lock);
   return retcode;
 }
-
-// Sends a UDP packet with no payload. This packet may be processed by eBPF egress handler to become
-// TCP control packets (SYN, RST).
-static inline int send_packet(enum ip_proto protocol, union ip_value from, __be16 from_port,
-                              union ip_value to, __be16 to_port) {
-  int sk =
-    try_errno(socket(protocol, SOCK_RAW, IPPROTO_UDP), "error creating socket: %s", strerrno);
-  struct udphdr udp = {.source = from_port, .dest = to_port, .len = htons(sizeof(udp))};
-  __u32 csum = 0;
-  if (protocol == PROTO_IPV4) {
-    update_csum_ul(&csum, ntohl(from.v4));
-    update_csum_ul(&csum, ntohl(to.v4));
-  } else {
-    for (int i = 0; i < 8; i++) {
-      update_csum(&csum, ntohs(from.v6.s6_addr16[i]));
-      update_csum(&csum, ntohs(to.v6.s6_addr16[i]));
-    }
-  }
-  update_csum(&csum, IPPROTO_UDP);
-  update_csum(&csum, sizeof(udp));
-  update_csum(&csum, ntohs(from_port));
-  update_csum(&csum, ntohs(to_port));
-  update_csum(&csum, sizeof(udp));
-  udp.check = htons(csum_fold(csum));
-  struct sockaddr_storage addr = ip_port_to_sockaddr(protocol, to, ntohs(to_port));
-  if (sendto(sk, &udp, sizeof(udp), 0, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-    char buf[IP_PORT_MAX_LEN];
-    ip_port_fmt(protocol, to, to_port, buf);
-    ret(-errno, "error sending packet to %s: %s", buf, strerrno);
-  }
-  return 0;
-}
