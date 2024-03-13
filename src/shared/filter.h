@@ -32,8 +32,7 @@ struct pkt_filter {
 // max: "remote=[%pI6]:%d\0"
 #define FILTER_FMT_MAX_LEN (8 + INET6_ADDRSTRLEN + 2 + 5 + 1)
 
-static inline void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __be16 port,
-                               char* restrict dest) {
+static inline void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __be16 port, char* restrict dest) {
   *dest = '\0';
   if (protocol == PROTO_IPV6) strcat(dest, "[");
   inet_ntop(protocol, &ip, dest + strlen(dest), INET6_ADDRSTRLEN);
@@ -41,8 +40,7 @@ static inline void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __be16
   snprintf(dest + strlen(dest), 7, ":%d", ntohs(port));
 }
 
-static inline struct sockaddr_storage ip_port_to_sockaddr(enum ip_proto protocol, union ip_value ip,
-                                                          __u16 port) {
+static inline struct sockaddr_storage ip_port_to_sockaddr(enum ip_proto protocol, union ip_value ip, __u16 port) {
   struct sockaddr_storage result = {};
   result.ss_family = protocol;
   if (protocol == PROTO_IPV4) {
@@ -57,8 +55,7 @@ static inline struct sockaddr_storage ip_port_to_sockaddr(enum ip_proto protocol
   return result;
 }
 
-static inline void pkt_filter_ip_port_fmt(const struct pkt_filter* restrict filter,
-                                          char* restrict dest) {
+static inline void pkt_filter_ip_port_fmt(const struct pkt_filter* restrict filter, char* restrict dest) {
   ip_port_fmt(filter->protocol, filter->ip, filter->port, dest);
 }
 

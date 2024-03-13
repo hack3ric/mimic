@@ -22,8 +22,8 @@ static const char args_doc[] =
   "\n"
   "Options:";
 
-static inline error_t argp_parse_cmd(struct argp_state* state, const char* cmdname,
-                                     const struct argp* cmd_argp, void* args) {
+static inline error_t argp_parse_cmd(struct argp_state* state, const char* cmdname, const struct argp* cmd_argp,
+                                     void* args) {
   int argc = state->argc - state->next + 1;
   char** argv = &state->argv[state->next - 1];
   char* argv0 = argv[0];

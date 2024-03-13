@@ -12,11 +12,10 @@
 #include "shared/filter.h"
 #include "shared/util.h"
 
-static const struct argp_option show_args_options[] = {
-  {"process", 'p', NULL, 0, "Show process information"},
-  {"connections", 'c', NULL, 0, "Show connections"},
-  {"json", 'j', NULL, 0, "Print JSON instead"},
-  {}};
+static const struct argp_option show_args_options[] = {{"process", 'p', NULL, 0, "Show process information"},
+                                                       {"connections", 'c', NULL, 0, "Show connections"},
+                                                       {"json", 'j', NULL, 0, "Print JSON instead"},
+                                                       {}};
 
 static inline error_t show_args_parse_opt(int key, char* arg, struct argp_state* state) {
   struct show_arguments* args = (struct show_arguments*)state->input;
@@ -98,8 +97,8 @@ int subcmd_show(struct show_arguments* args) {
   if (args->show_process && args->show_command) printf("\n");
 
   if (args->show_command) {
-    int conns_fd = try(bpf_map_get_fd_by_id(lock_content.conns_id),
-                       "failed to get fd of map 'mimic_conns': %s", strerror(-_ret));
+    int conns_fd =
+      try(bpf_map_get_fd_by_id(lock_content.conns_id), "failed to get fd of map 'mimic_conns': %s", strerror(-_ret));
     struct conn_tuple key;
     struct connection conn;
     char local[IP_PORT_MAX_LEN], remote[IP_PORT_MAX_LEN];
@@ -115,8 +114,8 @@ int subcmd_show(struct show_arguments* args) {
         ip_port_fmt(key.protocol, key.remote, key.remote_port, remote);
         printf("\x1b[1;32mCONNECTION\x1b[0m %s => %s\n", local, remote);
 
-        try(bpf_map_lookup_elem(conns_fd, &key, &conn),
-            "failed to get value from map 'mimic_conns': %s", strerror(-_ret));
+        try(bpf_map_lookup_elem(conns_fd, &key, &conn), "failed to get value from map 'mimic_conns': %s",
+            strerror(-_ret));
 
         printf("    \x1b[1mstate:\x1b[0m %s\n", conn_state_to_str(conn.state));
         printf(" \x1b[1msequence:\x1b[0m seq 0x%08X, ack 0x%08X\n", conn.seq, conn.ack_seq);

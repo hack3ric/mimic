@@ -31,8 +31,7 @@
 #define _get_macro(_0, _1, _2, _3, _4, _5, NAME, ...) NAME
 
 // Returns _ret while printing error.
-#define ret(...) \
-  _get_macro(_0, ##__VA_ARGS__, _ret_fmt, _ret_fmt, _ret_fmt, _ret_fmt, _ret, )(__VA_ARGS__)
+#define ret(...) _get_macro(_0, ##__VA_ARGS__, _ret_fmt, _ret_fmt, _ret_fmt, _ret_fmt, _ret, )(__VA_ARGS__)
 #define _ret(ret) return (ret)
 #define _ret_fmt(ret, ...)  \
   ({                        \
@@ -44,9 +43,8 @@
 //
 // Requires `cleanup` label, `retcode` to be defined inside function scope, and `retcode` to be
 // returned after cleanup.
-#define cleanup(...)                                                                    \
-  _get_macro(_0, ##__VA_ARGS__, _cleanup_fmt, _cleanup_fmt, _cleanup_fmt, _cleanup_fmt, \
-             _cleanup, )(__VA_ARGS__)
+#define cleanup(...) \
+  _get_macro(_0, ##__VA_ARGS__, _cleanup_fmt, _cleanup_fmt, _cleanup_fmt, _cleanup_fmt, _cleanup, )(__VA_ARGS__)
 #define _cleanup(ret) \
   ({                  \
     retcode = (ret);  \

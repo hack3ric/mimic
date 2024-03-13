@@ -18,13 +18,9 @@ static inline void update_csum(__u32* csum, __s32 delta) {
   *csum += delta;
 }
 
-static inline void update_csum_ul(__u32* csum, __u32 new) {
-  update_csum(csum, (new >> 16) + (new & 0xffff));
-}
+static inline void update_csum_ul(__u32* csum, __u32 new) { update_csum(csum, (new >> 16) + (new & 0xffff)); }
 
-static inline void update_csum_ul_neg(__u32* csum, __u32 new) {
-  update_csum(csum, -(new >> 16) - (new & 0xffff));
-}
+static inline void update_csum_ul_neg(__u32* csum, __u32 new) { update_csum(csum, -(new >> 16) - (new & 0xffff)); }
 
 #ifdef _MIMIC_BPF
 

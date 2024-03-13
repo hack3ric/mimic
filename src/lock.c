@@ -40,14 +40,13 @@ int lock_error_fmt(struct lock_error* error, char* buf, size_t len) {
       return strlen(msg);
     }
     case ERR_INVALID_TYPE:
-      return snprintf(buf, len, "expected %s for field '%s', got %s",
-                      json_type_to_name(error->invalid_type.expected), error->invalid_type.field,
-                      json_type_to_name(error->invalid_type.got));
+      return snprintf(buf, len, "expected %s for field '%s', got %s", json_type_to_name(error->invalid_type.expected),
+                      error->invalid_type.field, json_type_to_name(error->invalid_type.got));
     case ERR_NOT_FOUND:
       return snprintf(buf, len, "field '%s' not found", error->not_found.field);
     case ERR_VERSION_MISMATCH:
-      return snprintf(buf, len, "current Mimic version is %s, but lock file's is %s",
-                      argp_program_version, error->version_mismatch.got);
+      return snprintf(buf, len, "current Mimic version is %s, but lock file's is %s", argp_program_version,
+                      error->version_mismatch.got);
   }
 }
 
@@ -77,29 +76,27 @@ int lock_write(int fd, const struct lock_content* c) {
   int result = try_errno(write(fd, buf, buf_len), "failed to write lock file: %s", strerrno);
   json_object_put(lock_json);
   if (result < buf_len) {
-    ret(1, "failed to write lock file: not enough bytes written (expected %lu, got %d)", buf_len,
-        result);
+    ret(1, "failed to write lock file: not enough bytes written (expected %lu, got %d)", buf_len, result);
   }
   return 0;
 }
 
-#define _lock_parse_field(_type, _type_val, obj, key, error, errored)                       \
-  struct json_object* field;                                                                \
-  if (!json_object_object_get_ex(obj, key, &field)) {                                       \
-    if (error) *error = (struct lock_error){.kind = ERR_NOT_FOUND, .not_found.field = key}; \
-    *errored = true;                                                                        \
-    return 0;                                                                               \
-  }                                                                                         \
-  json_type field_type = json_object_get_type(field);                                       \
-  if (field_type != _type_val) {                                                            \
-    if (error) {                                                                            \
-      *error = (struct lock_error){                                                         \
-        .kind = ERR_INVALID_TYPE,                                                           \
-        .invalid_type = {.field = key, .expected = _type_val, .got = field_type}};          \
-    }                                                                                       \
-    *errored = true;                                                                        \
-    return 0;                                                                               \
-  }                                                                                         \
+#define _lock_parse_field(_type, _type_val, obj, key, error, errored)                                         \
+  struct json_object* field;                                                                                  \
+  if (!json_object_object_get_ex(obj, key, &field)) {                                                         \
+    if (error) *error = (struct lock_error){.kind = ERR_NOT_FOUND, .not_found.field = key};                   \
+    *errored = true;                                                                                          \
+    return 0;                                                                                                 \
+  }                                                                                                           \
+  json_type field_type = json_object_get_type(field);                                                         \
+  if (field_type != _type_val) {                                                                              \
+    if (error) {                                                                                              \
+      *error = (struct lock_error){.kind = ERR_INVALID_TYPE,                                                  \
+                                   .invalid_type = {.field = key, .expected = _type_val, .got = field_type}}; \
+    }                                                                                                         \
+    *errored = true;                                                                                          \
+    return 0;                                                                                                 \
+  }                                                                                                           \
   return json_object_get_##_type(field);
 
 static inline const char* lock_parse_field_string(const struct json_object* obj, const char* key,
@@ -107,8 +104,8 @@ static inline const char* lock_parse_field_string(const struct json_object* obj,
   _lock_parse_field(string, json_type_string, obj, key, error, errored);
 }
 
-static inline int lock_parse_field_int(const struct json_object* obj, const char* key,
-                                       struct lock_error* error, bool* errored) {
+static inline int lock_parse_field_int(const struct json_object* obj, const char* key, struct lock_error* error,
+                                       bool* errored) {
   _lock_parse_field(int, json_type_int, obj, key, error, errored);
 }
 
@@ -118,9 +115,8 @@ struct lock_content lock_deserialize(const struct json_object* obj, struct lock_
   json_type obj_type = json_object_get_type(obj);
   if (obj_type != json_type_object) {
     if (error) {
-      *error = (struct lock_error){
-        .kind = ERR_INVALID_TYPE,
-        .invalid_type = {.field = NULL, .expected = json_type_object, .got = obj_type}};
+      *error = (struct lock_error){.kind = ERR_INVALID_TYPE,
+                                   .invalid_type = {.field = NULL, .expected = json_type_object, .got = obj_type}};
     }
     return c;
   }
@@ -143,15 +139,13 @@ struct lock_content lock_deserialize(const struct json_object* obj, struct lock_
 
 int lock_read(FILE* file, struct lock_content* c) {
   char buf[1024] = {};
-  int result =
-    try_errno(fread(buf, 1, sizeof(buf), file), "failed to read lock file: %s", strerrno);
+  int result = try_errno(fread(buf, 1, sizeof(buf), file), "failed to read lock file: %s", strerrno);
   if (result > 1023) ret(1, "failed to read lock file: file size too big (> 1023)");
   buf[result + 1] = '\0';
 
   enum json_tokener_error parse_error = json_tokener_success;
-  struct json_object* obj =
-    try_ptr(json_tokener_parse_verbose(buf, &parse_error), "failed to parse lock file: %s",
-            json_tokener_error_desc(parse_error));
+  struct json_object* obj = try_ptr(json_tokener_parse_verbose(buf, &parse_error), "failed to parse lock file: %s",
+                                    json_tokener_error_desc(parse_error));
 
   struct lock_error lock_error = {};
   *c = lock_deserialize(obj, &lock_error);

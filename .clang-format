@@ -2,4 +2,4 @@ BasedOnStyle: Google
 IncludeBlocks: Preserve
 IndentWidth: 2
 ContinuationIndentWidth: 2
-ColumnLimit: 100
+ColumnLimit: 120

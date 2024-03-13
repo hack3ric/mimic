@@ -19,10 +19,9 @@
 #endif
 
 #ifndef __bpf_kfunc_start_defs
-#define __bpf_kfunc_start_defs()                                          \
-  __diag_push();                                                          \
-  __diag_ignore_all("-Wmissing-declarations",                             \
-                    "Global kfuncs as their definitions will be in BTF"); \
+#define __bpf_kfunc_start_defs()                                                                    \
+  __diag_push();                                                                                    \
+  __diag_ignore_all("-Wmissing-declarations", "Global kfuncs as their definitions will be in BTF"); \
   __diag_ignore_all("-Wmissing-prototypes", "Global kfuncs as their definitions will be in BTF")
 #endif
 
@@ -36,9 +35,7 @@ __bpf_kfunc_start_defs();
 //
 // Newer versions of Linux has `bpf_cast_to_kern_ctx` kfunc. This function is meant to provide such
 // functionality for lower versions of kernel.
-__bpf_kfunc struct sk_buff* mimic_inspect_skb(struct __sk_buff* skb_bpf) {
-  return (struct sk_buff*)skb_bpf;
-}
+__bpf_kfunc struct sk_buff* mimic_inspect_skb(struct __sk_buff* skb_bpf) { return (struct sk_buff*)skb_bpf; }
 
 // Change checksum position in `sk_buff` to instruct hardware/driver/kernel to offset checksum
 // correctly.

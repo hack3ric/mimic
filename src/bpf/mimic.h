@@ -5,8 +5,8 @@
 
 #include <bpf/bpf_helpers.h>
 
-#include "../shared/filter.h"
 #include "../shared/conn.h"
+#include "../shared/filter.h"
 
 extern struct mimic_whitelist_map {
   __uint(type, BPF_MAP_TYPE_HASH);
@@ -79,8 +79,7 @@ static inline bool matches_whitelist(QUARTET_DEF, bool ingress) {
     local.origin = ORIGIN_LOCAL;
     remote.origin = ORIGIN_REMOTE;
   }
-  return bpf_map_lookup_elem(&mimic_whitelist, &local) ||
-         bpf_map_lookup_elem(&mimic_whitelist, &remote);
+  return bpf_map_lookup_elem(&mimic_whitelist, &local) || bpf_map_lookup_elem(&mimic_whitelist, &remote);
 }
 
 static inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress) {

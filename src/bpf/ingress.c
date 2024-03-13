@@ -140,8 +140,7 @@ int ingress_handler(struct xdp_md* xdp) {
   if (newly_estab) {
     log_pkt(log_verbosity, LOG_LEVEL_INFO, "ingress: established connection", QUARTET_TCP);
   }
-  log_trace("ingress: received TCP packet: seq = %u, ack_seq = %u", bpf_ntohl(tcp->seq),
-            bpf_ntohl(tcp->ack_seq));
+  log_trace("ingress: received TCP packet: seq = %u, ack_seq = %u", bpf_ntohl(tcp->seq), bpf_ntohl(tcp->ack_seq));
   log_trace("ingress: current state: seq = %u, ack_seq = %u", seq, ack_seq);
 
   __be32 ipv4_saddr = 0, ipv4_daddr = 0;

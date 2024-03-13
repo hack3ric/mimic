@@ -21,9 +21,8 @@ extern struct mimic_log_rb_map {
 #define _log_c(...) _log_a(__VA_ARGS__, 3, 2, 1, 0)
 #define _log_d(_x, _y) _x##_y
 #define _log_e(_x, _y) _log_d(_x, _y)
-#define _log_f(_str, _size, _fmt, ...)  \
-  bpf_snprintf((_str), (_size), (_fmt), \
-               _log_e(_log_b, _log_c(_0 __VA_OPT__(, ) __VA_ARGS__))(__VA_ARGS__))
+#define _log_f(_str, _size, _fmt, ...) \
+  bpf_snprintf((_str), (_size), (_fmt), _log_e(_log_b, _log_c(_0 __VA_OPT__(, ) __VA_ARGS__))(__VA_ARGS__))
 
 #define _log_rbprintf(_l, _fmt, ...)                                              \
   ({                                                                              \
@@ -46,8 +45,7 @@ extern struct mimic_log_rb_map {
 #define log_trace(fmt, ...) \
   if (LOG_ALLOW_TRACE) _log_rbprintf(LOG_LEVEL_TRACE, fmt, ##__VA_ARGS__)
 
-static __always_inline void log_pkt(u32 log_verbosity, enum log_level level, char* msg,
-                                    QUARTET_DEF) {
+static __always_inline void log_pkt(u32 log_verbosity, enum log_level level, char* msg, QUARTET_DEF) {
   if (log_verbosity < level) return;
 
   struct log_event* e = bpf_ringbuf_reserve(&mimic_log_rb, LOG_RB_ITEM_LEN, 0);
