@@ -1,6 +1,7 @@
 #include <argp.h>
 #include <arpa/inet.h>
 #include <bits/types/sig_atomic_t.h>
+#include <bits/types/sigset_t.h>
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <errno.h>
@@ -15,6 +16,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
+#include <sys/signalfd.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -26,9 +29,10 @@
 #include "shared/log.h"
 #include "shared/util.h"
 
+#define MAX_EVENTS 10
+
 static const struct argp_option run_args_options[] = {
-  {"filter", 'f', "FILTER", 0,
-   "Specify what packets to process. This may be specified for multiple times."},
+  {"filter", 'f', "FILTER", 0, "Specify what packets to process. This may be specified for multiple times."},
   {"verbose", 'v', NULL, 0, "Output more information"},
   {"quiet", 'q', NULL, 0, "Output less information"},
   {}};
@@ -66,14 +70,6 @@ static inline error_t run_args_parse_opt(int key, char* arg, struct argp_state* 
 }
 
 const struct argp run_argp = {run_args_options, run_args_parse_opt, "INTERFACE", NULL};
-
-static volatile sig_atomic_t exiting = 0;
-static inline void sig_int(int signo) {
-  // Print carriage return to get rid of '^C'
-  fprintf(stderr, "\r");
-  log_warn("SIGINT received, exiting");
-  exiting = 1;
-}
 
 static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts,
                                       const struct bpf_program* prog, char* name) {
@@ -158,9 +154,8 @@ static inline int parse_filters(struct run_arguments* args, struct pkt_filter* f
   return 0;
 }
 
-static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters, int lock_fd,
-                          int ifindex) {
-  int retcode = 0;
+static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters, int lock_fd, int ifindex) {
+  int retcode = 0, epfd = 0, sfd = 0;
   struct lock_content lock_content = {.pid = getpid()};
   struct mimic_bpf* skel = NULL;
   bool tc_hook_created = false;
@@ -218,14 +213,13 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   try2(lock_write(lock_fd, &lock_content));
 
   __u32 vkey = SETTINGS_LOG_VERBOSITY, vvalue = log_verbosity;
-  try2(bpf_map__update_elem(skel->maps.mimic_settings, &vkey, sizeof(__u32), &vvalue, sizeof(__u32),
-                            BPF_ANY),
+  try2(bpf_map__update_elem(skel->maps.mimic_settings, &vkey, sizeof(__u32), &vvalue, sizeof(__u32), BPF_ANY),
        "failed to set BPF log verbosity: %s", strerror(-_ret));
 
   bool value = 1;
   for (int i = 0; i < args->filter_count; i++) {
-    retcode = bpf_map__update_elem(skel->maps.mimic_whitelist, &filters[i],
-                                   sizeof(struct pkt_filter), &value, sizeof(bool), BPF_ANY);
+    retcode = bpf_map__update_elem(skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter), &value,
+                                   sizeof(bool), BPF_ANY);
     if (retcode || LOG_ALLOW_DEBUG) {
       char fmt[FILTER_FMT_MAX_LEN];
       pkt_filter_fmt(&filters[i], fmt);
@@ -238,20 +232,17 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   }
 
   // Get ring buffer in advance so we can return earlier if error
-  log_rb = try2_ptr(ring_buffer__new(mimic_log_rb_fd, handle_event, NULL, NULL),
-                    "failed to attach BPF ring buffer: %s", strerrno);
+  log_rb = try2_ptr(ring_buffer__new(mimic_log_rb_fd, handle_event, NULL, NULL), "failed to attach BPF ring buffer: %s",
+                    strerrno);
 
   // TC and XDP
-  tc_hook_egress = (struct bpf_tc_hook){
-    .sz = sizeof(struct bpf_tc_hook), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
-  tc_opts_egress =
-    (struct bpf_tc_opts){.sz = sizeof(struct bpf_tc_opts), .handle = 1, .priority = 1};
+  tc_hook_egress =
+    (struct bpf_tc_hook){.sz = sizeof(struct bpf_tc_hook), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
+  tc_opts_egress = (struct bpf_tc_opts){.sz = sizeof(struct bpf_tc_opts), .handle = 1, .priority = 1};
   tc_hook_created = true;
   try2(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler, "egress"));
   xdp_ingress = try2_ptr(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
                          "failed to attach XDP program: %s", strerrno);
-
-  try2_errno((uintptr_t)signal(SIGINT, sig_int), "cannot set signal handler: %s", strerrno);
 
   log_info("Mimic successfully deployed at %s with filters:", args->ifname);
   for (int i = 0; i < args->filter_count; i++) {
@@ -260,16 +251,50 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
     log_info("  * %s", fmt);
   }
 
-  while (!exiting) {
-    retcode = ring_buffer__poll(log_rb, 100);
-    if (retcode < 0) {
-      if (retcode == -EINTR) cleanup(0);
-      cleanup(retcode, "failed to poll ring buffer: %s", strerror(-retcode));
+  epfd = try_errno(epoll_create1(0), "failed to create epoll: %s", strerrno);
+
+  int log_rb_epfd = ring_buffer__epoll_fd(log_rb), nfds, i;
+  struct epoll_event ev = {.events = EPOLLIN | EPOLLET, .data.fd = log_rb_epfd};
+  struct epoll_event events[MAX_EVENTS];
+  try2_errno(epoll_ctl(epfd, EPOLL_CTL_ADD, log_rb_epfd, &ev), "epoll_ctl error: %s", strerrno);
+
+  sigset_t mask = {};
+  sigaddset(&mask, SIGINT);
+
+  sfd = try2_errno(signalfd(-1, &mask, SFD_NONBLOCK), "error creating signalfd: %s", strerrno);
+  ev = (struct epoll_event){.events = EPOLLIN | EPOLLET, .data.fd = sfd};
+  try2_errno(epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &ev), "epoll_ctl error: %s", strerrno);
+
+  sigprocmask(SIG_SETMASK, &mask, NULL);
+
+  struct signalfd_siginfo siginfo;
+  int len;
+  while (true) {
+    nfds = try2_errno(epoll_wait(epfd, events, MAX_EVENTS, -1), "error waiting for epoll: %s", strerrno);
+    for (i = 0; i < nfds; i++) {
+      if (events[i].data.fd == log_rb_epfd) {
+        try2(ring_buffer__poll(log_rb, 0), "failed to poll ring buffer: %s", strerror(-_ret));
+      } else if (events[i].data.fd == sfd) {
+        len = try2_errno(read(sfd, &siginfo, sizeof(siginfo)), "failed to read signalfd: %s", strerrno);
+        if (len != sizeof(siginfo)) cleanup(1, "len != sizeof(siginfo)");
+        switch (siginfo.ssi_signo) {
+          case SIGINT:
+            fprintf(stderr, "\r");
+            log_warn("SIGINT received, exiting");
+            goto cleanup;
+          default:
+            break;
+        }
+      } else {
+        cleanup(1, "unknown fd: %d", events[i].data.fd);
+      }
     }
   }
 
 cleanup:
   log_info("cleaning up");
+  if (epfd) close(epfd);
+  if (sfd) close(sfd);
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
   if (xdp_ingress) bpf_link__destroy(xdp_ingress);
   if (log_rb) ring_buffer__free(log_rb);
@@ -307,8 +332,7 @@ int subcmd_run(struct run_arguments* args) {
       if (lock_file) {
         struct lock_content lock_content;
         if (lock_read(lock_file, &lock_content) == 0) {
-          log_error("hint: is another Mimic process (PID %d) running on this interface?",
-                    lock_content.pid);
+          log_error("hint: is another Mimic process (PID %d) running on this interface?", lock_content.pid);
         } else {
           log_error("hint: check %s", lock);
         }
