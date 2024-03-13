@@ -103,7 +103,7 @@ static int handle_event(void* ctx, void* data, size_t data_sz) {
     ip_port_fmt(pkt->protocol, pkt->from, pkt->from_port, from);
     ip_port_fmt(pkt->protocol, pkt->to, pkt->to_port, to);
 
-    log_anyway(e->level, "%s: %s -> %s", pkt->msg, from, to);
+    log(e->level, "%s: %s -> %s", pkt->msg, from, to);
   }
   return 0;
 }
@@ -151,6 +151,17 @@ static inline int parse_filters(struct run_arguments* args, struct pkt_filter* f
     }
     if (inet_pton(af, value, &filter->ip.v6) == 0) ret(1, "bad IP address: %s", value);
   }
+  return 0;
+}
+
+// SIGUSR1 is used to sync userspace settings with BPF maps. When received SIGUSR1 from a `mimic edit` process, the
+// running daemon should update its settings, and then send SIGUSR1 back to the edit process.
+static inline int sync_settings(struct mimic_bpf* skel, uint32_t ssi_pid) {
+  __u32 key = SETTINGS_LOG_VERBOSITY, value;
+  try(bpf_map__lookup_elem(skel->maps.mimic_settings, &key, sizeof(key), &value, sizeof(value), 0));
+  log_verbosity = value;
+  kill(ssi_pid, SIGUSR1);
+  log_warn("updated settings: log_verbosity = %d", value);
   return 0;
 }
 
@@ -253,18 +264,21 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
 
   epfd = try_errno(epoll_create1(0), "failed to create epoll: %s", strerrno);
 
+  // BPF log handler
   int log_rb_epfd = ring_buffer__epoll_fd(log_rb), nfds, i;
   struct epoll_event ev = {.events = EPOLLIN | EPOLLET, .data.fd = log_rb_epfd};
   struct epoll_event events[MAX_EVENTS];
   try2_errno(epoll_ctl(epfd, EPOLL_CTL_ADD, log_rb_epfd, &ev), "epoll_ctl error: %s", strerrno);
 
+  // Signal handler
   sigset_t mask = {};
   sigaddset(&mask, SIGINT);
-
+  sigaddset(&mask, SIGUSR1);
   sfd = try2_errno(signalfd(-1, &mask, SFD_NONBLOCK), "error creating signalfd: %s", strerrno);
   ev = (struct epoll_event){.events = EPOLLIN | EPOLLET, .data.fd = sfd};
   try2_errno(epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &ev), "epoll_ctl error: %s", strerrno);
 
+  // Block default handler for signals of interest
   sigprocmask(SIG_SETMASK, &mask, NULL);
 
   struct signalfd_siginfo siginfo;
@@ -282,6 +296,9 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
             fprintf(stderr, "\r");
             log_warn("SIGINT received, exiting");
             goto cleanup;
+          case SIGUSR1:
+            try2(sync_settings(skel, siginfo.ssi_pid), "failed to sync settings: %s", strerror(-_ret));
+            break;
           default:
             break;
         }
