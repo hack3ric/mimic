@@ -29,8 +29,6 @@
 #include "shared/log.h"
 #include "shared/util.h"
 
-#define MAX_EVENTS 10
-
 static const struct argp_option run_args_options[] = {
   {"filter", 'f', "FILTER", 0, "Specify what packets to process. This may be specified for multiple times."},
   {"verbose", 'v', NULL, 0, "Output more information"},
@@ -53,9 +51,6 @@ static inline error_t run_args_parse_opt(int key, char* arg, struct argp_state* 
     case 'q':
       if (log_verbosity > 0) log_verbosity--;
       break;
-    case ARGP_KEY_NO_ARGS:
-      argp_usage(state);
-      break;
     case ARGP_KEY_ARG:
       if (!args->ifname) {
         args->ifname = arg;
@@ -63,13 +58,16 @@ static inline error_t run_args_parse_opt(int key, char* arg, struct argp_state* 
         return ARGP_ERR_UNKNOWN;
       }
       break;
+    case ARGP_KEY_NO_ARGS:
+      argp_usage(state);
+      break;
     default:
       return ARGP_ERR_UNKNOWN;
   }
   return 0;
 }
 
-const struct argp run_argp = {run_args_options, run_args_parse_opt, "INTERFACE", NULL};
+const struct argp run_argp = {run_args_options, run_args_parse_opt, "<interface>", NULL};
 
 static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts,
                                       const struct bpf_program* prog, char* name) {
@@ -165,13 +163,15 @@ static inline int sync_settings(struct mimic_bpf* skel, uint32_t ssi_pid) {
   return 0;
 }
 
+#define MAX_EVENTS 10
+
 static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters, int lock_fd, int ifindex) {
   int retcode = 0, epfd = 0, sfd = 0;
   struct lock_content lock_content = {.pid = getpid()};
   struct mimic_bpf* skel = NULL;
   bool tc_hook_created = false;
-  struct bpf_tc_hook tc_hook_egress = {};
-  struct bpf_tc_opts tc_opts_egress = {};
+  struct bpf_tc_hook tc_hook_egress;
+  struct bpf_tc_opts tc_opts_egress;
   struct bpf_link* xdp_ingress = NULL;
   struct ring_buffer* log_rb = NULL;
 

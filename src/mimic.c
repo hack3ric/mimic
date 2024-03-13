@@ -12,6 +12,8 @@ int main(int argc, char** argv) {
       return subcmd_run(&args.run);
     case CMD_show:
       return subcmd_show(&args.show);
+    case CMD_config:
+      return subcmd_config(&args.config);
     default:
       break;
   }

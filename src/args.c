@@ -16,9 +16,9 @@ static const char args_doc[] =
   "\n"
   "Commands:\n"
   "\n"
-  "  run                        Run Mimic on an network interface\n"
-  "  show                       View details of a currently running instance\n"
-  "  edit                       Configure filters and preferences on the fly\n"
+  "      run                    Run Mimic on an network interface\n"
+  "      show                   Show overview of a currently running instance\n"
+  "      config                 Get or set configurations of an instance\n"
   "\n"
   "Options:";
 
@@ -55,7 +55,7 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
     case ARGP_KEY_ARG:
       gen_cmd_parse(run);
       gen_cmd_parse(show);
-      // gen_cmd_parse(edit);
+      gen_cmd_parse(config);
       log_error("unknown command '%s'", arg);
       exit(1);
       break;

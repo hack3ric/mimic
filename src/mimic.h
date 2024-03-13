@@ -11,28 +11,35 @@ struct arguments {
     CMD_NULL,
     CMD_run,
     CMD_show,
-    CMD_edit,
+    CMD_config,
   } cmd;
   union {
     struct run_arguments {
+      char* ifname;
       char* filters[8];
       unsigned int filter_count;
-      char* ifname;
     } run;
     struct show_arguments {
       char* ifname;
       bool show_process, show_command;
       bool json;
     } show;
+    struct config_arguments {
+      char* ifname;
+      char* key;
+      char* value;
+    } config;
   };
 };
 
 extern const struct argp argp;
 extern const struct argp run_argp;
 extern const struct argp show_argp;
+extern const struct argp config_argp;
 
 int subcmd_run(struct run_arguments* args);
 int subcmd_show(struct show_arguments* args);
+int subcmd_config(struct config_arguments* args);
 
 struct lock_content {
   pid_t pid;
