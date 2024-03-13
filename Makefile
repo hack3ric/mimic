@@ -4,7 +4,14 @@ BPFTOOL ?= /usr/sbin/bpftool
 # -g is required (by Clang) to generate BTF
 # for bpf-gcc, use -gbtf and -mco-re
 BPF_CFLAGS ?= --target=bpf -mcpu=v3 -g -O3
+MODE ?= debug
+
+ifeq ($(MODE), debug)
+CFLAGS ?= -O0
+CFLAGS += -g
+else ifeq ($(MODE), release)
 CFLAGS ?= -O2
+endif
 
 ifeq ($(KERNEL_UNAME),)
 KERNEL_VMLINUX = /sys/kernel/btf/vmlinux
