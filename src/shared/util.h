@@ -89,35 +89,47 @@
 #define strerrno strerror(errno)
 
 // Same as `try`, but returns -errno
-#define try_errno(expr, ...)                  \
-  ({                                          \
-    int _ret = (expr);                        \
-    if (_ret < 0) ret(-errno, ##__VA_ARGS__); \
-    _ret;                                     \
+#define try_errno(expr, ...)      \
+  ({                              \
+    int _ret = (expr);            \
+    if (_ret < 0) {               \
+      _ret = -errno;              \
+      ret(-errno, ##__VA_ARGS__); \
+    }                             \
+    _ret;                         \
   })
 
 // `try_errno` but `cleanup`.
-#define try2_errno(expr, ...)                     \
-  ({                                              \
-    int _ret = (expr);                            \
-    if (_ret < 0) cleanup(-errno, ##__VA_ARGS__); \
-    _ret;                                         \
+#define try2_errno(expr, ...)       \
+  ({                                \
+    int _ret = (expr);              \
+    if (_ret < 0) {                 \
+      _ret = -errno;                \
+      cleanup(_ret, ##__VA_ARGS__); \
+    }                               \
+    _ret;                           \
   })
 
 // Similar to `try_errno`, but for function that returns a pointer.
-#define try_ptr(expr, ...)                 \
-  ({                                       \
-    void* _ret = (expr);                   \
-    if (!_ret) ret(-errno, ##__VA_ARGS__); \
-    _ret;                                  \
+#define try_ptr(expr, ...)      \
+  ({                            \
+    void* _ptr = (expr);        \
+    if (!_ptr) {                \
+      int _ret = -errno;        \
+      ret(_ret, ##__VA_ARGS__); \
+    }                           \
+    _ptr;                       \
   })
 
 // Tests int return value from a function. Used for functions that returns non-zero error.
-#define try2_ptr(expr, ...)                    \
-  ({                                           \
-    void* _ret = (expr);                       \
-    if (!_ret) cleanup(-errno, ##__VA_ARGS__); \
-    _ret;                                      \
+#define try2_ptr(expr, ...)         \
+  ({                                \
+    void* _ptr = (expr);            \
+    if (!_ptr) {                    \
+      int _ret = -errno;            \
+      cleanup(_ret, ##__VA_ARGS__); \
+    }                               \
+    _ptr;                           \
   })
 
 #endif  // _MIMIC_BPF
