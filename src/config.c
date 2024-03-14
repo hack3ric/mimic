@@ -14,14 +14,14 @@
 #include "shared/util.h"
 
 static const struct argp_option config_args_options[] = {
-  {"add", 'a', NULL, 0, "Add values to a set", 0},
-  {"delete", 'd', NULL, 0, "Remove values from a set", 0},
-  {"clear", 'c' << 8, NULL, 0, "Clear the configuration. Set value to null, or remove all elements from a set", 1},
+  {"add", 'a', NULL, 0, N_("Add values to a set"), 0},
+  {"delete", 'd', NULL, 0, N_("Remove values from a set"), 0},
+  {"clear", 'c' << 8, NULL, 0, N_("Clear the configuration. Set value to null, or remove all elements from a set"), 1},
   {}};
 
 static inline void ensure_exclusitivity(struct config_arguments* args) {
   if (args->add || args->delete || args->clear) {
-    log_error("cannot specify more than one of --add, --delete and --clear");
+    log_error(_("cannot specify more than one of --add, --delete and --clear"));
     exit(1);
   }
 }
@@ -72,7 +72,7 @@ static inline error_t config_args_parse_opt(int key, char* arg, struct argp_stat
   return 0;
 }
 
-const struct argp config_argp = {config_args_options, config_args_parse_opt, "<interface> <key> [value...]", NULL};
+const struct argp config_argp = {config_args_options, config_args_parse_opt, N_("<interface> <key> [value...]"), NULL};
 
 // [lower, upper]
 static inline int parse_int_bounded(const char* str, int lower, int upper, int* value) {

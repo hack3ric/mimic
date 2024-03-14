@@ -30,9 +30,9 @@
 #include "shared/util.h"
 
 static const struct argp_option run_args_options[] = {
-  {"filter", 'f', "FILTER", 0, "Specify what packets to process. This may be specified for multiple times."},
-  {"verbose", 'v', NULL, 0, "Output more information"},
-  {"quiet", 'q', NULL, 0, "Output less information"},
+  {"filter", 'f', N_("FILTER"), 0, N_("Specify what packets to process. This may be specified for multiple times.")},
+  {"verbose", 'v', NULL, 0, N_("Output more information")},
+  {"quiet", 'q', NULL, 0, N_("Output less information")},
   {}};
 
 static inline error_t run_args_parse_opt(int key, char* arg, struct argp_state* state) {
@@ -67,7 +67,7 @@ static inline error_t run_args_parse_opt(int key, char* arg, struct argp_state* 
   return 0;
 }
 
-const struct argp run_argp = {run_args_options, run_args_parse_opt, "<interface>", NULL};
+const struct argp run_argp = {run_args_options, run_args_parse_opt, N_("<interface>"), NULL};
 
 static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts,
                                       const struct bpf_program* prog, char* name) {
@@ -291,7 +291,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
         try2(ring_buffer__poll(log_rb, 0), _("failed to poll ring buffer: %s"), strerror(-_ret));
       } else if (events[i].data.fd == sfd) {
         len = try2_errno(read(sfd, &siginfo, sizeof(siginfo)), _("failed to read signalfd: %s"), strerror(-_ret));
-        if (len != sizeof(siginfo)) cleanup(1, N_("len != sizeof(siginfo)"));
+        if (len != sizeof(siginfo)) cleanup(1, "len != sizeof(siginfo)");
         switch (siginfo.ssi_signo) {
           case SIGINT:
             fprintf(stderr, "\r");
@@ -321,7 +321,7 @@ cleanup:
 }
 
 int subcmd_run(struct run_arguments* args) {
-  if (geteuid() != 0) ret(1, _("you cannot perform run Mimic unless you are root"));
+  if (geteuid() != 0) ret(1, _("you cannot run Mimic unless you are root"));
 
   int ifindex = if_nametoindex(args->ifname);
   if (!ifindex) ret(1, _("no interface named '%s'"), args->ifname);
@@ -337,7 +337,7 @@ int subcmd_run(struct run_arguments* args) {
     if (errno == ENOENT) {
       try_errno(mkdir("/run/mimic", 0755), _("failed to create /run/mimic: %s"), strerror(-_ret));
     } else {
-      ret(-errno, "failed to stat /run/mimic: %s", strerror(errno));
+      ret(-errno, _("failed to stat /run/mimic: %s"), strerror(errno));
     }
   }
   char lock[32];

@@ -13,7 +13,7 @@ const char* argp_program_bug_address = "https://github.com/hack3ric/mimic/issues
 /* mimic (global options) */
 
 static const struct argp_option args_options[] = {{}};
-static const char args_doc[] =
+static const char args_doc[] = N_(
   "\n"
   "Commands:\n"
   "\n"
@@ -21,7 +21,7 @@ static const char args_doc[] =
   "      show                   Show overview of a currently running instance\n"
   "      config                 Get or set configurations of an instance\n"
   "\n"
-  "Options:";
+  "Options:");
 
 static inline error_t argp_parse_cmd(struct argp_state* state, const char* cmdname, const struct argp* cmd_argp,
                                      void* args) {
@@ -71,4 +71,4 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
   return 0;
 }
 
-const struct argp argp = {args_options, args_parse_opt, "COMMAND [OPTION...]", args_doc};
+const struct argp argp = {args_options, args_parse_opt, N_("COMMAND [OPTION...]"), args_doc};

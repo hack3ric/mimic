@@ -45,7 +45,7 @@ static inline error_t show_args_parse_opt(int key, char* arg, struct argp_state*
   return 0;
 }
 
-const struct argp show_argp = {show_args_options, show_args_parse_opt, "<interface>", NULL};
+const struct argp show_argp = {show_args_options, show_args_parse_opt, N_("<interface>"), NULL};
 
 int subcmd_show(struct show_arguments* args) {
   int retcode;
