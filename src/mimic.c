@@ -5,7 +5,7 @@
 
 int main(int argc, char** argv) {
   struct arguments args = {};
-  try(argp_parse(&argp, argc, argv, ARGP_IN_ORDER, NULL, &args), "error parsing arguments");
+  try(argp_parse(&argp, argc, argv, ARGP_IN_ORDER, NULL, &args), _("error parsing arguments"));
 
   switch (args.cmd) {
     case CMD_run:

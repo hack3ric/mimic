@@ -11,6 +11,13 @@
 #endif
 // clang-format on
 
+// Reserved for gettext use in the future.
+//
+// On eBPF, these markers are just for convenience, so that I can get a comprehensive list of texts. In the future,
+// logging should be rewritten so that eBPF should only send structurized information and let userspace call gettext.
+#define _(text) text
+#define N_(text) text
+
 #define redecl(_type, _name, _off, _ctx, _ret)                              \
   _name = ({                                                                \
     _type* _ptr = (void*)(__u64)(_ctx)->data + (_off);                      \

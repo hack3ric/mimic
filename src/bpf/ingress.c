@@ -52,7 +52,7 @@ int ingress_handler(struct xdp_md* xdp) {
   u32 vkey = SETTINGS_LOG_VERBOSITY;
   u32 log_verbosity = *(u32*)try_ptr_or_drop(bpf_map_lookup_elem(&mimic_settings, &vkey));
 
-  log_pkt(log_verbosity, LOG_LEVEL_DEBUG, "ingress: matched (fake) TCP packet", QUARTET_TCP);
+  log_pkt(log_verbosity, LOG_LEVEL_DEBUG, _("ingress: matched (fake) TCP packet"), QUARTET_TCP);
 
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP, true);
   struct connection* conn = try_ptr_or_drop(get_conn(&conn_key));
@@ -73,9 +73,9 @@ int ingress_handler(struct xdp_md* xdp) {
     bpf_spin_unlock(&conn->lock);
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
-    log_pkt(log_verbosity, LOG_LEVEL_WARN, "ingress: received RST", QUARTET_TCP);
+    log_pkt(log_verbosity, LOG_LEVEL_WARN, _("ingress: received RST"), QUARTET_TCP);
     if (rst_result == RST_DESTROYED) {
-      log_pkt(log_verbosity, LOG_LEVEL_WARN, "ingress: destroyed connection", QUARTET_TCP);
+      log_pkt(log_verbosity, LOG_LEVEL_WARN, _("ingress: destroyed connection"), QUARTET_TCP);
     }
     return XDP_DROP;
   }
@@ -138,10 +138,10 @@ int ingress_handler(struct xdp_md* xdp) {
   ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
   if (newly_estab) {
-    log_pkt(log_verbosity, LOG_LEVEL_INFO, "ingress: established connection", QUARTET_TCP);
+    log_pkt(log_verbosity, LOG_LEVEL_INFO, _("ingress: established connection"), QUARTET_TCP);
   }
-  log_trace("ingress: received TCP packet: seq = %u, ack_seq = %u", bpf_ntohl(tcp->seq), bpf_ntohl(tcp->ack_seq));
-  log_trace("ingress: current state: seq = %u, ack_seq = %u", seq, ack_seq);
+  log_trace(_("ingress: received TCP packet: seq = %u, ack_seq = %u"), bpf_ntohl(tcp->seq), bpf_ntohl(tcp->ack_seq));
+  log_trace(_("ingress: current state: seq = %u, ack_seq = %u"), seq, ack_seq);
 
   __be32 ipv4_saddr = 0, ipv4_daddr = 0;
   struct in6_addr ipv6_saddr = {}, ipv6_daddr = {};

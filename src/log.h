@@ -18,19 +18,20 @@ static const char* _log_prefixes[] = {
   _LOG_ERROR_PREFIX, _LOG_WARN_PREFIX, _LOG_INFO_PREFIX, _LOG_DEBUG_PREFIX, _LOG_TRACE_PREFIX,
 };
 
-#define log(_l, fmt, ...) \
-  if (log_verbosity >= (_l)) fprintf(stderr, "%s" fmt "\n", _log_prefixes[_l], ##__VA_ARGS__)
+#define log(_l, fmt, ...)                       \
+  do {                                          \
+    if (log_verbosity >= (_l)) {                \
+      fprintf(stderr, "%s", _log_prefixes[_l]); \
+      fprintf(stderr, fmt, ##__VA_ARGS__);      \
+      fprintf(stderr, "\n");                    \
+    }                                           \
+  } while (0)
 
-#define log_error(fmt, ...) \
-  if (LOG_ALLOW_ERROR) fprintf(stderr, _LOG_ERROR_PREFIX fmt "\n", ##__VA_ARGS__)
-#define log_warn(fmt, ...) \
-  if (LOG_ALLOW_WARN) fprintf(stderr, _LOG_WARN_PREFIX fmt "\n", ##__VA_ARGS__)
-#define log_info(fmt, ...) \
-  if (LOG_ALLOW_INFO) fprintf(stderr, _LOG_INFO_PREFIX fmt "\n", ##__VA_ARGS__)
-#define log_debug(fmt, ...) \
-  if (LOG_ALLOW_DEBUG) fprintf(stderr, _LOG_DEBUG_PREFIX fmt "\n", ##__VA_ARGS__)
-#define log_trace(fmt, ...) \
-  if (LOG_ALLOW_TRACE) fprintf(stderr, _LOG_TRACE_PREFIX fmt "\n", ##__VA_ARGS__)
+#define log_error(fmt, ...) log(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define log_warn(fmt, ...) log(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)
+#define log_info(fmt, ...) log(LOG_LEVEL_INFO, fmt, ##__VA_ARGS__)
+#define log_debug(fmt, ...) log(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define log_trace(fmt, ...) log(LOG_LEVEL_TRACE, fmt, ##__VA_ARGS__)
 
 int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list args);
 

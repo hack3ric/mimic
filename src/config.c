@@ -81,23 +81,23 @@ static inline int parse_int_bounded(const char* str, int lower, int upper, int* 
   errno = 0;
   v = strtol(str, &inval, 10);
   if (str[0] == '\0' || inval[0] != '\0') {
-    ret(1, "invalid value (expected any integer between %d and %d)", lower, upper);
+    ret(1, _("invalid value (expected any integer between %d and %d)"), lower, upper);
   } else if (v < lower || v > upper || errno == ERANGE) {
-    ret(1, "value out of range (expected any integer between %d and %d)", lower, upper);
+    ret(1, _("value out of range (expected any integer between %d and %d)"), lower, upper);
   }
   *value = v;
   return 0;
 }
 
 int subcmd_config(struct config_arguments* args) {
-  if (!args->key) ret(1, "no key provided");
+  if (!args->key) ret(1, _("no key provided"));
 
   int ifindex = if_nametoindex(args->ifname);
-  if (!ifindex) ret(1, "no interface named '%s'", args->ifname);
+  if (!ifindex) ret(1, _("no interface named '%s'"), args->ifname);
 
   char lock[32];
   snprintf(lock, sizeof(lock), "/run/mimic/%d.lock", ifindex);
-  FILE* lock_file = try_ptr(fopen(lock, "r"), "failed to open lock file at %s: %s", lock, strerror(-_ret));
+  FILE* lock_file = try_ptr(fopen(lock, "r"), _("failed to open lock file at %s: %s"), lock, strerror(-_ret));
   struct lock_content lock_content;
   try(lock_read(lock_file, &lock_content));
   fclose(lock_file);
@@ -106,25 +106,25 @@ int subcmd_config(struct config_arguments* args) {
     int value;
     try(parse_int_bounded(args->values[0], 0, 4, &value));
 
-    int settings_fd = try(bpf_map_get_fd_by_id(lock_content.settings_id), "failed to get fd of map '%s': %s",
+    int settings_fd = try(bpf_map_get_fd_by_id(lock_content.settings_id), _("failed to get fd of map '%s': %s"),
                           "mimic_settings", strerror(-_ret));
     __u32 k = SETTINGS_LOG_VERBOSITY, v;
-    try(bpf_map_lookup_elem(settings_fd, &k, &v), "failed to get log verbosity: %s", strerror(-_ret));
+    try(bpf_map_lookup_elem(settings_fd, &k, &v), _("failed to get log verbosity: %s"), strerror(-_ret));
 
     if (args->values[0]) {
-      try(bpf_map_update_elem(settings_fd, &k, &value, BPF_EXIST), "failed to update log verbosity: %s",
+      try(bpf_map_update_elem(settings_fd, &k, &value, BPF_EXIST), _("failed to update log verbosity: %s"),
           strerror(-_ret));
 
       sigset_t sigset = {};
       sigaddset(&sigset, SIGUSR1);
-      try_errno(sigprocmask(SIG_SETMASK, &sigset, NULL), "error setting signal mask: %s", strerror(-_ret));
+      try_errno(sigprocmask(SIG_SETMASK, &sigset, NULL), _("error setting signal mask: %s"), strerror(-_ret));
 
-      try_errno(kill(lock_content.pid, SIGUSR1), "failed to send signal to instance: %s", strerror(-_ret));
+      try_errno(kill(lock_content.pid, SIGUSR1), _("failed to send signal to instance: %s"), strerror(-_ret));
 
-      int sigfd = try_errno(signalfd(-1, &sigset, SFD_NONBLOCK), "error creating signalfd: %s", strerror(-_ret));
+      int sigfd = try_errno(signalfd(-1, &sigset, SFD_NONBLOCK), _("error creating signalfd: %s"), strerror(-_ret));
       struct pollfd pfd = {.fd = sigfd, .events = POLLIN};
-      if (try_errno(poll(&pfd, 1, 1000), "error polling signal: %s", strerror(-_ret)) == 0) {
-        log_warn("listening for returning signal timed out");
+      if (try_errno(poll(&pfd, 1, 1000), _("error polling signal: %s"), strerror(-_ret)) == 0) {
+        log_warn(_("listening for returning signal timed out"));
       }
     } else {
       printf("%d\n", v);
@@ -132,7 +132,7 @@ int subcmd_config(struct config_arguments* args) {
   } else if (strcmp(args->key, "whitelist") == 0) {
     // TODO
   } else {
-    ret(1, "unknown key '%s'", args->key);
+    ret(1, _("unknown key '%s'"), args->key);
   }
 
   return 0;

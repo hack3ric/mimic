@@ -5,6 +5,7 @@
 
 #include "log.h"
 #include "mimic.h"
+#include "shared/util.h"
 
 const char* argp_program_version = "0.2.0";
 const char* argp_program_bug_address = "https://github.com/hack3ric/mimic/issues";
@@ -56,7 +57,7 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       gen_cmd_parse(run);
       gen_cmd_parse(show);
       gen_cmd_parse(config);
-      log_error("unknown command '%s'", arg);
+      log_error(_("unknown command '%s'"), arg);
       exit(1);
       break;
     case 'a':
