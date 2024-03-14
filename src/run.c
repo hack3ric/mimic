@@ -261,11 +261,16 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   xdp_ingress = try2_ptr(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
                          _("failed to attach XDP program: %s"), strerror(-_ret));
 
-  log_info(_("Mimic successfully deployed at %s with filters:"), args->ifname);
-  for (int i = 0; i < args->filter_count; i++) {
-    char fmt[FILTER_FMT_MAX_LEN];
-    pkt_filter_fmt(&filters[i], fmt);
-    log_info("  * %s", fmt);
+  if (args->filter_count <= 0) {
+    log_info(_("Mimic successfully deployed at %s"), args->ifname);
+    log_warn(_("no filter specified"));
+  } else {
+    log_info(_("Mimic successfully deployed at %s with filters:"), args->ifname);
+    for (int i = 0; i < args->filter_count; i++) {
+      char fmt[FILTER_FMT_MAX_LEN];
+      pkt_filter_fmt(&filters[i], fmt);
+      log_info("  * %s", fmt);
+    }
   }
 
   epfd = try_errno(epoll_create1(0), _("failed to create epoll: %s"), strerror(-_ret));
@@ -331,10 +336,11 @@ int subcmd_run(struct run_arguments* args) {
   int ifindex = if_nametoindex(args->ifname);
   if (!ifindex) ret(1, _("no interface named '%s'"), args->ifname);
 
-  if (args->filter_count == 0) ret(1, _("no filter specified"));
   struct pkt_filter filters[args->filter_count];
-  memset(filters, 0, args->filter_count * sizeof(*filters));
-  try(parse_filters(args, filters));
+  if (args->filter_count > 0) {
+    memset(filters, 0, args->filter_count * sizeof(*filters));
+    try(parse_filters(args, filters));
+  }
 
   // Lock file
   struct stat st = {};

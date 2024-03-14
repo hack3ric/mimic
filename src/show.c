@@ -69,7 +69,7 @@ int subcmd_show(struct show_arguments* args) {
     char buf[FILTER_FMT_MAX_LEN];
     retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
     if (retcode < 0 && retcode != -ENOENT) {
-      ret(retcode, _("failed to get first key of map '%s': %s"), "mimic_whitelist", strerror(-retcode));
+      ret(retcode, _("failed to get next key of map '%s': %s"), "mimic_whitelist", strerror(-retcode));
     }
     if (retcode != -ENOENT) {
       pkt_filter_fmt(&filter, buf);
@@ -97,7 +97,7 @@ int subcmd_show(struct show_arguments* args) {
     char local[IP_PORT_MAX_LEN], remote[IP_PORT_MAX_LEN];
     retcode = bpf_map_get_next_key(conns_fd, NULL, &key);
     if (retcode < 0 && retcode != -ENOENT) {
-      ret(retcode, _("failed to get first key of map '%s': %s"), "mimic_conns", strerror(-retcode));
+      ret(retcode, _("failed to get next key of map '%s': %s"), "mimic_conns", strerror(-retcode));
     }
     if (retcode == -ENOENT) {
       printf(_("\x1b[1;33m\x1b[1mCONNECTION\x1b[0m no active connection\n"));
