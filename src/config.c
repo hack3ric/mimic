@@ -138,12 +138,15 @@ int subcmd_config(struct config_arguments* args) {
     } else {
       printf("%d\n", v);
     }
+
   } else if (strcmp(args->key, "whitelist") == 0) {
     int whitelist_fd = try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
                            "mimic_whitelist", strerror(-_ret));
     int i;
     struct pkt_filter filter;
     char buf[FILTER_FMT_MAX_LEN];
+
+    // TODO: send changelog using mimic_log_rb
     if (args->values[0]) {
       if (args->add) {
         for (i = 0; i < CONFIG_MAX_VALUES; i++) {
@@ -162,15 +165,20 @@ int subcmd_config(struct config_arguments* args) {
           try(bpf_map_delete_elem(whitelist_fd, &filter), _("failed to delete filter '%s': %s"), args->values[i],
               _ret == -ENOENT ? _("filter not found") : strerror(-_ret));
         }
-        retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
-        if (retcode == -ENOENT) log_warn(_("all filters removed"));
+        // retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
+        // if (retcode == -ENOENT) log_warn(_("all filters removed"));
       } else {
-        ret(1, "need to specify either --add or --delete");
+        ret(1, _("need to specify either --add or --delete"));
       }
     } else if (args->clear) {
-      for (i = 0; i < CONFIG_MAX_VALUES; i++) {
-        // TODO
+      while (true) {
+        retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
+        if (retcode == -ENOENT) break;
+        if (retcode < 0) {
+          ret(retcode, _("failed to get next key of map '%s': %s"), "mimic_whitelist", strerror(-retcode));
+        }
       }
+      // log_warn(_("all filters removed"))
     } else {
       retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
       if (retcode < 0 && retcode != -ENOENT) {
