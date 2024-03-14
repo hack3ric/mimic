@@ -1,13 +1,17 @@
 #include <argp.h>
+#include <asm-generic/errno-base.h>
 #include <bpf/bpf.h>
 #include <linux/bpf.h>
+#include <linux/bpf_common.h>
 #include <net/if.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/select.h>
 #include <sys/signalfd.h>
+#include <unistd.h>
 
 #include "log.h"
 #include "mimic.h"
@@ -90,6 +94,8 @@ static inline int parse_int_bounded(const char* str, int lower, int upper, int* 
 }
 
 int subcmd_config(struct config_arguments* args) {
+  int retcode;
+
   if (!args->key) ret(1, _("no key provided"));
 
   int ifindex = if_nametoindex(args->ifname);
@@ -104,16 +110,17 @@ int subcmd_config(struct config_arguments* args) {
 
   if (strcmp(args->key, "log.verbosity") == 0) {
     int value;
-    try(parse_int_bounded(args->values[0], 0, 4, &value));
+    if (args->values[0]) try(parse_int_bounded(args->values[0], 0, 4, &value));
 
     int settings_fd = try(bpf_map_get_fd_by_id(lock_content.settings_id), _("failed to get fd of map '%s': %s"),
                           "mimic_settings", strerror(-_ret));
     __u32 k = SETTINGS_LOG_VERBOSITY, v;
-    try(bpf_map_lookup_elem(settings_fd, &k, &v), _("failed to get log verbosity: %s"), strerror(-_ret));
+    try(bpf_map_lookup_elem(settings_fd, &k, &v), _("failed to get value from map '%s': %s"), "mimic_settings",
+        strerror(-_ret));
 
     if (args->values[0]) {
-      try(bpf_map_update_elem(settings_fd, &k, &value, BPF_EXIST), _("failed to update log verbosity: %s"),
-          strerror(-_ret));
+      try(bpf_map_update_elem(settings_fd, &k, &value, BPF_EXIST), _("failed to update value of map '%s': %s"),
+          "mimic_settings", strerror(-_ret));
 
       sigset_t sigset = {};
       sigaddset(&sigset, SIGUSR1);
@@ -126,11 +133,67 @@ int subcmd_config(struct config_arguments* args) {
       if (try_errno(poll(&pfd, 1, 1000), _("error polling signal: %s"), strerror(-_ret)) == 0) {
         log_warn(_("listening for returning signal timed out"));
       }
+      close(sigfd);
+      close(settings_fd);
     } else {
       printf("%d\n", v);
     }
   } else if (strcmp(args->key, "whitelist") == 0) {
-    // TODO
+    int whitelist_fd = try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
+                           "mimic_whitelist", strerror(-_ret));
+    int i;
+    struct pkt_filter filter;
+    char buf[FILTER_FMT_MAX_LEN];
+    if (args->values[0]) {
+      if (args->add) {
+        for (i = 0; i < CONFIG_MAX_VALUES; i++) {
+          if (!args->values[i]) break;
+          memset(&filter, 0, sizeof(filter));
+          try(parse_filter(args->values[i], &filter));
+          bool value = true;
+          try(bpf_map_update_elem(whitelist_fd, &filter, &value, BPF_ANY), _("failed to add filter '%s': %s"),
+              args->values[i], strerror(-_ret));
+        }
+      } else if (args->delete) {
+        for (i = 0; i < CONFIG_MAX_VALUES; i++) {
+          if (!args->values[i]) break;
+          memset(&filter, 0, sizeof(filter));
+          try(parse_filter(args->values[i], &filter));
+          try(bpf_map_delete_elem(whitelist_fd, &filter), _("failed to delete filter '%s': %s"), args->values[i],
+              _ret == -ENOENT ? _("filter not found") : strerror(-_ret));
+        }
+        retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
+        if (retcode == -ENOENT) log_warn(_("all filters removed"));
+      } else {
+        ret(1, "need to specify either --add or --delete");
+      }
+    } else if (args->clear) {
+      for (i = 0; i < CONFIG_MAX_VALUES; i++) {
+        // TODO
+      }
+    } else {
+      retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
+      if (retcode < 0 && retcode != -ENOENT) {
+        ret(retcode, _("failed to get next key of map '%s': %s"), "mimic_whitelist", strerror(-retcode));
+      }
+      printf("[");
+      if (retcode != -ENOENT) {
+        pkt_filter_fmt(&filter, buf);
+        printf("\n  \"%s\"", buf);
+        while (true) {
+          retcode = bpf_map_get_next_key(whitelist_fd, &filter, &filter);
+          if (retcode < 0) {
+            if (retcode == -ENOENT) break;
+            ret(retcode, _("failed to get next key of map '%s': %s"), "mimic_whitelist", strerror(-retcode));
+          }
+          pkt_filter_fmt(&filter, buf);
+          printf(",\n  \"%s\"", buf);
+        }
+        printf("\n");
+      }
+      printf("]\n");
+    }
+    close(whitelist_fd);
   } else {
     ret(1, _("unknown key '%s'"), args->key);
   }
