@@ -60,8 +60,6 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       log_error(_("unknown command '%s'"), arg);
       exit(1);
       break;
-    case 'a':
-      break;
     case ARGP_KEY_NO_ARGS:
       argp_usage(state);
       break;
