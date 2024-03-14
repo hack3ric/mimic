@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <sys/types.h>
 
+#include "shared/filter.h"
+
 #define CONFIG_MAX_VALUES 16
 
 struct arguments {
@@ -24,7 +26,6 @@ struct arguments {
     struct show_arguments {
       char* ifname;
       bool show_process, show_command;
-      bool json;
     } show;
     struct config_arguments {
       char* ifname;
@@ -52,5 +53,7 @@ struct lock_content {
 
 int lock_write(int fd, const struct lock_content* c);
 int lock_read(FILE* file, struct lock_content* c);
+
+int parse_filter(const char* filter_str, struct pkt_filter* filter);
 
 #endif  // _MIMIC_MIMIC_H
