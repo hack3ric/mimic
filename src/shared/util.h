@@ -86,8 +86,6 @@
 // `errno` is not available in BPF
 #ifndef _MIMIC_BPF
 
-#define strerrno strerror(errno)
-
 // Same as `try`, but returns -errno
 #define try_errno(expr, ...)      \
   ({                              \

@@ -57,7 +57,7 @@ int subcmd_show(struct show_arguments* args) {
 
   char lock[32];
   snprintf(lock, sizeof(lock), "/run/mimic/%d.lock", ifindex);
-  FILE* lock_file = try_ptr(fopen(lock, "r"), "failed to open lock file at %s: %s", lock, strerrno);
+  FILE* lock_file = try_ptr(fopen(lock, "r"), "failed to open lock file at %s: %s", lock, strerror(-_ret));
   struct lock_content lock_content;
   try(lock_read(lock_file, &lock_content));
   fclose(lock_file);

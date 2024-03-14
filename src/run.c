@@ -175,11 +175,12 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   struct bpf_link* xdp_ingress = NULL;
   struct ring_buffer* log_rb = NULL;
 
-  skel = try2_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerrno);
+  skel = try2_ptr(mimic_bpf__open(), "failed to open BPF program: %s", strerror(-_ret));
 
-  if (mimic_bpf__load(skel)) {
-    log_error("failed to load BPF program: %s", strerrno);
-    if (errno == EINVAL) {
+  retcode = mimic_bpf__load(skel);
+  if (retcode < 0) {
+    log_error("failed to load BPF program: %s", strerror(-retcode));
+    if (-retcode == EINVAL) {
       FILE* modules = fopen("/proc/modules", "r");
       char buf[256];
       while (fgets(buf, sizeof(buf), modules)) {
@@ -189,7 +190,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
     einval_end:
       fclose(modules);
     }
-    cleanup(-errno);
+    cleanup(retcode);
   }
 
   // Save state to lock file
@@ -200,14 +201,14 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   int egress_handler_fd, ingress_handler_fd;
   int mimic_whitelist_fd, mimic_conns_fd, mimic_settings_fd, mimic_log_rb_fd;
 
-#define _get_id(_Type, _TypeFull, _Name)                                                       \
-  ({                                                                                           \
-    _Name##_fd = try2(bpf_##_TypeFull##__fd(skel->_Type##s._Name),                             \
-                      "failed to get fd of " #_TypeFull " '" #_Name "': %s", strerror(-_ret)); \
-    memset(&_Type##_info, 0, _Type##_len);                                                     \
-    try2(bpf_obj_get_info_by_fd(_Name##_fd, &_Type##_info, &_Type##_len),                      \
-         "failed to get info of " #_TypeFull " '" #_Name "': %s", strerror(-_ret));            \
-    _Type##_info.id;                                                                           \
+#define _get_id(_Type, _TypeFull, _Name)                                                                          \
+  ({                                                                                                              \
+    _Name##_fd = try2(bpf_##_TypeFull##__fd(skel->_Type##s._Name), "failed to get fd of " #_TypeFull " '%s': %s", \
+                      #_Name, strerror(-_ret));                                                                   \
+    memset(&_Type##_info, 0, _Type##_len);                                                                        \
+    try2(bpf_obj_get_info_by_fd(_Name##_fd, &_Type##_info, &_Type##_len),                                         \
+         "failed to get info of " #_TypeFull " '%s': %s", #_Name, strerror(-_ret));                               \
+    _Type##_info.id;                                                                                              \
   })
 
 #define _get_prog_id(_name) _get_id(prog, program, _name)
@@ -244,7 +245,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
 
   // Get ring buffer in advance so we can return earlier if error
   log_rb = try2_ptr(ring_buffer__new(mimic_log_rb_fd, handle_event, NULL, NULL), "failed to attach BPF ring buffer: %s",
-                    strerrno);
+                    strerror(-_ret));
 
   // TC and XDP
   tc_hook_egress =
@@ -253,7 +254,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   tc_hook_created = true;
   try2(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler, "egress"));
   xdp_ingress = try2_ptr(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
-                         "failed to attach XDP program: %s", strerrno);
+                         "failed to attach XDP program: %s", strerror(-_ret));
 
   log_info("Mimic successfully deployed at %s with filters:", args->ifname);
   for (int i = 0; i < args->filter_count; i++) {
@@ -262,34 +263,34 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
     log_info("  * %s", fmt);
   }
 
-  epfd = try_errno(epoll_create1(0), "failed to create epoll: %s", strerrno);
+  epfd = try_errno(epoll_create1(0), "failed to create epoll: %s", strerror(-_ret));
 
   // BPF log handler
   int log_rb_epfd = ring_buffer__epoll_fd(log_rb), nfds, i;
   struct epoll_event ev = {.events = EPOLLIN | EPOLLET, .data.fd = log_rb_epfd};
   struct epoll_event events[MAX_EVENTS];
-  try2_errno(epoll_ctl(epfd, EPOLL_CTL_ADD, log_rb_epfd, &ev), "epoll_ctl error: %s", strerrno);
+  try2_errno(epoll_ctl(epfd, EPOLL_CTL_ADD, log_rb_epfd, &ev), "epoll_ctl error: %s", strerror(-_ret));
 
   // Signal handler
   sigset_t mask = {};
   sigaddset(&mask, SIGINT);
   sigaddset(&mask, SIGUSR1);
-  sfd = try2_errno(signalfd(-1, &mask, SFD_NONBLOCK), "error creating signalfd: %s", strerrno);
+  sfd = try2_errno(signalfd(-1, &mask, SFD_NONBLOCK), "error creating signalfd: %s", strerror(-_ret));
   ev = (struct epoll_event){.events = EPOLLIN | EPOLLET, .data.fd = sfd};
-  try2_errno(epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &ev), "epoll_ctl error: %s", strerrno);
+  try2_errno(epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &ev), "epoll_ctl error: %s", strerror(-_ret));
 
   // Block default handler for signals of interest
-  try2_errno(sigprocmask(SIG_SETMASK, &mask, NULL), "error setting signal mask: %s", strerrno);
+  try2_errno(sigprocmask(SIG_SETMASK, &mask, NULL), "error setting signal mask: %s", strerror(-_ret));
 
   struct signalfd_siginfo siginfo;
   int len;
   while (true) {
-    nfds = try2_errno(epoll_wait(epfd, events, MAX_EVENTS, -1), "error waiting for epoll: %s", strerrno);
+    nfds = try2_errno(epoll_wait(epfd, events, MAX_EVENTS, -1), "error waiting for epoll: %s", strerror(-_ret));
     for (i = 0; i < nfds; i++) {
       if (events[i].data.fd == log_rb_epfd) {
         try2(ring_buffer__poll(log_rb, 0), "failed to poll ring buffer: %s", strerror(-_ret));
       } else if (events[i].data.fd == sfd) {
-        len = try2_errno(read(sfd, &siginfo, sizeof(siginfo)), "failed to read signalfd: %s", strerrno);
+        len = try2_errno(read(sfd, &siginfo, sizeof(siginfo)), "failed to read signalfd: %s", strerror(-_ret));
         if (len != sizeof(siginfo)) cleanup(1, "len != sizeof(siginfo)");
         switch (siginfo.ssi_signo) {
           case SIGINT:
@@ -334,16 +335,16 @@ int subcmd_run(struct run_arguments* args) {
   struct stat st = {};
   if (stat("/run/mimic", &st) == -1) {
     if (errno == ENOENT) {
-      try_errno(mkdir("/run/mimic", 0755), "failed to create /run/mimic: %s", strerrno);
+      try_errno(mkdir("/run/mimic", 0755), "failed to create /run/mimic: %s", strerror(-_ret));
     } else {
-      ret(-errno, "failed to stat /run/mimic: %s", strerrno);
+      ret(-errno, "failed to stat /run/mimic: %s", strerror(errno));
     }
   }
   char lock[32];
   snprintf(lock, sizeof(lock), "/run/mimic/%d.lock", ifindex);
   int lock_fd = open(lock, O_CREAT | O_EXCL | O_WRONLY, 0644);
   if (lock_fd < 0) {
-    log_error("failed to lock on %s at %s: %s", args->ifname, lock, strerrno);
+    log_error("failed to lock on %s at %s: %s", args->ifname, lock, strerror(errno));
     if (errno == EEXIST) {
       FILE* lock_file = fopen(lock, "r");
       if (lock_file) {

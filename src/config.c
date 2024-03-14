@@ -97,7 +97,7 @@ int subcmd_config(struct config_arguments* args) {
 
   char lock[32];
   snprintf(lock, sizeof(lock), "/run/mimic/%d.lock", ifindex);
-  FILE* lock_file = try_ptr(fopen(lock, "r"), "failed to open lock file at %s: %s", lock, strerrno);
+  FILE* lock_file = try_ptr(fopen(lock, "r"), "failed to open lock file at %s: %s", lock, strerror(-_ret));
   struct lock_content lock_content;
   try(lock_read(lock_file, &lock_content));
   fclose(lock_file);
@@ -106,8 +106,8 @@ int subcmd_config(struct config_arguments* args) {
     int value;
     try(parse_int_bounded(args->values[0], 0, 4, &value));
 
-    int settings_fd = try(bpf_map_get_fd_by_id(lock_content.settings_id),
-                          "failed to get fd of map 'mimic_settings': %s", strerror(-_ret));
+    int settings_fd = try(bpf_map_get_fd_by_id(lock_content.settings_id), "failed to get fd of map '%s': %s",
+                          "mimic_settings", strerror(-_ret));
     __u32 k = SETTINGS_LOG_VERBOSITY, v;
     try(bpf_map_lookup_elem(settings_fd, &k, &v), "failed to get log verbosity: %s", strerror(-_ret));
 
@@ -117,14 +117,14 @@ int subcmd_config(struct config_arguments* args) {
 
       sigset_t sigset = {};
       sigaddset(&sigset, SIGUSR1);
-      try_errno(sigprocmask(SIG_SETMASK, &sigset, NULL), "error setting signal mask: %s", strerrno);
+      try_errno(sigprocmask(SIG_SETMASK, &sigset, NULL), "error setting signal mask: %s", strerror(-_ret));
 
-      try_errno(kill(lock_content.pid, SIGUSR1), "failed to send SIGUSR1 to instance: %s", strerrno);
+      try_errno(kill(lock_content.pid, SIGUSR1), "failed to send signal to instance: %s", strerror(-_ret));
 
-      int sigfd = try_errno(signalfd(-1, &sigset, SFD_NONBLOCK), "error creating signalfd: %s", strerrno);
+      int sigfd = try_errno(signalfd(-1, &sigset, SFD_NONBLOCK), "error creating signalfd: %s", strerror(-_ret));
       struct pollfd pfd = {.fd = sigfd, .events = POLLIN};
-      if (try_errno(poll(&pfd, 1, 1000), "error polling signal: %s", strerrno) == 0) {
-        log_warn("listening for returning SIGUSR1 timed out");
+      if (try_errno(poll(&pfd, 1, 1000), "error polling signal: %s", strerror(-_ret)) == 0) {
+        log_warn("listening for returning signal timed out");
       }
     } else {
       printf("%d\n", v);
