@@ -6,6 +6,7 @@
 #include <bpf/bpf_helpers.h>
 
 #include "../shared/log.h"
+#include "../shared/filter.h"
 #include "mimic.h"
 
 extern struct mimic_log_rb_map {

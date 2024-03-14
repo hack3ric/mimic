@@ -1,15 +1,10 @@
 #include <argp.h>
-#include <arpa/inet.h>
-#include <bits/types/sig_atomic_t.h>
-#include <bits/types/sigset_t.h>
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/bpf.h>
-#include <linux/types.h>
 #include <net/if.h>
-#include <netinet/in.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -18,9 +13,9 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/signalfd.h>
-#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <linux/types.h>
 
 #include "bpf_skel.h"
 #include "log.h"

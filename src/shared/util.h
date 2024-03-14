@@ -6,6 +6,7 @@
 #include "../bpf/vmlinux.h"
 #include "../bpf/log.h"
 #else
+#include <features.h>
 #include <linux/pkt_cls.h>
 #include "../log.h"
 #endif

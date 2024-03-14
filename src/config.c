@@ -1,20 +1,21 @@
 #include <argp.h>
-#include <asm-generic/errno-base.h>
 #include <bpf/bpf.h>
+#include <errno.h>
 #include <linux/bpf.h>
-#include <linux/bpf_common.h>
+#include <linux/types.h>
 #include <net/if.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/select.h>
 #include <sys/signalfd.h>
 #include <unistd.h>
 
 #include "log.h"
 #include "mimic.h"
+#include "shared/filter.h"
 #include "shared/util.h"
 
 static const struct argp_option config_args_options[] = {

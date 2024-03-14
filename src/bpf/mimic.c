@@ -2,8 +2,6 @@
 
 #include <bpf/bpf_helpers.h>
 
-#include "../shared/conn.h"
-#include "../shared/util.h"
 #include "mimic.h"
 
 struct mimic_whitelist_map mimic_whitelist SEC(".maps");

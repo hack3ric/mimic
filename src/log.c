@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "log.h"
+#include "shared/log.h"
 
 int log_verbosity = 2;
 
