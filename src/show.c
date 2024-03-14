@@ -12,9 +12,8 @@
 #include "shared/filter.h"
 #include "shared/util.h"
 
-static const struct argp_option show_args_options[] = {{"process", 'p', NULL, 0, N_("Show process information")},
-                                                       {"connections", 'c', NULL, 0, N_("Show connections")},
-                                                       {}};
+static const struct argp_option show_args_options[] = {
+  {"process", 'p', NULL, 0, N_("Show process information")}, {"connections", 'c', NULL, 0, N_("Show connections")}, {}};
 
 static inline error_t show_args_parse_opt(int key, char* arg, struct argp_state* state) {
   struct show_arguments* args = (struct show_arguments*)state->input;
@@ -108,8 +107,8 @@ int subcmd_show(struct show_arguments* args) {
         ip_port_fmt(key.protocol, key.remote, key.remote_port, remote);
         printf(_("\x1b[1;32mCONNECTION\x1b[0m %s => %s\n"), local, remote);
 
-        try(bpf_map_lookup_elem(conns_fd, &key, &conn), _("failed to get value from map '%s': %s"), "mimic_conns",
-            strerror(-_ret));
+        try(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK), _("failed to get value from map '%s': %s"),
+            "mimic_conns", strerror(-_ret));
 
         printf(_("    \x1b[1mstate:\x1b[0m %s\n"), conn_state_to_str(conn.state));
         printf(_(" \x1b[1msequence:\x1b[0m seq 0x%08X, ack 0x%08X\n"), conn.seq, conn.ack_seq);
