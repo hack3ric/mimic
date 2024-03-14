@@ -279,7 +279,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   try2_errno(epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &ev), "epoll_ctl error: %s", strerrno);
 
   // Block default handler for signals of interest
-  sigprocmask(SIG_SETMASK, &mask, NULL);
+  try2_errno(sigprocmask(SIG_SETMASK, &mask, NULL), "error setting signal mask: %s", strerrno);
 
   struct signalfd_siginfo siginfo;
   int len;
@@ -295,7 +295,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
           case SIGINT:
             fprintf(stderr, "\r");
             log_warn("SIGINT received, exiting");
-            goto cleanup;
+            cleanup(0);
           case SIGUSR1:
             try2(sync_settings(skel, siginfo.ssi_pid), "failed to sync settings: %s", strerror(-_ret));
             break;

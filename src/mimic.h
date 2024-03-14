@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <sys/types.h>
 
+#define CONFIG_MAX_VALUES 16
+
 struct arguments {
   enum argument_cmd {
     CMD_NULL,
@@ -27,7 +29,8 @@ struct arguments {
     struct config_arguments {
       char* ifname;
       char* key;
-      char* value;
+      char* values[CONFIG_MAX_VALUES];
+      bool add, delete, clear;
     } config;
   };
 };
