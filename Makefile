@@ -35,7 +35,7 @@ MIMIC_SRCS := $(wildcard src/*.c)
 MIMIC_OBJS := $(MIMIC_SRCS:.c=.o)
 MIMIC_HEADERS := src/bpf_skel.h $(wildcard src/*.h) $(MIMIC_SHARED_HEADERS)
 
-.PHONY: build build-cli build-kmod generate generate-skel generate-vmlinux clean .FORCE
+.PHONY: build build-cli build-kmod generate generate-skel generate-vmlinux generate-pot clean .FORCE
 .FORCE:
 
 all: build
@@ -45,6 +45,7 @@ build-kmod: out/mimic.ko
 generate: generate-skel generate-vmlinux
 generate-skel: src/bpf_skel.h
 generate-vmlinux: src/bpf/vmlinux.h
+generate-pot: out/mimic.pot
 
 MKDIR_P = mkdir -p $(@D)
 
@@ -71,6 +72,10 @@ out/mimic.ko: .FORCE
 	$(MKDIR_P)
 	$(MAKE) -C src/kmod
 	cp src/kmod/mimic.ko $@
+
+out/mimic.pot:
+	$(MKDIR_P)
+	find src -type f -regex '.*\.[ch]' | xargs xgettext -k_ -kN_ -o $@ --
 
 clean:
 	$(MAKE) -C src/kmod $@
