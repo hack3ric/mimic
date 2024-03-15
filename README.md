@@ -10,8 +10,10 @@ Currently Mimic does not ship prebuilt binaries. You have to build it from sourc
 
 The following requirements need to be satisfied on every machine that would run Mimic:
 
-- Recent Linux kernel: version >= 6.1 (with BPF enabled) is guaranteed to work
-- libbpf, version 1.x: `apt install libbpf1` or similar, depending on your Linux distro
+- Recent Linux kernel and headers, compiled with BTF (`CONFIG_DEBUG_INFO_BTF=y`) and BPF JIT (`CONFIG_BPF_JIT=y`) support
+  - Most distros enables them on 64-bit systems by default, and version >= 6.1 is guaranteed to work. On single-board computers with custom kernel, recompilation with these options enabled is probably needed.
+- libbpf, version 1.x
+  - `apt install libbpf1` or similar, depending on your Linux distro
 
 To use Mimic, first load the kernel module which provides lower-level access of network packages for eBPF programs. If you use packaged version of Mimic (.deb), DKMS should compile it against current kernel automatically:
 
@@ -22,16 +24,14 @@ To use Mimic, first load the kernel module which provides lower-level access of 
 Optionally, load Mimic kernel module at startup:
 
 ```console
-# cat << EOF > /etc/modules-load.d/mimic.conf
-mimic
-EOF
+# echo 'mimic' > /etc/modules-load.d/mimic.conf
 ```
 
 Otherwise, refer to [Building from Source](#building-from-source) to build and load kernel packages manually:
 
 ```console
-$ make out/kmod/mimic.ko
-$ sudo insmod out/kmod/mimic.ko
+$ make out/mimic.ko
+$ sudo insmod out/mimic.ko
 ```
 
 ## Usage
@@ -42,7 +42,7 @@ A filter is an entry of whitelist that looks like a key-value pair: `{origin}={i
 
 For IPv6, the IP field needs to be surrounded by square brackets: `local=[2001:db8::cafe]:7000`. This means packets originated from or sending to the local machine using that IP and port is processed. Multiple parallel filters can be specified by passing multiple `-f` options.
 
-The general usage of Mimic CLI looks like:
+The general command of running a Mimic instance looks like:
 
 ```console
 # mimic run -f <filter1> [-f <filter2> [...]] <interface>
