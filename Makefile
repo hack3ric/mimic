@@ -34,6 +34,10 @@ MIMIC_BPF_HEADERS := src/bpf/vmlinux.h $(wildcard src/bpf/*.h) $(MIMIC_SHARED_HE
 MIMIC_SRCS := $(wildcard src/*.c)
 MIMIC_OBJS := $(MIMIC_SRCS:.c=.o)
 MIMIC_HEADERS := src/bpf_skel.h $(wildcard src/*.h) $(MIMIC_SHARED_HEADERS)
+MIMIC_LINK_LIBS := -lbpf -ljson-c
+ifneq ($(ARGP_STANDALONE),)
+MIMIC_LINK_LIBS += -largp
+endif
 
 .PHONY: build build-cli build-kmod generate generate-skel generate-vmlinux generate-pot clean .FORCE
 .FORCE:
@@ -66,7 +70,7 @@ $(filter src/%.o, $(MIMIC_OBJS)): src/%.o: $(MIMIC_HEADERS)
 
 out/mimic: $(MIMIC_OBJS)
 	$(MKDIR_P)
-	$(CC) $(CFLAGS) $(MIMIC_OBJS) -o $@ $(LDFLAGS) -lbpf -ljson-c
+	$(CC) $(CFLAGS) $(MIMIC_OBJS) -o $@ $(LDFLAGS) $(MIMIC_LINK_LIBS)
 
 out/mimic.ko: .FORCE
 	$(MKDIR_P)
