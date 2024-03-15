@@ -14,13 +14,13 @@ CFLAGS ?= -O2
 endif
 
 ifeq ($(KERNEL_UNAME),)
-KERNEL_VMLINUX = /sys/kernel/btf/vmlinux
+KERNEL_VMLINUX := /sys/kernel/btf/vmlinux
 else ifeq ($(KERNEL_UNAME),$(shell uname -r))
-KERNEL_VMLINUX = /sys/kernel/btf/vmlinux
+KERNEL_VMLINUX := /sys/kernel/btf/vmlinux
 else ifneq ($(wildcard /usr/lib/debug/lib/modules/$(KERNEL_UNAME)/vmlinux),)
-KERNEL_VMLINUX = /usr/lib/debug/lib/modules/$(KERNEL_UNAME)/vmlinux
+KERNEL_VMLINUX := /usr/lib/debug/lib/modules/$(KERNEL_UNAME)/vmlinux
 else ifneq ($(wildcard /lib/modules/$(KERNEL_UNAME)/build/vmlinux),)
-KERNEL_VMLINUX = /lib/modules/$(KERNEL_UNAME)/build/vmlinux
+KERNEL_VMLINUX := /lib/modules/$(KERNEL_UNAME)/build/vmlinux
 else
 $(error vmlinux file not found)
 endif

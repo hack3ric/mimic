@@ -2,7 +2,7 @@ obj-m += mimic.o
 
 KERNEL_UNAME ?= $(shell uname -r)
 
-system_build_dir := /lib/modules/$(KERNEL_UNAME)/build
+SYSTEM_BUILD_DIR := /lib/modules/$(KERNEL_UNAME)/build
 PWD := $(CURDIR)
 
 # Notes on Debian hack:
@@ -18,16 +18,16 @@ PWD := $(CURDIR)
 ifdef DEBIAN_HACK_RESOLVE_BTFIDS_PATH
 BUILD := build
 else
-BUILD := $(system_build_dir)
+BUILD := $(SYSTEM_BUILD_DIR)
 endif
 
 all:
 ifdef DEBIAN_HACK_RESOLVE_BTFIDS_PATH
-	cp -rs $(system_build_dir) $(BUILD)
+	cp -rs $(SYSTEM_BUILD_DIR) $(BUILD)
 	[ -f $(BUILD)/vmlinux ] || cp /sys/kernel/btf/vmlinux $(BUILD)
 	if [ ! -f $(BUILD)/tools/bpf/resolve_btfids/resolve_btfids ]; then \
 		rm -rf tools; \
-		cp -rL $(system_build_dir)/tools $(BUILD)/tools; \
+		cp -rL $(SYSTEM_BUILD_DIR)/tools $(BUILD)/tools; \
 		install -Dm755 $(DEBIAN_HACK_RESOLVE_BTFIDS_PATH) $(BUILD)/tools/bpf/resolve_btfids/resolve_btfids; \
 	fi
 endif
@@ -35,4 +35,4 @@ endif
 
 clean:
 	rm -rf build
-	[ ! -d $(system_build_dir) ] || $(MAKE) -C $(system_build_dir) M=$(PWD) clean
+	[ ! -d $(SYSTEM_BUILD_DIR) ] || $(MAKE) -C $(SYSTEM_BUILD_DIR) M=$(PWD) clean
