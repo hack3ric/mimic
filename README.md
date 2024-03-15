@@ -10,7 +10,7 @@ Currently Mimic does not ship prebuilt binaries. You have to build it from sourc
 
 ### Kernel Support
 
-To run Mimic, you need recent Linux kernel and its headers, compiled with BPF (`CONFIG_BPF_SYSCALL=y`), BPF JIT (`CONFIG_BPF_JIT=y`), and BTF (`CONFIG_DEBUG_INFO_BTF=y`) support. Most distros enable them on 64-bit systems by default. On single-board computers with custom kernel, recompilation with these options enabled is probably needed.
+To run Mimic, you need a fairly recent Linux kernel, compiled with BPF (`CONFIG_BPF_SYSCALL=y`), BPF JIT (`CONFIG_BPF_JIT=y`), and BTF (`CONFIG_DEBUG_INFO_BTF=y`) support. Most distros enable them on 64-bit systems by default. On single-board computers with custom kernel, recompilation with these options enabled is probably needed.
 
 BPF support varies depending on architecture, kernel version and distro configurations. Be ready if installed kernel won't load eBPF programs JITed even when enabled, or JIT does not support calling kernel function.
 
@@ -82,6 +82,7 @@ Debian < 12 (bullseye, buster or earlier) and Ubuntu < 23.04 (kinetic, jammy or 
 
 Otherwise, the following dependencies is required:
 
+- Linux kernel, [as previously mentioned](#kernel-support), along with its headers: `` apt install linux-{image,headers}-`uname -r` `` on Debian or similar
 - GNU make
 - Clang version >= 14, and optionally GCC (if system kernel is built using it)
 - pahole, bpftool (for generating BPF stuff)
