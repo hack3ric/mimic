@@ -38,6 +38,10 @@ MIMIC_LINK_LIBS := -lbpf -ljson-c
 ifneq ($(ARGP_STANDALONE),)
 MIMIC_LINK_LIBS += -largp
 endif
+ifneq ($(STATIC),)
+MIMIC_LINK_LIBS += -lelf -lzstd -lz
+LDFLAGS += -static
+endif
 
 .PHONY: build build-cli build-kmod generate generate-skel generate-vmlinux generate-pot clean .FORCE
 .FORCE:
