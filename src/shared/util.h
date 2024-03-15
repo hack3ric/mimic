@@ -8,6 +8,7 @@
 #else
 #include <features.h>
 #include <linux/pkt_cls.h>
+#include <unistd.h>
 #include "../log.h"
 #endif
 // clang-format on
@@ -184,6 +185,17 @@
 
 // defined in linux/tcp.h
 #define tcp_flag_word(tp) (((union tcp_word_hdr*)(tp))->words[3])
+
+#endif  // _MIMIC_BPF
+
+// Cleanup utilities
+#ifndef _MIMIC_BPF
+
+static inline void cleanup_fd(int* fd) {
+  if (*fd >= 0) close(*fd);
+}
+
+#define _cleanup_fd __attribute__((__cleanup__(cleanup_fd)))
 
 #endif  // _MIMIC_BPF
 

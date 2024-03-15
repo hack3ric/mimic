@@ -47,7 +47,7 @@ int subcmd_show(struct show_arguments* args) {
   int retcode;
 
   int ifindex = if_nametoindex(args->ifname);
-  if (!ifindex) ret(1, _("no interface named '%s'"), args->ifname);
+  if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
 
   char lock[32];
   snprintf(lock, sizeof(lock), "/run/mimic/%d.lock", ifindex);
@@ -55,6 +55,8 @@ int subcmd_show(struct show_arguments* args) {
   struct lock_content lock_content;
   try(lock_read(lock_file, &lock_content));
   fclose(lock_file);
+
+  _cleanup_fd int whitelist_fd = -1, conns_fd = -1;
 
   if (!args->show_process && !args->show_command) {
     args->show_process = args->show_command = true;
@@ -64,8 +66,8 @@ int subcmd_show(struct show_arguments* args) {
     printf(_("     \x1b[1;32mMIMIC\x1b[0m running at %s\n"), args->ifname);
     printf(_("      \x1b[1mpid:\x1b[0m %d\n"), lock_content.pid);
 
-    int whitelist_fd = try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
-                           "mimic_whitelist", strerror(-_ret));
+    whitelist_fd = try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
+                       "mimic_whitelist", strerror(-_ret));
     struct pkt_filter filter;
     char buf[FILTER_FMT_MAX_LEN];
     retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
@@ -85,14 +87,13 @@ int subcmd_show(struct show_arguments* args) {
         printf("        \x1b[90m||\x1b[0m %s\n", buf);
       }
     }
-    close(whitelist_fd);
   }
 
   if (args->show_process && args->show_command) printf("\n");
 
   if (args->show_command) {
-    int conns_fd = try(bpf_map_get_fd_by_id(lock_content.conns_id), _("failed to get fd of map '%s': %s"),
-                       "mimic_conns", strerror(-_ret));
+    conns_fd = try(bpf_map_get_fd_by_id(lock_content.conns_id), _("failed to get fd of map '%s': %s"), "mimic_conns",
+                   strerror(-_ret));
     struct conn_tuple key;
     struct connection conn;
     char local[IP_PORT_MAX_LEN], remote[IP_PORT_MAX_LEN];
@@ -121,7 +122,6 @@ int subcmd_show(struct show_arguments* args) {
         }
       }
     }
-    close(conns_fd);
   }
 
   return 0;

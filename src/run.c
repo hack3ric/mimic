@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/bpf.h>
+#include <linux/types.h>
 #include <net/if.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -15,7 +16,6 @@
 #include <sys/signalfd.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <linux/types.h>
 
 #include "bpf_skel.h"
 #include "log.h"
@@ -124,9 +124,15 @@ static inline int sync_settings(struct mimic_bpf* skel, uint32_t ssi_pid) {
 #define MAX_EVENTS 10
 
 static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters, int lock_fd, int ifindex) {
-  int retcode = 0, epfd = 0, sfd = 0;
-  struct lock_content lock_content = {.pid = getpid()};
+  int retcode;
+  _cleanup_fd int epfd = -1, sfd = -1;
+
   struct mimic_bpf* skel = NULL;
+
+  // These fds are actually reference of skel, so no need to use _cleanup_fd
+  int egress_handler_fd = -1, ingress_handler_fd = -1;
+  int mimic_whitelist_fd = -1, mimic_conns_fd = -1, mimic_settings_fd = -1, mimic_log_rb_fd = -1;
+
   bool tc_hook_created = false;
   struct bpf_tc_hook tc_hook_egress;
   struct bpf_tc_opts tc_opts_egress;
@@ -156,8 +162,6 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   struct bpf_prog_info prog_info = {};
   struct bpf_map_info map_info = {};
   __u32 prog_len = sizeof(prog_info), map_len = sizeof(map_info);
-  int egress_handler_fd, ingress_handler_fd;
-  int mimic_whitelist_fd, mimic_conns_fd, mimic_settings_fd, mimic_log_rb_fd;
 
 #define _get_id(_Type, _TypeFull, _Name, _E1, _E2)                                                       \
   ({                                                                                                     \
@@ -171,6 +175,8 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   _get_id(prog, program, _name, _("failed to get fd of program '%s': %s"), _("failed to get info of program '%s': %s"))
 #define _get_map_id(_name) \
   _get_id(map, map, _name, _("failed to get fd of map '%s': %s"), _("failed to get info of map '%s': %s"))
+
+  struct lock_content lock_content = {.pid = getpid()};
 
   lock_content.egress_id = _get_prog_id(egress_handler);
   lock_content.ingress_id = _get_prog_id(ingress_handler);
@@ -254,7 +260,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
         try2(ring_buffer__poll(log_rb, 0), _("failed to poll ring buffer: %s"), strerror(-_ret));
       } else if (events[i].data.fd == sfd) {
         len = try2_errno(read(sfd, &siginfo, sizeof(siginfo)), _("failed to read signalfd: %s"), strerror(-_ret));
-        if (len != sizeof(siginfo)) cleanup(1, "len != sizeof(siginfo)");
+        if (len != sizeof(siginfo)) cleanup(-1, "len != sizeof(siginfo)");
         switch (siginfo.ssi_signo) {
           case SIGINT:
             fprintf(stderr, "\r");
@@ -267,15 +273,14 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
             break;
         }
       } else {
-        cleanup(1, _("unknown fd: %d"), events[i].data.fd);
+        cleanup(-1, _("unknown fd: %d"), events[i].data.fd);
       }
     }
   }
 
+  retcode = 0;
 cleanup:
   log_info("cleaning up");
-  if (epfd) close(epfd);
-  if (sfd) close(sfd);
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
   if (xdp_ingress) bpf_link__destroy(xdp_ingress);
   if (log_rb) ring_buffer__free(log_rb);
@@ -284,10 +289,10 @@ cleanup:
 }
 
 int subcmd_run(struct run_arguments* args) {
-  if (geteuid() != 0) ret(1, _("you cannot run Mimic unless you are root"));
+  if (geteuid() != 0) ret(-1, _("you cannot run Mimic unless you are root"));
 
   int ifindex = if_nametoindex(args->ifname);
-  if (!ifindex) ret(1, _("no interface named '%s'"), args->ifname);
+  if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
 
   struct pkt_filter filters[args->filter_count];
   if (args->filter_count > 0) {
@@ -326,7 +331,6 @@ int subcmd_run(struct run_arguments* args) {
 
   libbpf_set_print(libbpf_print_fn);
   int retcode = run_bpf(args, filters, lock_fd, ifindex);
-
   close(lock_fd);
   remove(lock);
   return retcode;

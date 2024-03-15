@@ -4,6 +4,7 @@
 #include <bpf/bpf_helpers.h>
 
 #include "../shared/conn.h"
+#include "../shared/gettext.h"
 #include "../shared/log.h"
 #include "../shared/util.h"
 #include "log.h"

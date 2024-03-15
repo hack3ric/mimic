@@ -9,11 +9,11 @@ int main(int argc, char** argv) {
 
   switch (args.cmd) {
     case CMD_run:
-      return subcmd_run(&args.run);
+      return -subcmd_run(&args.run);
     case CMD_show:
-      return subcmd_show(&args.show);
+      return -subcmd_show(&args.show);
     case CMD_config:
-      return subcmd_config(&args.config);
+      return -subcmd_config(&args.config);
     default:
       break;
   }

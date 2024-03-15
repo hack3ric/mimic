@@ -40,8 +40,9 @@ int lock_error_fmt(struct lock_error* error, char* buf, size_t len) {
       return strlen(msg);
     }
     case ERR_INVALID_TYPE:
-      return snprintf(buf, len, _("expected %s for field '%s', got %s"), json_type_to_name(error->invalid_type.expected),
-                      error->invalid_type.field, json_type_to_name(error->invalid_type.got));
+      return snprintf(buf, len, _("expected %s for field '%s', got %s"),
+                      json_type_to_name(error->invalid_type.expected), error->invalid_type.field,
+                      json_type_to_name(error->invalid_type.got));
     case ERR_NOT_FOUND:
       return snprintf(buf, len, _("field '%s' not found"), error->not_found.field);
     case ERR_VERSION_MISMATCH:
@@ -76,7 +77,7 @@ int lock_write(int fd, const struct lock_content* c) {
   int result = try_errno(write(fd, buf, buf_len), _("failed to write lock file: %s"), strerror(-_ret));
   json_object_put(lock_json);
   if (result < buf_len) {
-    ret(1, _("failed to write lock file: not enough bytes written (expected %lu, got %d)"), buf_len, result);
+    ret(-1, _("failed to write lock file: not enough bytes written (expected %lu, got %d)"), buf_len, result);
   }
   return 0;
 }
@@ -140,7 +141,7 @@ struct lock_content lock_deserialize(const struct json_object* obj, struct lock_
 int lock_read(FILE* file, struct lock_content* c) {
   char buf[1024] = {};
   int result = try_errno(fread(buf, 1, sizeof(buf), file), _("failed to read lock file: %s"), strerror(-_ret));
-  if (result > 1023) ret(1, _("failed to read lock file: file size too big (> %d)"), 1023);
+  if (result > 1023) ret(-1, _("failed to read lock file: file size too big (> %d)"), 1023);
   buf[result + 1] = '\0';
 
   enum json_tokener_error parse_error = json_tokener_success;
@@ -152,7 +153,7 @@ int lock_read(FILE* file, struct lock_content* c) {
   json_object_put(obj);
   if (lock_error.kind != ERR_NULL) {
     lock_error_fmt(&lock_error, buf, 1023);
-    ret(1, _("failed to parse lock file: %s"), buf);
+    ret(-1, _("failed to parse lock file: %s"), buf);
   }
 
   return 0;

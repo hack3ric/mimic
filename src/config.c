@@ -16,6 +16,7 @@
 #include "log.h"
 #include "mimic.h"
 #include "shared/filter.h"
+#include "shared/gettext.h"
 #include "shared/util.h"
 
 static const struct argp_option config_args_options[] = {
@@ -86,21 +87,40 @@ static inline int parse_int_bounded(const char* str, int lower, int upper, int* 
   errno = 0;
   v = strtol(str, &inval, 10);
   if (str[0] == '\0' || inval[0] != '\0') {
-    ret(1, _("invalid value (expected any integer between %d and %d)"), lower, upper);
+    ret(-1, _("invalid value (expected any integer between %d and %d)"), lower, upper);
   } else if (v < lower || v > upper || errno == ERANGE) {
-    ret(1, _("value out of range (expected any integer between %d and %d)"), lower, upper);
+    ret(-1, _("value out of range (expected any integer between %d and %d)"), lower, upper);
   }
   *value = v;
+  return 0;
+}
+
+static inline int sync_settings(pid_t pid) {
+  sigset_t mask = {}, orig_mask;
+  sigaddset(&mask, SIGUSR1);
+  try_errno(sigprocmask(SIG_SETMASK, &mask, &orig_mask), _("error setting signal mask: %s"), strerror(-_ret));
+
+  try_errno(kill(pid, SIGUSR1), _("failed to send signal to instance: %s"), strerror(-_ret));
+
+  int sigfd = try_errno(signalfd(-1, &mask, SFD_NONBLOCK), _("error creating signalfd: %s"), strerror(-_ret));
+  struct pollfd pfd = {.fd = sigfd, .events = POLLIN};
+  if (try_errno(poll(&pfd, 1, 1000), _("error polling signal: %s"), strerror(-_ret)) == 0) {
+    log_warn(_("listening for returning signal timed out"));
+  }
+
+  try_errno(sigprocmask(SIG_SETMASK, &orig_mask, &mask), _("error setting signal mask: %s"), strerror(-_ret));
+  close(sigfd);
+
   return 0;
 }
 
 int subcmd_config(struct config_arguments* args) {
   int retcode;
 
-  if (!args->key) ret(1, _("no key provided"));
+  if (!args->key) ret(-1, _("no key provided"));
 
   int ifindex = if_nametoindex(args->ifname);
-  if (!ifindex) ret(1, _("no interface named '%s'"), args->ifname);
+  if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
 
   char lock[32];
   snprintf(lock, sizeof(lock), "/run/mimic/%d.lock", ifindex);
@@ -109,40 +129,32 @@ int subcmd_config(struct config_arguments* args) {
   try(lock_read(lock_file, &lock_content));
   fclose(lock_file);
 
-  if (strcmp(args->key, "log.verbosity") == 0) {
-    int value;
-    if (args->values[0]) try(parse_int_bounded(args->values[0], 0, 4, &value));
+  _cleanup_fd int log_rb_fd = -1, settings_fd = -1, whitelist_fd = -1;
 
-    int settings_fd = try(bpf_map_get_fd_by_id(lock_content.settings_id), _("failed to get fd of map '%s': %s"),
-                          "mimic_settings", strerror(-_ret));
-    __u32 k = SETTINGS_LOG_VERBOSITY, v;
-    try(bpf_map_lookup_elem(settings_fd, &k, &v), _("failed to get value from map '%s': %s"), "mimic_settings",
+  log_rb_fd = try(bpf_map_get_fd_by_id(lock_content.log_rb_id), _("failed to get fd of map '%s': %s"), "mimic_log_rb",
+                  strerror(-_ret));
+
+  if (strcmp(args->key, "log.verbosity") == 0) {
+    int parsed;
+    if (args->values[0]) try(parse_int_bounded(args->values[0], 0, 4, &parsed));
+
+    settings_fd = try(bpf_map_get_fd_by_id(lock_content.settings_id), _("failed to get fd of map '%s': %s"),
+                      "mimic_settings", strerror(-_ret));
+
+    __u32 key = SETTINGS_LOG_VERBOSITY, value;
+    try(bpf_map_lookup_elem(settings_fd, &key, &value), _("failed to get value from map '%s': %s"), "mimic_settings",
         strerror(-_ret));
 
     if (args->values[0]) {
-      try(bpf_map_update_elem(settings_fd, &k, &value, BPF_EXIST), _("failed to update value of map '%s': %s"),
+      try(bpf_map_update_elem(settings_fd, &key, &parsed, BPF_EXIST), _("failed to update value of map '%s': %s"),
           "mimic_settings", strerror(-_ret));
-
-      sigset_t sigset = {};
-      sigaddset(&sigset, SIGUSR1);
-      try_errno(sigprocmask(SIG_SETMASK, &sigset, NULL), _("error setting signal mask: %s"), strerror(-_ret));
-
-      try_errno(kill(lock_content.pid, SIGUSR1), _("failed to send signal to instance: %s"), strerror(-_ret));
-
-      int sigfd = try_errno(signalfd(-1, &sigset, SFD_NONBLOCK), _("error creating signalfd: %s"), strerror(-_ret));
-      struct pollfd pfd = {.fd = sigfd, .events = POLLIN};
-      if (try_errno(poll(&pfd, 1, 1000), _("error polling signal: %s"), strerror(-_ret)) == 0) {
-        log_warn(_("listening for returning signal timed out"));
-      }
-      close(sigfd);
-      close(settings_fd);
+      try(sync_settings(lock_content.pid));
     } else {
-      printf("%d\n", v);
+      printf("%d\n", value);
     }
-
   } else if (strcmp(args->key, "whitelist") == 0) {
-    int whitelist_fd = try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
-                           "mimic_whitelist", strerror(-_ret));
+    whitelist_fd = try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
+                       "mimic_whitelist", strerror(-_ret));
     int i;
     struct pkt_filter filter;
     char buf[FILTER_FMT_MAX_LEN];
@@ -169,7 +181,7 @@ int subcmd_config(struct config_arguments* args) {
         // retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
         // if (retcode == -ENOENT) log_warn(_("all filters removed"));
       } else {
-        ret(1, _("need to specify either --add or --delete"));
+        ret(-1, _("need to specify either --add or --delete"));
       }
     } else if (args->clear) {
       while (true) {
@@ -202,9 +214,8 @@ int subcmd_config(struct config_arguments* args) {
       }
       printf("]\n");
     }
-    close(whitelist_fd);
   } else {
-    ret(1, _("unknown key '%s'"), args->key);
+    ret(-1, _("unknown key '%s'"), args->key);
   }
 
   return 0;
