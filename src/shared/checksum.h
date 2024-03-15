@@ -31,14 +31,14 @@ static inline void update_csum_ul_neg(__u32* csum, __u32 new) { update_csum(csum
 // void update_csum_data(void* ctx, __u32* csum, __u32 off)
 #define update_csum_data(_x, csum, off)                                                     \
   ({                                                                                        \
-    __u16* data = (void*)(size_t)_x->data + off;                                            \
+    __u16* data = (void*)(__u64)_x->data + off;                                            \
     int i = 0;                                                                              \
     for (; i < ETH_DATA_LEN / sizeof(__u16); i++) {                                         \
-      if ((size_t)(data + i + 1) > (size_t)_x->data_end) break;                             \
+      if ((__u64)(data + i + 1) > (__u64)_x->data_end) break;                             \
       *csum += bpf_ntohs(data[i]);                                                          \
     }                                                                                       \
     __u8* remainder = (__u8*)data + i * sizeof(__u16);                                      \
-    if ((size_t)(remainder + 1) <= (size_t)_x->data_end) *csum += (__u16)(*remainder << 8); \
+    if ((__u64)(remainder + 1) <= (__u64)_x->data_end) *csum += (__u16)(*remainder << 8); \
   })
 
 #endif  // _MIMIC_BPF
