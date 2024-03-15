@@ -8,7 +8,7 @@ Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP QoS and po
 
 Currently Mimic does not ship prebuilt binaries. You have to build it from source. See [Building from Source](#building-from-source) for more information.
 
-### Kernel support
+### Kernel Support
 
 To run Mimic, you need recent Linux kernel and its headers, compiled with BPF (`CONFIG_BPF_SYSCALL=y`), BPF JIT (`CONFIG_BPF_JIT=y`), and BTF (`CONFIG_DEBUG_INFO_BTF=y`) support. Most distros enable them on 64-bit systems by default. On single-board computers with custom kernel, recompilation with these options enabled is probably needed.
 
