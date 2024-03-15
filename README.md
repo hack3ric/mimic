@@ -92,6 +92,38 @@ Then just simply run `make` to generate dynamically linked CLI and kernel module
 
 On Alpine and possibly other non-glibc distros, `argp-standalone` is needed. Install it, and use `make ARGP_STANDALONE=1` to link against it.
 
+### Notes on Building Kernel Module
+
+If the following output appears:
+```
+  ...
+  LD [M]  /path/to/mimic.ko
+  BTF [M] /path/to/mimic.ko
+Skipping BTF generation for /path/to/mimic.ko due to unavailability of vmlinux
+```
+
+Just copy current vmlinux to kernel module build directory:
+
+```console
+# cp /sys/kernel/btf/vmlinux /lib/modules/`uname-r`/build
+```
+
+Furthermore, the following error will occur on Debian, or sometimes other distros:
+
+```
+/bin/sh: 1: ./tools/bpf/resolve_btfids/resolve_btfids: not found
+```
+
+This is because they forget to ship this Linux kernel building utility (see [bug report](https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1027304) for Debian). To solve this, `resolve_btfids` has to be built from Linux source (preferrably the same version as the current kernel) and placed in that location:
+
+```console
+$ tar xf /path/to/linux-source-*.tar.*
+$ make -C linux-source-*/tools/bpf/resolve_btfids
+$ sudo install -D linux-source-*/tools/bpf/resolve_btfids/resolve_btfids /lib/modules/`uname -r`/build/tools/bpf/resolve_btfids/resolve_btfids
+```
+
+The Debian packages already worked around these issues; see debian/ directory for more details.
+
 ## Details
 
 Mimic extends every UDP packet with 12 bytes. First 12 bytes of the data is moved to the back, and the UDP header is transformed into TCP header in place.
