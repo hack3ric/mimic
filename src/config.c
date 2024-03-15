@@ -123,16 +123,13 @@ int subcmd_config(struct config_arguments* args) {
   if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
 
   char lock[32];
-  snprintf(lock, sizeof(lock), "/run/mimic/%d.lock", ifindex);
+  snprintf(lock, sizeof(lock), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
   FILE* lock_file = try_ptr(fopen(lock, "r"), _("failed to open lock file at %s: %s"), lock, strerror(-_ret));
   struct lock_content lock_content;
   try(lock_read(lock_file, &lock_content));
   fclose(lock_file);
 
-  _cleanup_fd int log_rb_fd = -1, settings_fd = -1, whitelist_fd = -1;
-
-  log_rb_fd = try(bpf_map_get_fd_by_id(lock_content.log_rb_id), _("failed to get fd of map '%s': %s"), "mimic_log_rb",
-                  strerror(-_ret));
+  _cleanup_fd int settings_fd = -1, whitelist_fd = -1;
 
   if (strcmp(args->key, "log.verbosity") == 0) {
     int parsed;
@@ -159,7 +156,7 @@ int subcmd_config(struct config_arguments* args) {
     struct pkt_filter filter;
     char buf[FILTER_FMT_MAX_LEN];
 
-    // TODO: send changelog using mimic_log_rb
+    // TODO: send changelog
     if (args->values[0]) {
       if (args->add) {
         for (i = 0; i < CONFIG_MAX_VALUES; i++) {

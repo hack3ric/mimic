@@ -289,6 +289,10 @@ cleanup:
 }
 
 int subcmd_run(struct run_arguments* args) {
+  // TODO: capabilities
+  //
+  // needs cap_sys_admin=+pe and cap_net_admin=+pe
+  // see https://github.com/torvalds/linux/blob/v6.1/include/uapi/linux/capability.h#L405
   if (geteuid() != 0) ret(-1, _("you cannot run Mimic unless you are root"));
 
   int ifindex = if_nametoindex(args->ifname);
@@ -302,15 +306,16 @@ int subcmd_run(struct run_arguments* args) {
 
   // Lock file
   struct stat st = {};
-  if (stat("/run/mimic", &st) == -1) {
+  if (stat(MIMIC_RUNTIME_DIR, &st) == -1) {
     if (errno == ENOENT) {
-      try_errno(mkdir("/run/mimic", 0755), _("failed to create /run/mimic: %s"), strerror(-_ret));
+      try_errno(mkdir(MIMIC_RUNTIME_DIR, 0755), _("failed to create directory %s: %s"), MIMIC_RUNTIME_DIR,
+                strerror(-_ret));
     } else {
-      ret(-errno, _("failed to stat /run/mimic: %s"), strerror(errno));
+      ret(-errno, _("failed to stat %s: %s"), MIMIC_RUNTIME_DIR, strerror(errno));
     }
   }
   char lock[32];
-  snprintf(lock, sizeof(lock), "/run/mimic/%d.lock", ifindex);
+  snprintf(lock, sizeof(lock), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
   int lock_fd = open(lock, O_CREAT | O_EXCL | O_WRONLY, 0644);
   if (lock_fd < 0) {
     log_error(_("failed to lock on %s at %s: %s"), args->ifname, lock, strerror(errno));

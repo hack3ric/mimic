@@ -13,6 +13,10 @@
 #endif
 // clang-format on
 
+#ifndef MIMIC_RUNTIME_DIR
+#define MIMIC_RUNTIME_DIR "/var/mimic"
+#endif
+
 #define redecl(_type, _name, _off, _ctx, _ret)                              \
   _name = ({                                                                \
     _type* _ptr = (void*)(__u64)(_ctx)->data + (_off);                      \
