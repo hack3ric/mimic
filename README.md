@@ -8,12 +8,18 @@ Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP QoS and po
 
 Currently Mimic does not ship prebuilt binaries. You have to build it from source. See [Building from Source](#building-from-source) for more information.
 
-The following requirements need to be satisfied on every machine that would run Mimic:
+### Kernel support
 
-- Recent Linux kernel and headers, compiled with BTF (`CONFIG_DEBUG_INFO_BTF=y`) and BPF JIT (`CONFIG_BPF_JIT=y`) support
-  - Most distros enables them on 64-bit systems by default, and version >= 6.1 is guaranteed to work. On single-board computers with custom kernel, recompilation with these options enabled is probably needed.
-- libbpf, version 1.x
-  - `apt install libbpf1` or similar, depending on your Linux distro
+To run Mimic, you need recent Linux kernel and its headers, compiled with BPF (`CONFIG_BPF_SYSCALL=y`), BPF JIT (`CONFIG_BPF_JIT=y`), and BTF (`CONFIG_DEBUG_INFO_BTF=y`) support. Most distros enable them on 64-bit systems by default. On single-board computers with custom kernel, recompilation with these options enabled is probably needed.
+
+BPF support varies depending on architecture, kernel version and distro configurations. Be ready if installed kernel won't load eBPF programs JITed even when enabled, or JIT does not support calling kernel function.
+
+The following is a list of kernel versions verified to work on certain architectures; feel free to test out and contribute to the list!
+
+- x86_64: >= v6.1
+- riscv64: >= v6.7
+
+### Kernel Module
 
 To use Mimic, first load the kernel module which provides lower-level access of network packages for eBPF programs. If you use packaged version of Mimic (.deb), DKMS should compile it against current kernel automatically:
 
@@ -77,17 +83,14 @@ Debian < 12 (bullseye, buster or earlier) and Ubuntu < 23.04 (kinetic, jammy or 
 Otherwise, the following dependencies is required:
 
 - GNU make
-- libbpf 1.x and its header files: `apt install libbpf-dev` or similar
-- Clang version >= 14 **and** GCC (for building kernel module)
-- pahole, bpftool
+- Clang version >= 14, and optionally GCC (if system kernel is built using it)
+- pahole, bpftool (for generating BPF stuff)
+- libbpf 1.x: `apt install libbpf-dev` on Debian or similar
+- json-c: `apt install libjson-c-dev` on Debian or similar
 
-Then just simply:
+Then just simply run `make` to generate dynamically linked CLI and kernel modules. To build statically linked CLI, use `make STATIC=1`.
 
-```console
-$ make
-```
-
-to build everything, including Mimic CLI and kernel module.
+On Alpine and possibly other non-glibc distros, `argp-standalone` is needed. Install it, and use `make ARGP_STANDALONE=1` to link against it.
 
 ## Details
 
