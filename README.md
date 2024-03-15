@@ -106,7 +106,7 @@ Skipping BTF generation for /path/to/mimic.ko due to unavailability of vmlinux
 Just copy current vmlinux to kernel module build directory:
 
 ```console
-# cp /sys/kernel/btf/vmlinux /lib/modules/`uname-r`/build
+# cp /sys/kernel/btf/vmlinux /lib/modules/`uname -r`/build
 ```
 
 Furthermore, the following error will occur on Debian, or sometimes other distros:
