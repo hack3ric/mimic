@@ -177,8 +177,6 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   info.settings_id = _get_map_id(mimic_settings);
   info.log_rb_id = _get_map_id(mimic_log_rb);
 
-  // try2(lock_write(lock_fd, &lock_content));
-
   __u32 vkey = SETTINGS_LOG_VERBOSITY, vvalue = log_verbosity;
   try2(bpf_map__update_elem(skel->maps.mimic_settings, &vkey, sizeof(__u32), &vvalue, sizeof(__u32), BPF_ANY),
        _("failed to set BPF log verbosity: %s"), strerror(-_ret));
@@ -249,25 +247,26 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   int len;
   while (true) {
     nfds = try2_errno(epoll_wait(epfd, events, MAX_EVENTS, -1), _("error waiting for epoll: %s"), strerror(-_ret));
+
     for (i = 0; i < nfds; i++) {
       if (events[i].data.fd == log_rb_epfd) {
         try2(ring_buffer__poll(log_rb, 0), _("failed to poll ring buffer: %s"), strerror(-_ret));
+
       } else if (events[i].data.fd == sfd) {
         len = try2_errno(read(sfd, &siginfo, sizeof(siginfo)), _("failed to read signalfd: %s"), strerror(-_ret));
         if (len != sizeof(siginfo)) cleanup(-1, "len != sizeof(siginfo)");
-        switch (siginfo.ssi_signo) {
-          case SIGINT:
-            fprintf(stderr, "\r");
-            log_warn(_("SIGINT received, exiting"));
-            cleanup(0);
-          default:
-            break;
+        if (siginfo.ssi_signo == SIGINT) {
+          fprintf(stderr, "\r");
+          log_warn(_("SIGINT received, exiting"));
+          cleanup(0);
         }
+
       } else if (events[i].data.fd == lock_sk) {
         struct lock_request req_buf;
         struct sockaddr_un addr_buf;
-        try2(lock_server_process(lock_sk, &req_buf, &addr_buf, &info, skel->maps.mimic_settings,
-                                 skel->maps.mimic_whitelist));
+        // Ignore returned error values, only print log
+        lock_server_process(lock_sk, &req_buf, &addr_buf, &info, skel->maps.mimic_settings, skel->maps.mimic_whitelist);
+
       } else {
         cleanup(-1, _("unknown fd: %d"), events[i].data.fd);
       }

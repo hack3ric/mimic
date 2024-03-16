@@ -119,16 +119,10 @@ int subcmd_config(struct config_arguments* args) {
   struct sockaddr_un lock = {.sun_family = AF_UNIX};
   snprintf(lock.sun_path, sizeof(lock.sun_path), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
 
-  char ver_buf[32];
-  bool ver_matches =
-    try(lock_check_version(sk, &lock, -1, ver_buf, sizeof(ver_buf)), _("failed to check version: %s"), strerror(-_ret));
-  if (!ver_matches) {
-    ver_buf[sizeof(ver_buf) - 1] = '\0';
-    ret(-1, "current Mimic version is %s, but lock file's is %s", argp_program_version, ver_buf);
-  }
-
   struct lock_info lock_info;
+  try(lock_check_version_print(sk, &lock, -1));
   try(lock_read_info(sk, &lock, -1, &lock_info));
+
   _cleanup_fd int settings_fd = -1, whitelist_fd = -1;
 
   if (strcmp(args->key, "log.verbosity") == 0) {
@@ -145,10 +139,11 @@ int subcmd_config(struct config_arguments* args) {
     if (args->values[0]) {
       try(bpf_map_update_elem(settings_fd, &key, &parsed, BPF_EXIST), _("failed to update value of map '%s': %s"),
           "mimic_settings", strerror(-_ret));
-      lock_notify_update(sk, &lock, -1, SETTINGS_LOG_VERBOSITY);
+      lock_notify_update(sk, &lock, -1, key);
     } else {
       printf("%d\n", value);
     }
+
   } else if (strcmp(args->key, "whitelist") == 0) {
     whitelist_fd = try(bpf_map_get_fd_by_id(lock_info.whitelist_id), _("failed to get fd of map '%s': %s"),
                        "mimic_whitelist", strerror(-_ret));
@@ -156,7 +151,6 @@ int subcmd_config(struct config_arguments* args) {
     struct pkt_filter filter;
     char buf[FILTER_FMT_MAX_LEN];
 
-    // TODO: send changelog
     if (args->values[0]) {
       if (args->add) {
         for (i = 0; i < CONFIG_MAX_VALUES; i++) {
@@ -175,12 +169,11 @@ int subcmd_config(struct config_arguments* args) {
           try(bpf_map_delete_elem(whitelist_fd, &filter), _("failed to delete filter '%s': %s"), args->values[i],
               _ret == -ENOENT ? _("filter not found") : strerror(-_ret));
         }
-        // retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
-        // if (retcode == -ENOENT) log_warn(_("all filters removed"));
       } else {
         ret(-1, _("need to specify either --add or --delete"));
       }
       lock_notify_update(sk, &lock, -1, SETTINGS_WHITELIST);
+
     } else if (args->clear) {
       while (true) {
         retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
@@ -189,8 +182,8 @@ int subcmd_config(struct config_arguments* args) {
           ret(retcode, _("failed to get next key of map '%s': %s"), "mimic_whitelist", strerror(-retcode));
         }
       }
-      // log_warn(_("all filters removed"))
       lock_notify_update(sk, &lock, -1, SETTINGS_WHITELIST);
+
     } else {
       retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
       if (retcode < 0 && retcode != -ENOENT) {
@@ -213,6 +206,7 @@ int subcmd_config(struct config_arguments* args) {
       }
       printf("]\n");
     }
+
   } else {
     ret(-1, _("unknown key '%s'"), args->key);
   }

@@ -47,6 +47,12 @@ int subcmd_run(struct run_arguments* args);
 int subcmd_show(struct show_arguments* args);
 int subcmd_config(struct config_arguments* args);
 
+struct lock_client {
+  int sk;
+  struct sockaddr_un* addr;
+  int addr_len;
+};
+
 struct lock_request {
   enum lock_request_kind { REQ_VERSION, REQ_INFO, REQ_UPDATE } kind;
   union {
@@ -68,6 +74,7 @@ int lock_create_client();
 int lock_create_server(const struct sockaddr_un* addr, int addr_len);
 
 int lock_check_version(int sk, const struct sockaddr_un* addr, int addr_len, char* restrict buf, size_t buf_len);
+int lock_check_version_print(int sk, const struct sockaddr_un* addr, int addr_len);
 int lock_read_info(int sk, const struct sockaddr_un* addr, int addr_len, struct lock_info* c);
 int lock_notify_update(int sk, const struct sockaddr_un* addr, int addr_len, enum settings_key key);
 int lock_server_process(int sk, struct lock_request* req_buf, struct sockaddr_un* addr_buf, struct lock_info* info,

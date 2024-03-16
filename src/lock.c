@@ -63,6 +63,17 @@ int lock_check_version(int sk, const struct sockaddr_un* addr, int addr_len, cha
   return !strncmp(argp_program_version, buf, recv_len);
 }
 
+int lock_check_version_print(int sk, const struct sockaddr_un* addr, int addr_len) {
+  char ver_buf[32];
+  bool ver_matches =
+    try(lock_check_version(sk, addr, -1, ver_buf, sizeof(ver_buf)), _("failed to check version: %s"), strerror(-_ret));
+  if (!ver_matches) {
+    ver_buf[sizeof(ver_buf) - 1] = '\0';
+    ret(-1, "current Mimic version is %s, but lock file's is %s", argp_program_version, ver_buf);
+  }
+  return 0;
+}
+
 int lock_read_info(int sk, const struct sockaddr_un* addr, int addr_len, struct lock_info* c) {
   struct lock_request req = {.kind = REQ_INFO};
   try(lock_send_req(sk, addr, addr_len, &req));
@@ -77,8 +88,7 @@ int lock_notify_update(int sk, const struct sockaddr_un* addr, int addr_len, enu
   try(lock_send_req(sk, addr, addr_len, &req));
   try(wait_until_ready(sk, POLLIN, TIMEOUT));
   // Receive zero-sized datagram as response
-  char buf;
-  try_errno(recv(sk, &buf, 0, 0));
+  try_errno(recv(sk, &req, 0, 0));
   return 0;
 }
 
@@ -90,7 +100,6 @@ int lock_server_process(int sk, struct lock_request* req_buf, struct sockaddr_un
     ret(-EAFNOSUPPORT, _("(PROGRAM ERROR) UNIX socket returned non-UNIX address!?"));
   }
 
-  // TODO: handle errors gracefully
   __u32 value;
   switch (req_buf->kind) {
     case REQ_VERSION:

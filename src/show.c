@@ -53,16 +53,9 @@ int subcmd_show(struct show_arguments* args) {
   struct sockaddr_un lock = {.sun_family = AF_UNIX};
   snprintf(lock.sun_path, sizeof(lock.sun_path), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
 
-  char ver_buf[32];
-  bool ver_matches =
-    try(lock_check_version(sk, &lock, -1, ver_buf, sizeof(ver_buf)), _("failed to check version: %s"), strerror(-_ret));
-  if (!ver_matches) {
-    ver_buf[sizeof(ver_buf) - 1] = '\0';
-    ret(-1, "current Mimic version is %s, but lock file's is %s", argp_program_version, ver_buf);
-  }
-
   struct lock_info lock_info;
-  try(lock_read_info(sk, &lock, -1, &lock_info));
+  try(lock_check_version_print(sk, &lock, -1));
+  try(lock_read_info(sk, &lock, -1, &lock_info), _("failed to read process information: %s"), strerror(-_ret));
 
   _cleanup_fd int whitelist_fd = -1, conns_fd = -1;
 
