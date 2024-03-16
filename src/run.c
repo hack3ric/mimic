@@ -178,7 +178,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
 #define _get_map_id(_name) \
   _get_id(map, map, _name, _("failed to get fd of map '%s': %s"), _("failed to get info of map '%s': %s"))
 
-  struct lock_content lock_content = {.pid = getpid()};
+  struct lock_info lock_content = {.pid = getpid()};
 
   lock_content.egress_id = _get_prog_id(egress_handler);
   lock_content.ingress_id = _get_prog_id(ingress_handler);

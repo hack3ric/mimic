@@ -52,8 +52,8 @@ int subcmd_show(struct show_arguments* args) {
   char lock[32];
   snprintf(lock, sizeof(lock), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
   FILE* lock_file = try_ptr(fopen(lock, "r"), _("failed to open lock file at %s: %s"), lock, strerror(-_ret));
-  struct lock_content lock_content;
-  try(lock_read(lock_file, &lock_content));
+  struct lock_info lock_content;
+  try(lock_read_info(lock_file, &lock_content));
   fclose(lock_file);
 
   _cleanup_fd int whitelist_fd = -1, conns_fd = -1;

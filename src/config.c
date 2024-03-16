@@ -136,8 +136,8 @@ int subcmd_config(struct config_arguments* args) {
   char lock[32];
   snprintf(lock, sizeof(lock), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
   FILE* lock_file = try_ptr(fopen(lock, "r"), _("failed to open lock file at %s: %s"), lock, strerror(-_ret));
-  struct lock_content lock_content;
-  try(lock_read(lock_file, &lock_content));
+  struct lock_info lock_info;
+  try(lock_read_info(lock_file, &lock_info));
   fclose(lock_file);
 
   _cleanup_fd int settings_fd = -1, whitelist_fd = -1;
@@ -146,7 +146,7 @@ int subcmd_config(struct config_arguments* args) {
     int parsed;
     if (args->values[0]) try(parse_int_bounded(args->values[0], 0, 4, &parsed));
 
-    settings_fd = try(bpf_map_get_fd_by_id(lock_content.settings_id), _("failed to get fd of map '%s': %s"),
+    settings_fd = try(bpf_map_get_fd_by_id(lock_info.settings_id), _("failed to get fd of map '%s': %s"),
                       "mimic_settings", strerror(-_ret));
 
     __u32 key = SETTINGS_LOG_VERBOSITY, value;
@@ -156,12 +156,12 @@ int subcmd_config(struct config_arguments* args) {
     if (args->values[0]) {
       try(bpf_map_update_elem(settings_fd, &key, &parsed, BPF_EXIST), _("failed to update value of map '%s': %s"),
           "mimic_settings", strerror(-_ret));
-      try(sync_settings(lock_content.pid));
+      try(sync_settings(lock_info.pid));
     } else {
       printf("%d\n", value);
     }
   } else if (strcmp(args->key, "whitelist") == 0) {
-    whitelist_fd = try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
+    whitelist_fd = try(bpf_map_get_fd_by_id(lock_info.whitelist_id), _("failed to get fd of map '%s': %s"),
                        "mimic_whitelist", strerror(-_ret));
     int i;
     struct pkt_filter filter;

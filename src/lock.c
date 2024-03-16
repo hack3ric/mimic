@@ -34,7 +34,7 @@ struct lock_error {
   };
 };
 
-int lock_error_fmt(struct lock_error* error, char* buf, size_t len) {
+static inline int lock_error_fmt(struct lock_error* error, char* buf, size_t len) {
   switch (error->kind) {
     case ERR_NULL: {
       const char* msg = _("Success");
@@ -53,7 +53,7 @@ int lock_error_fmt(struct lock_error* error, char* buf, size_t len) {
   }
 }
 
-static inline struct json_object* lock_serialize(const struct lock_content* c) {
+static inline struct json_object* lock_serialize_info(const struct lock_info* c) {
   struct json_object* obj = json_object_new_object();
 
   int ret = json_object_object_add(obj, "version", json_object_new_string(argp_program_version));
@@ -72,8 +72,8 @@ static inline struct json_object* lock_serialize(const struct lock_content* c) {
   return obj;
 }
 
-int lock_write(int sk, struct sockaddr_un* addr, const struct lock_content* c) {
-  struct json_object* lock_json = lock_serialize(c);
+int lock_write_info(int sk, struct sockaddr_un* addr, const struct lock_info* c) {
+  struct json_object* lock_json = lock_serialize_info(c);
   const char* buf = json_object_to_json_string(lock_json);
   size_t buf_len = strlen(buf);
   int result = try_errno(sendto(sk, buf, buf_len, 0, (struct sockaddr*)addr, sizeof(*addr)),
@@ -113,8 +113,8 @@ static inline int lock_parse_field_int(const struct json_object* obj, const char
   _lock_parse_field(int, json_type_int, obj, key, error, errored);
 }
 
-struct lock_content lock_deserialize(const struct json_object* obj, struct lock_error* error) {
-  struct lock_content c = {};
+struct lock_info lock_info_deserialize(const struct json_object* obj, struct lock_error* error) {
+  struct lock_info c = {};
   bool errored = false;
   json_type obj_type = json_object_get_type(obj);
   if (obj_type != json_type_object) {
@@ -142,7 +142,7 @@ struct lock_content lock_deserialize(const struct json_object* obj, struct lock_
 }
 
 // TODO: socket
-int lock_read(FILE* file, struct lock_content* c) {
+int lock_read_info(FILE* file, struct lock_info* c) {
   char buf[1024] = {};
   int result = try_errno(fread(buf, 1, sizeof(buf), file), _("failed to read lock file: %s"), strerror(-_ret));
   if (result > 1023) ret(-1, _("failed to read lock file: file size too big (> %d)"), 1023);
@@ -153,7 +153,7 @@ int lock_read(FILE* file, struct lock_content* c) {
                                     json_tokener_error_desc(parse_error));
 
   struct lock_error lock_error = {};
-  *c = lock_deserialize(obj, &lock_error);
+  *c = lock_info_deserialize(obj, &lock_error);
   json_object_put(obj);
   if (lock_error.kind != ERR_NULL) {
     lock_error_fmt(&lock_error, buf, 1023);
