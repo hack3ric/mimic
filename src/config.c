@@ -19,7 +19,7 @@
 #include "shared/gettext.h"
 #include "shared/util.h"
 
-static const struct argp_option config_args_options[] = {
+static const struct argp_option options[] = {
   {"add", 'a', NULL, 0, N_("Add values to a set"), 0},
   {"delete", 'd', NULL, 0, N_("Remove values from a set"), 0},
   {"clear", 'c' << 8, NULL, 0, N_("Clear the configuration. Set value to null, or remove all elements from a set"), 1},
@@ -32,7 +32,7 @@ static inline void ensure_exclusitivity(struct config_arguments* args) {
   }
 }
 
-static inline error_t config_args_parse_opt(int key, char* arg, struct argp_state* state) {
+static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
   struct config_arguments* args = (struct config_arguments*)state->input;
   switch (key) {
     case 'a':
@@ -78,7 +78,7 @@ static inline error_t config_args_parse_opt(int key, char* arg, struct argp_stat
   return 0;
 }
 
-const struct argp config_argp = {config_args_options, config_args_parse_opt, N_("<interface> <key> [value...]"), NULL};
+const struct argp config_argp = {options, args_parse_opt, N_("<interface> <key> [value...]"), NULL};
 
 // [lower, upper]
 static inline int parse_int_bounded(const char* str, int lower, int upper, int* value) {

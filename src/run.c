@@ -24,13 +24,13 @@
 #include "shared/log.h"
 #include "shared/util.h"
 
-static const struct argp_option run_args_options[] = {
+static const struct argp_option options[] = {
   {"filter", 'f', N_("FILTER"), 0, N_("Specify what packets to process. This may be specified for multiple times.")},
   {"verbose", 'v', NULL, 0, N_("Output more information")},
   {"quiet", 'q', NULL, 0, N_("Output less information")},
   {}};
 
-static inline error_t run_args_parse_opt(int key, char* arg, struct argp_state* state) {
+static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
   struct run_arguments* args = (struct run_arguments*)state->input;
   switch (key) {
     case 'f':
@@ -62,7 +62,7 @@ static inline error_t run_args_parse_opt(int key, char* arg, struct argp_state* 
   return 0;
 }
 
-const struct argp run_argp = {run_args_options, run_args_parse_opt, N_("<interface>"), NULL};
+const struct argp run_argp = {options, args_parse_opt, N_("<interface>"), NULL};
 
 static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts,
                                       const struct bpf_program* prog, char* name) {

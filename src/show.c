@@ -13,10 +13,10 @@
 #include "shared/filter.h"
 #include "shared/util.h"
 
-static const struct argp_option show_args_options[] = {
+static const struct argp_option options[] = {
   {"process", 'p', NULL, 0, N_("Show process information")}, {"connections", 'c', NULL, 0, N_("Show connections")}, {}};
 
-static inline error_t show_args_parse_opt(int key, char* arg, struct argp_state* state) {
+static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
   struct show_arguments* args = (struct show_arguments*)state->input;
   switch (key) {
     case 'p':
@@ -41,7 +41,7 @@ static inline error_t show_args_parse_opt(int key, char* arg, struct argp_state*
   return 0;
 }
 
-const struct argp show_argp = {show_args_options, show_args_parse_opt, N_("<interface>"), NULL};
+const struct argp show_argp = {options, args_parse_opt, N_("<interface>"), NULL};
 
 int subcmd_show(struct show_arguments* args) {
   int retcode;
