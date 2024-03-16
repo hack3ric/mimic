@@ -92,9 +92,11 @@ static inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress) {
     key.remote_port = tcp->dest;
   }
   if (ipv4) {
+    key.protocol = PROTO_IPV4;
     key.local.v4 = ipv4->saddr;
     key.remote.v4 = ipv4->daddr;
   } else if (ipv6) {
+    key.protocol = PROTO_IPV6;
     key.local.v6 = ipv6->saddr;
     key.remote.v6 = ipv6->daddr;
   }
