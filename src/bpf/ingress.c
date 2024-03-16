@@ -18,10 +18,10 @@ static inline int restore_data(struct xdp_md* xdp, u16 offset, u32 buf_len) {
   u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
   if (copy_len > 0) {
     if (copy_len < 2) copy_len = 1;  // HACK: see egress.c
-    try_or_drop(bpf_xdp_load_bytes(xdp, buf_len - copy_len, buf, copy_len));
-    try_or_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf, copy_len));
+    try_drop(bpf_xdp_load_bytes(xdp, buf_len - copy_len, buf, copy_len));
+    try_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf, copy_len));
   }
-  try_or_drop(bpf_xdp_adjust_tail(xdp, -(int)TCP_UDP_HEADER_DIFF));
+  try_drop(bpf_xdp_adjust_tail(xdp, -(int)TCP_UDP_HEADER_DIFF));
   return XDP_PASS;
 }
 
@@ -51,12 +51,12 @@ int ingress_handler(struct xdp_md* xdp) {
   if (!matches_whitelist(QUARTET_TCP, true)) return XDP_PASS;
 
   u32 vkey = SETTINGS_LOG_VERBOSITY;
-  u32 log_verbosity = *(u32*)try_ptr_or_drop(bpf_map_lookup_elem(&mimic_settings, &vkey));
+  u32 log_verbosity = *(u32*)try_p_drop(bpf_map_lookup_elem(&mimic_settings, &vkey));
 
   log_pkt(log_verbosity, LOG_LEVEL_DEBUG, N_("ingress: matched (fake) TCP packet"), QUARTET_TCP);
 
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP, true);
-  struct connection* conn = try_ptr_or_drop(get_conn(&conn_key));
+  struct connection* conn = try_p_drop(get_conn(&conn_key));
 
   u32 buf_len = bpf_xdp_get_buff_len(xdp);
   u32 payload_len = buf_len - ip_end - sizeof(*tcp);

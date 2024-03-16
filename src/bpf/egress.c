@@ -13,7 +13,7 @@
 // Extend socket buffer and move n bytes from front to back.
 static int mangle_data(struct __sk_buff* skb, u16 offset) {
   u16 data_len = skb->len - offset;
-  try_or_shot(bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0));
+  try_shot(bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0));
   u8 buf[TCP_UDP_HEADER_DIFF] = {};
   u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
   if (copy_len > 0) {
@@ -22,8 +22,8 @@ static int mangle_data(struct __sk_buff* skb, u16 offset) {
     // https://lore.kernel.org/bpf/f464186c-0353-9f9e-0271-e70a30e2fcdb@linux.dev/T/
     if (copy_len < 2) copy_len = 1;
 
-    try_or_shot(bpf_skb_load_bytes(skb, offset, buf, copy_len));
-    try_or_shot(bpf_skb_store_bytes(skb, skb->len - copy_len, buf, copy_len, 0));
+    try_shot(bpf_skb_load_bytes(skb, offset, buf, copy_len));
+    try_shot(bpf_skb_store_bytes(skb, skb->len - copy_len, buf, copy_len, 0));
   }
   return TC_ACT_OK;
 }
@@ -73,12 +73,12 @@ int egress_handler(struct __sk_buff* skb) {
   if (!matches_whitelist(QUARTET_UDP, false)) return TC_ACT_OK;
 
   u32 vkey = SETTINGS_LOG_VERBOSITY;
-  u32 log_verbosity = *(u32*)try_ptr_or_shot(bpf_map_lookup_elem(&mimic_settings, &vkey));
+  u32 log_verbosity = *(u32*)try_p_shot(bpf_map_lookup_elem(&mimic_settings, &vkey));
 
   log_pkt(log_verbosity, LOG_LEVEL_DEBUG, N_("egress: matched UDP packet"), QUARTET_UDP);
 
   struct conn_tuple conn_key = gen_conn_key(QUARTET_UDP, false);
-  struct connection* conn = try_ptr_or_shot(get_conn(&conn_key));
+  struct connection* conn = try_p_shot(get_conn(&conn_key));
 
   struct udphdr old_udphdr = *udp;
   old_udphdr.check = 0;
@@ -153,8 +153,8 @@ int egress_handler(struct __sk_buff* skb) {
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_TCP;
 
-    try_or_shot(bpf_l3_csum_replace(skb, ETH_HLEN + IPV4_CSUM_OFF, old_len, new_len, 2));
-    try_or_shot(bpf_l3_csum_replace(skb, ETH_HLEN + IPV4_CSUM_OFF, bpf_htons(IPPROTO_UDP), bpf_htons(IPPROTO_TCP), 2));
+    try_shot(bpf_l3_csum_replace(skb, ETH_HLEN + IPV4_CSUM_OFF, old_len, new_len, 2));
+    try_shot(bpf_l3_csum_replace(skb, ETH_HLEN + IPV4_CSUM_OFF, bpf_htons(IPPROTO_UDP), bpf_htons(IPPROTO_TCP), 2));
   } else if (ipv6) {
     ipv6->payload_len = bpf_htons(bpf_ntohs(ipv6->payload_len) + TCP_UDP_HEADER_DIFF);
     ipv6->nexthdr = IPPROTO_TCP;

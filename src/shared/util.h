@@ -93,7 +93,7 @@
 #ifndef _MIMIC_BPF
 
 // Same as `try`, but returns -errno
-#define try_errno(expr, ...)      \
+#define try_e(expr, ...)          \
   ({                              \
     int _ret = (expr);            \
     if (_ret < 0) {               \
@@ -103,8 +103,8 @@
     _ret;                         \
   })
 
-// `try_errno` but `cleanup`.
-#define try2_errno(expr, ...)       \
+// `try_e` but `cleanup`.
+#define try2_e(expr, ...)           \
   ({                                \
     int _ret = (expr);              \
     if (_ret < 0) {                 \
@@ -114,8 +114,8 @@
     _ret;                           \
   })
 
-// Similar to `try_errno`, but for function that returns a pointer.
-#define try_ptr(expr, ...)      \
+// Similar to `try_e`, but for function that returns a pointer.
+#define try_p(expr, ...)        \
   ({                            \
     void* _ptr = (expr);        \
     if (!_ptr) {                \
@@ -125,8 +125,8 @@
     _ptr;                       \
   })
 
-// Tests int return value from a function. Used for functions that returns non-zero error.
-#define try2_ptr(expr, ...)         \
+// Similar to `try2_e`, but for function that returns a pointer.
+#define try2_p(expr, ...)           \
   ({                                \
     void* _ptr = (expr);            \
     if (!_ptr) {                    \
@@ -146,23 +146,23 @@
     _val;                     \
   })
 
-#define try_or_ok(x) try_ret(x, TC_ACT_OK)
-#define try_or_shot(x) try_ret(x, TC_ACT_SHOT)
-#define try_or_pass(x) try_ret(x, XDP_PASS)
-#define try_or_drop(x) try_ret(x, XDP_DROP)
+#define try_ok(x) try_ret(x, TC_ACT_OK)
+#define try_shot(x) try_ret(x, TC_ACT_SHOT)
+#define try_pass(x) try_ret(x, XDP_PASS)
+#define try_drop(x) try_ret(x, XDP_DROP)
 
 // Tests pointer return value from a function, but return a different value when failed.
-#define try_ptr_ret(expr, ret) \
-  ({                           \
-    void* _ptr = (expr);       \
-    if (!_ptr) return ret;     \
-    _ptr;                      \
+#define try_p_ret(expr, ret) \
+  ({                         \
+    void* _ptr = (expr);     \
+    if (!_ptr) return ret;   \
+    _ptr;                    \
   })
 
-#define try_ptr_or_ok(x) try_ptr_ret(x, TC_ACT_OK)
-#define try_ptr_or_shot(x) try_ptr_ret(x, TC_ACT_SHOT)
-#define try_ptr_or_pass(x) try_ptr_ret(x, XDP_PASS)
-#define try_ptr_or_drop(x) try_ptr_ret(x, XDP_DROP)
+#define try_p_ok(x) try_p_ret(x, TC_ACT_OK)
+#define try_p_shot(x) try_p_ret(x, TC_ACT_SHOT)
+#define try_p_pass(x) try_p_ret(x, XDP_PASS)
+#define try_p_drop(x) try_p_ret(x, XDP_DROP)
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define max(x, y) ((x) < (y) ? (y) : (x))
