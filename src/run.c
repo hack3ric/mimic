@@ -198,7 +198,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
 
   // Get ring buffer in advance so we can return earlier if error
   log_rb = try2_p(ring_buffer__new(mimic_log_rb_fd, handle_event, NULL, NULL),
-                    _("failed to attach BPF ring buffer: %s"), strerror(-_ret));
+                  _("failed to attach BPF ring buffer: %s"), strerror(-_ret));
 
   // TC and XDP
   tc_hook_egress =
@@ -207,7 +207,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   tc_hook_created = true;
   try2(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler, "egress"));
   xdp_ingress = try2_p(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
-                         _("failed to attach XDP program: %s"), strerror(-_ret));
+                       _("failed to attach XDP program: %s"), strerror(-_ret));
 
   if (args->filter_count <= 0) {
     log_info(_("Mimic successfully deployed at %s"), args->ifname);
@@ -217,7 +217,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
     for (int i = 0; i < args->filter_count; i++) {
       char fmt[FILTER_FMT_MAX_LEN];
       pkt_filter_fmt(&filters[i], fmt);
-      log_info("  * %s", fmt);
+      log_info("- %s", fmt);
     }
   }
 
