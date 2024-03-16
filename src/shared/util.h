@@ -23,16 +23,16 @@
     if ((__u64)_ptr + sizeof(_type) > (__u64)(_ctx)->data_end) return _ret; \
     _ptr;                                                                   \
   })
-#define redecl_or_ok(type, name, off, skb) redecl(type, name, off, skb, TC_ACT_OK)
-#define redecl_or_shot(type, name, off, skb) redecl(type, name, off, skb, TC_ACT_SHOT)
-#define redecl_or_pass(type, name, off, xdp) redecl(type, name, off, xdp, XDP_PASS)
-#define redecl_or_drop(type, name, off, xdp) redecl(type, name, off, xdp, XDP_DROP)
+#define redecl_ok(type, name, off, skb) redecl(type, name, off, skb, TC_ACT_OK)
+#define redecl_shot(type, name, off, skb) redecl(type, name, off, skb, TC_ACT_SHOT)
+#define redecl_pass(type, name, off, xdp) redecl(type, name, off, xdp, XDP_PASS)
+#define redecl_drop(type, name, off, xdp) redecl(type, name, off, xdp, XDP_DROP)
 
 #define decl(type, name, off, ctx, ret) type* redecl(type, name, off, ctx, ret)
-#define decl_or_ok(type, name, off, skb) decl(type, name, off, skb, TC_ACT_OK)
-#define decl_or_shot(type, name, off, skb) decl(type, name, off, skb, TC_ACT_SHOT)
-#define decl_or_pass(type, name, off, xdp) decl(type, name, off, xdp, XDP_PASS)
-#define decl_or_drop(type, name, off, xdp) decl(type, name, off, xdp, XDP_DROP)
+#define decl_ok(type, name, off, skb) decl(type, name, off, skb, TC_ACT_OK)
+#define decl_shot(type, name, off, skb) decl(type, name, off, skb, TC_ACT_SHOT)
+#define decl_pass(type, name, off, xdp) decl(type, name, off, xdp, XDP_PASS)
+#define decl_drop(type, name, off, xdp) decl(type, name, off, xdp, XDP_DROP)
 
 #define _get_macro(_0, _1, _2, _3, _4, _5, NAME, ...) NAME
 

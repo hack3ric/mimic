@@ -27,7 +27,7 @@ static inline int restore_data(struct xdp_md* xdp, u16 offset, u32 buf_len) {
 
 SEC("xdp")
 int ingress_handler(struct xdp_md* xdp) {
-  decl_or_pass(struct ethhdr, eth, 0, xdp);
+  decl_pass(struct ethhdr, eth, 0, xdp);
   u16 eth_proto = bpf_ntohs(eth->h_proto);
 
   struct iphdr* ipv4 = NULL;
@@ -35,10 +35,10 @@ int ingress_handler(struct xdp_md* xdp) {
   u32 ip_end;
 
   if (eth_proto == ETH_P_IP) {
-    redecl_or_drop(struct iphdr, ipv4, ETH_HLEN, xdp);
+    redecl_drop(struct iphdr, ipv4, ETH_HLEN, xdp);
     ip_end = ETH_HLEN + sizeof(*ipv4);
   } else if (eth_proto == ETH_P_IPV6) {
-    redecl_or_drop(struct ipv6hdr, ipv6, ETH_HLEN, xdp);
+    redecl_drop(struct ipv6hdr, ipv6, ETH_HLEN, xdp);
     ip_end = ETH_HLEN + sizeof(*ipv6);
   } else {
     return XDP_PASS;
@@ -46,7 +46,7 @@ int ingress_handler(struct xdp_md* xdp) {
 
   u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? ipv6->nexthdr : 0;
   if (ip_proto != IPPROTO_TCP) return XDP_PASS;
-  decl_or_pass(struct tcphdr, tcp, ip_end, xdp);
+  decl_pass(struct tcphdr, tcp, ip_end, xdp);
 
   if (!matches_whitelist(QUARTET_TCP, true)) return XDP_PASS;
 
@@ -164,7 +164,7 @@ int ingress_handler(struct xdp_md* xdp) {
   }
 
   try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len));
-  decl_or_drop(struct udphdr, udp, ip_end, xdp);
+  decl_drop(struct udphdr, udp, ip_end, xdp);
 
   u16 udp_len = buf_len - ip_end - TCP_UDP_HEADER_DIFF;
   udp->len = bpf_htons(udp_len);

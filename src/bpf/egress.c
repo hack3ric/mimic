@@ -49,7 +49,7 @@ static __always_inline void update_tcp_header(struct tcphdr* tcp, u16 udp_len, b
 
 SEC("tc")
 int egress_handler(struct __sk_buff* skb) {
-  decl_or_ok(struct ethhdr, eth, 0, skb);
+  decl_ok(struct ethhdr, eth, 0, skb);
   u16 eth_proto = bpf_ntohs(eth->h_proto);
 
   struct iphdr* ipv4 = NULL;
@@ -57,10 +57,10 @@ int egress_handler(struct __sk_buff* skb) {
   u32 ip_end;
 
   if (eth_proto == ETH_P_IP) {
-    redecl_or_shot(struct iphdr, ipv4, ETH_HLEN, skb);
+    redecl_shot(struct iphdr, ipv4, ETH_HLEN, skb);
     ip_end = ETH_HLEN + sizeof(*ipv4);
   } else if (eth_proto == ETH_P_IPV6) {
-    redecl_or_shot(struct ipv6hdr, ipv6, ETH_HLEN, skb);
+    redecl_shot(struct ipv6hdr, ipv6, ETH_HLEN, skb);
     ip_end = ETH_HLEN + sizeof(*ipv6);
   } else {
     return TC_ACT_OK;
@@ -68,7 +68,7 @@ int egress_handler(struct __sk_buff* skb) {
 
   u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? ipv6->nexthdr : 0;
   if (ip_proto != IPPROTO_UDP) return TC_ACT_OK;
-  decl_or_ok(struct udphdr, udp, ip_end, skb);
+  decl_ok(struct udphdr, udp, ip_end, skb);
 
   if (!matches_whitelist(QUARTET_UDP, false)) return TC_ACT_OK;
 
@@ -161,7 +161,7 @@ int egress_handler(struct __sk_buff* skb) {
   }
 
   try(mangle_data(skb, ip_end + sizeof(*udp)));
-  decl_or_shot(struct tcphdr, tcp, ip_end, skb);
+  decl_shot(struct tcphdr, tcp, ip_end, skb);
   update_tcp_header(tcp, udp_len, syn, ack, rst, seq, ack_seq);
 
   tcp->check = 0;
