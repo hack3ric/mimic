@@ -1,163 +1,118 @@
 #include <argp.h>
-#include <json-c/json_object.h>
-#include <json-c/json_tokener.h>
-#include <json-c/json_types.h>
-#include <json-c/json_util.h>
+#include <bpf/libbpf.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "log.h"
 #include "mimic.h"
 #include "shared/util.h"
 
-struct lock_error {
-  enum lock_error_kind {
-    ERR_NULL,
-    ERR_INVALID_TYPE,
-    ERR_NOT_FOUND,
-    ERR_VERSION_MISMATCH,
-  } kind;
-  union {
-    struct {
-      const char* field;
-      json_type expected, got;
-    } invalid_type;
-    struct {
-      const char* field;
-    } not_found;
-    struct {
-      const char* got;
-    } version_mismatch;
-  };
-};
+#define TIMEOUT 1000
 
-static inline int lock_error_fmt(struct lock_error* error, char* buf, size_t len) {
-  switch (error->kind) {
-    case ERR_NULL: {
-      const char* msg = _("Success");
-      strncpy(buf, msg, len);
-      return strlen(msg);
-    }
-    case ERR_INVALID_TYPE:
-      return snprintf(buf, len, _("expected %s for field '%s', got %s"),
-                      json_type_to_name(error->invalid_type.expected), error->invalid_type.field,
-                      json_type_to_name(error->invalid_type.got));
-    case ERR_NOT_FOUND:
-      return snprintf(buf, len, _("field '%s' not found"), error->not_found.field);
-    case ERR_VERSION_MISMATCH:
-      return snprintf(buf, len, _("current Mimic version is %s, but lock file's is %s"), argp_program_version,
-                      error->version_mismatch.got);
+int lock_create_client() {
+  int sk = try_errno(socket(AF_UNIX, SOCK_DGRAM | SOCK_NONBLOCK, 0));
+  // Create UNIX socket with abstract address
+  sa_family_t addr = AF_UNIX;
+  if (bind(sk, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+    close(sk);
+    return -errno;
   }
+  return sk;
 }
 
-static inline struct json_object* lock_serialize_info(const struct lock_info* c) {
-  struct json_object* obj = json_object_new_object();
-
-  int ret = json_object_object_add(obj, "version", json_object_new_string(argp_program_version));
-  ret = ret ?: json_object_object_add(obj, "pid", json_object_new_int(c->pid));
-  ret = ret ?: json_object_object_add(obj, "egress_id", json_object_new_int(c->egress_id));
-  ret = ret ?: json_object_object_add(obj, "ingress_id", json_object_new_int(c->ingress_id));
-  ret = ret ?: json_object_object_add(obj, "whitelist_id", json_object_new_int(c->whitelist_id));
-  ret = ret ?: json_object_object_add(obj, "settings_id", json_object_new_int(c->settings_id));
-  ret = ret ?: json_object_object_add(obj, "conns_id", json_object_new_int(c->conns_id));
-  ret = ret ?: json_object_object_add(obj, "log_rb_id", json_object_new_int(c->log_rb_id));
-
-  if (ret) {
-    json_object_put(obj);
-    return NULL;
+int lock_create_server(const struct sockaddr_un* addr, int addr_len) {
+  int sk = try_errno(socket(AF_UNIX, SOCK_DGRAM | SOCK_NONBLOCK, 0));
+  if (bind(sk, (struct sockaddr*)addr, addr_len < 0 ? SUN_LEN(addr) : addr_len) < 0) {
+    close(sk);
+    return -errno;
   }
-  return obj;
+  return sk;
 }
 
-int lock_write_info(int sk, struct sockaddr_un* addr, const struct lock_info* c) {
-  struct json_object* lock_json = lock_serialize_info(c);
-  const char* buf = json_object_to_json_string(lock_json);
-  size_t buf_len = strlen(buf);
-  int result = try_errno(sendto(sk, buf, buf_len, 0, (struct sockaddr*)addr, sizeof(*addr)),
-                         _("failed to write lock file: %s"), strerror(-_ret));
-  json_object_put(lock_json);
-  if (result < buf_len) {
-    ret(-1, _("failed to write lock file: not enough bytes written (expected %lu, got %d)"), buf_len, result);
-  }
+static inline int wait_until_ready(int fd, short int events, int timeout) {
+  struct pollfd pfd = {.fd = fd, .events = events};
+  if (try_errno(poll(&pfd, 1, timeout)) == 0) return -ETIMEDOUT;
   return 0;
 }
 
-#define _lock_parse_field(_type, _type_val, obj, key, error, errored)                                         \
-  struct json_object* field;                                                                                  \
-  if (!json_object_object_get_ex(obj, key, &field)) {                                                         \
-    if (error) *error = (struct lock_error){.kind = ERR_NOT_FOUND, .not_found.field = key};                   \
-    *errored = true;                                                                                          \
-    return 0;                                                                                                 \
-  }                                                                                                           \
-  json_type field_type = json_object_get_type(field);                                                         \
-  if (field_type != _type_val) {                                                                              \
-    if (error) {                                                                                              \
-      *error = (struct lock_error){.kind = ERR_INVALID_TYPE,                                                  \
-                                   .invalid_type = {.field = key, .expected = _type_val, .got = field_type}}; \
-    }                                                                                                         \
-    *errored = true;                                                                                          \
-    return 0;                                                                                                 \
-  }                                                                                                           \
-  return json_object_get_##_type(field);
-
-static inline const char* lock_parse_field_string(const struct json_object* obj, const char* key,
-                                                  struct lock_error* error, bool* errored) {
-  _lock_parse_field(string, json_type_string, obj, key, error, errored);
+static inline int lock_send(int sk, const struct sockaddr_un* addr, int addr_len, const void* restrict value,
+                            size_t len) {
+  int sun_len = addr_len < 0 ? SUN_LEN(addr) : addr_len;
+  return sendto(sk, value, len, 0, (struct sockaddr*)addr, sun_len);
 }
 
-static inline int lock_parse_field_int(const struct json_object* obj, const char* key, struct lock_error* error,
-                                       bool* errored) {
-  _lock_parse_field(int, json_type_int, obj, key, error, errored);
+static inline int lock_send_req(int sk, const struct sockaddr_un* addr, int addr_len, const struct lock_request* req) {
+  int bytes = try_errno(lock_send(sk, addr, addr_len, req, sizeof(*req)));
+  if (bytes != sizeof(*req)) return -EMSGSIZE;
+  return 0;
 }
 
-struct lock_info lock_info_deserialize(const struct json_object* obj, struct lock_error* error) {
-  struct lock_info c = {};
-  bool errored = false;
-  json_type obj_type = json_object_get_type(obj);
-  if (obj_type != json_type_object) {
-    if (error) {
-      *error = (struct lock_error){.kind = ERR_INVALID_TYPE,
-                                   .invalid_type = {.field = NULL, .expected = json_type_object, .got = obj_type}};
-    }
-    return c;
+int lock_check_version(int sk, const struct sockaddr_un* addr, int addr_len, char* restrict buf, size_t buf_len) {
+  if (buf_len < VER_LEN) return -EINVAL;
+  struct lock_request req = {.kind = REQ_VERSION};
+  try(lock_send_req(sk, addr, addr_len, &req));
+  try(wait_until_ready(sk, POLLIN, TIMEOUT));
+  int recv_len = try_errno(recv(sk, buf, VER_LEN, 0));
+  if (recv_len < VER_LEN) return false;
+  return !strncmp(argp_program_version, buf, recv_len);
+}
+
+int lock_read_info(int sk, const struct sockaddr_un* addr, int addr_len, struct lock_info* c) {
+  struct lock_request req = {.kind = REQ_INFO};
+  try(lock_send_req(sk, addr, addr_len, &req));
+  try(wait_until_ready(sk, POLLIN, TIMEOUT));
+  int recv_len = try_errno(recv(sk, c, sizeof(*c), 0));
+  if (recv_len != sizeof(*c)) return -ENOMSG;
+  return 0;
+}
+
+int lock_notify_update(int sk, const struct sockaddr_un* addr, int addr_len, enum settings_key key) {
+  struct lock_request req = {.kind = REQ_UPDATE, .update.key = key};
+  try(lock_send_req(sk, addr, addr_len, &req));
+  try(wait_until_ready(sk, POLLIN, TIMEOUT));
+  // Receive zero-sized datagram as response
+  char buf;
+  try_errno(recv(sk, &buf, 0, 0));
+  return 0;
+}
+
+int lock_server_process(int sk, struct lock_request* req_buf, struct sockaddr_un* addr_buf, struct lock_info* info,
+                        struct bpf_map* settings, struct bpf_map* whitelist) {
+  socklen_t addr_len = sizeof(*addr_buf);
+  try_errno(recvfrom(sk, req_buf, sizeof(*req_buf), 0, (struct sockaddr*)addr_buf, &addr_len));
+  if (addr_buf->sun_family != AF_UNIX) {
+    ret(-EAFNOSUPPORT, _("(PROGRAM ERROR) UNIX socket returned non-UNIX address!?"));
   }
-  const char* version = lock_parse_field_string(obj, "version", error, &errored);
-  if (!errored && strcmp(version, argp_program_version) != 0) {
-    if (error) {
-      *error = (struct lock_error){.kind = ERR_VERSION_MISMATCH, .version_mismatch.got = version};
-    }
-    return c;
-  }
-  if (!errored) c.pid = lock_parse_field_int(obj, "pid", error, &errored);
-  if (!errored) c.egress_id = lock_parse_field_int(obj, "egress_id", error, &errored);
-  if (!errored) c.ingress_id = lock_parse_field_int(obj, "ingress_id", error, &errored);
-  if (!errored) c.whitelist_id = lock_parse_field_int(obj, "whitelist_id", error, &errored);
-  if (!errored) c.conns_id = lock_parse_field_int(obj, "conns_id", error, &errored);
-  if (!errored) c.settings_id = lock_parse_field_int(obj, "settings_id", error, &errored);
-  if (!errored) c.log_rb_id = lock_parse_field_int(obj, "log_rb_id", error, &errored);
-  return c;
-}
 
-// TODO: socket
-int lock_read_info(FILE* file, struct lock_info* c) {
-  char buf[1024] = {};
-  int result = try_errno(fread(buf, 1, sizeof(buf), file), _("failed to read lock file: %s"), strerror(-_ret));
-  if (result > 1023) ret(-1, _("failed to read lock file: file size too big (> %d)"), 1023);
-  buf[result + 1] = '\0';
-
-  enum json_tokener_error parse_error = json_tokener_success;
-  struct json_object* obj = try_ptr(json_tokener_parse_verbose(buf, &parse_error), _("failed to parse lock file: %s"),
-                                    json_tokener_error_desc(parse_error));
-
-  struct lock_error lock_error = {};
-  *c = lock_info_deserialize(obj, &lock_error);
-  json_object_put(obj);
-  if (lock_error.kind != ERR_NULL) {
-    lock_error_fmt(&lock_error, buf, 1023);
-    ret(-1, _("failed to parse lock file: %s"), buf);
+  // TODO: handle errors gracefully
+  __u32 value;
+  switch (req_buf->kind) {
+    case REQ_VERSION:
+      try_errno(lock_send(sk, addr_buf, addr_len, argp_program_version, VER_LEN));
+      break;
+    case REQ_INFO:
+      try_errno(lock_send(sk, addr_buf, addr_len, info, sizeof(*info)));
+      break;
+    case REQ_UPDATE:
+      switch (req_buf->update.key) {
+        case SETTINGS_LOG_VERBOSITY:
+          try(bpf_map__lookup_elem(settings, &req_buf->update.key, sizeof(__u32), &value, sizeof(__u32), 0));
+          log_verbosity = value;
+          log_warn(_("updated log verbosity: %d"), value);
+          break;
+        case SETTINGS_WHITELIST:
+          log_warn(_("updated filters"));
+          // TODO: print every filter
+          break;
+      }
+      try_errno(lock_send(sk, addr_buf, addr_len, &addr_len, 0));
+      break;
   }
 
   return 0;

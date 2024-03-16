@@ -49,12 +49,20 @@ int subcmd_show(struct show_arguments* args) {
   int ifindex = if_nametoindex(args->ifname);
   if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
 
-  char lock[32];
-  snprintf(lock, sizeof(lock), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
-  FILE* lock_file = try_ptr(fopen(lock, "r"), _("failed to open lock file at %s: %s"), lock, strerror(-_ret));
-  struct lock_info lock_content;
-  try(lock_read_info(lock_file, &lock_content));
-  fclose(lock_file);
+  _cleanup_fd int sk = try(lock_create_client(), _("failed to create socket: %s"), strerror(-_ret));
+  struct sockaddr_un lock = {.sun_family = AF_UNIX};
+  snprintf(lock.sun_path, sizeof(lock.sun_path), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
+
+  char ver_buf[32];
+  bool ver_matches =
+    try(lock_check_version(sk, &lock, -1, ver_buf, sizeof(ver_buf)), _("failed to check version: %s"), strerror(-_ret));
+  if (!ver_matches) {
+    ver_buf[sizeof(ver_buf) - 1] = '\0';
+    ret(-1, "current Mimic version is %s, but lock file's is %s", argp_program_version, ver_buf);
+  }
+
+  struct lock_info lock_info;
+  try(lock_read_info(sk, &lock, -1, &lock_info));
 
   _cleanup_fd int whitelist_fd = -1, conns_fd = -1;
 
@@ -64,9 +72,9 @@ int subcmd_show(struct show_arguments* args) {
 
   if (args->show_process) {
     printf(_("     \x1b[1;32mMIMIC\x1b[0m running at %s\n"), args->ifname);
-    printf(_("      \x1b[1mpid:\x1b[0m %d\n"), lock_content.pid);
+    printf(_("      \x1b[1mpid:\x1b[0m %d\n"), lock_info.pid);
 
-    whitelist_fd = try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
+    whitelist_fd = try(bpf_map_get_fd_by_id(lock_info.whitelist_id), _("failed to get fd of map '%s': %s"),
                        "mimic_whitelist", strerror(-_ret));
     struct pkt_filter filter;
     char buf[FILTER_FMT_MAX_LEN];
@@ -92,7 +100,7 @@ int subcmd_show(struct show_arguments* args) {
   if (args->show_process && args->show_command) printf("\n");
 
   if (args->show_command) {
-    conns_fd = try(bpf_map_get_fd_by_id(lock_content.conns_id), _("failed to get fd of map '%s': %s"), "mimic_conns",
+    conns_fd = try(bpf_map_get_fd_by_id(lock_info.conns_id), _("failed to get fd of map '%s': %s"), "mimic_conns",
                    strerror(-_ret));
     struct conn_tuple key;
     struct connection conn;

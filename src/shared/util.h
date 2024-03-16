@@ -204,6 +204,9 @@ static inline void cleanup_fd(int* fd) {
 #endif  // _MIMIC_BPF
 
 // mimic_settings keys
-#define SETTINGS_LOG_VERBOSITY 0x0001
+enum settings_key {
+  SETTINGS_LOG_VERBOSITY,
+  SETTINGS_WHITELIST,  // not stored in mimic_settings map
+};
 
 #endif  // _MIMIC_SHARED_UTIL_H

@@ -112,20 +112,9 @@ static inline int parse_filters(struct run_arguments* args, struct pkt_filter* f
   return 0;
 }
 
-// SIGUSR1 is used to sync userspace settings with BPF maps. When received SIGUSR1 from a `mimic edit` process, the
-// running daemon should update its settings, and then send SIGUSR1 back to the edit process.
-static inline int sync_settings(struct mimic_bpf* skel, uint32_t ssi_pid) {
-  __u32 key = SETTINGS_LOG_VERBOSITY, value;
-  try(bpf_map__lookup_elem(skel->maps.mimic_settings, &key, sizeof(key), &value, sizeof(value), 0));
-  log_verbosity = value;
-  kill(ssi_pid, SIGUSR1);
-  // log_warn(N_("updated settings: log_verbosity = %d"), value);
-  return 0;
-}
-
 #define MAX_EVENTS 10
 
-static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters, int lock_fd, int ifindex) {
+static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters, int lock_sk, int ifindex) {
   int retcode;
   _cleanup_fd int epfd = -1, sfd = -1;
 
@@ -178,15 +167,15 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
 #define _get_map_id(_name) \
   _get_id(map, map, _name, _("failed to get fd of map '%s': %s"), _("failed to get info of map '%s': %s"))
 
-  struct lock_info lock_content = {.pid = getpid()};
+  struct lock_info info = {.pid = getpid()};
 
-  lock_content.egress_id = _get_prog_id(egress_handler);
-  lock_content.ingress_id = _get_prog_id(ingress_handler);
+  info.egress_id = _get_prog_id(egress_handler);
+  info.ingress_id = _get_prog_id(ingress_handler);
 
-  lock_content.whitelist_id = _get_map_id(mimic_whitelist);
-  lock_content.conns_id = _get_map_id(mimic_conns);
-  lock_content.settings_id = _get_map_id(mimic_settings);
-  lock_content.log_rb_id = _get_map_id(mimic_log_rb);
+  info.whitelist_id = _get_map_id(mimic_whitelist);
+  info.conns_id = _get_map_id(mimic_conns);
+  info.settings_id = _get_map_id(mimic_settings);
+  info.log_rb_id = _get_map_id(mimic_log_rb);
 
   // try2(lock_write(lock_fd, &lock_content));
 
@@ -245,10 +234,13 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   // Signal handler
   sigset_t mask = {};
   sigaddset(&mask, SIGINT);
-  sigaddset(&mask, SIGUSR1);
   sfd = try2_errno(signalfd(-1, &mask, SFD_NONBLOCK), _("error creating signalfd: %s"), strerror(-_ret));
   ev = (struct epoll_event){.events = EPOLLIN | EPOLLET, .data.fd = sfd};
   try2_errno(epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
+
+  // Lock file IPC
+  ev = (struct epoll_event){.events = EPOLLIN, .data.fd = lock_sk};
+  try2_errno(epoll_ctl(epfd, EPOLL_CTL_ADD, lock_sk, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
 
   // Block default handler for signals of interest
   try2_errno(sigprocmask(SIG_SETMASK, &mask, NULL), _("error setting signal mask: %s"), strerror(-_ret));
@@ -268,12 +260,14 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
             fprintf(stderr, "\r");
             log_warn(_("SIGINT received, exiting"));
             cleanup(0);
-          case SIGUSR1:
-            try2(sync_settings(skel, siginfo.ssi_pid), _("failed to sync settings: %s"), strerror(-_ret));
-            break;
           default:
             break;
         }
+      } else if (events[i].data.fd == lock_sk) {
+        struct lock_request req_buf;
+        struct sockaddr_un addr_buf;
+        try2(lock_server_process(lock_sk, &req_buf, &addr_buf, &info, skel->maps.mimic_settings,
+                                 skel->maps.mimic_whitelist));
       } else {
         cleanup(-1, _("unknown fd: %d"), events[i].data.fd);
       }
@@ -291,6 +285,8 @@ cleanup:
 }
 
 int subcmd_run(struct run_arguments* args) {
+  int retcode;
+
   // TODO: capabilities
   //
   // needs cap_sys_admin=+pe and cap_net_admin=+pe
@@ -316,30 +312,37 @@ int subcmd_run(struct run_arguments* args) {
       ret(-errno, _("failed to stat %s: %s"), MIMIC_RUNTIME_DIR, strerror(errno));
     }
   }
-  int lock_fd = try(socket(AF_UNIX, SOCK_DGRAM | SOCK_NONBLOCK, 0));
   struct sockaddr_un addr = {.sun_family = AF_UNIX};
   snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
-  if (bind(lock_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-    close(lock_fd);
+  retcode = lock_create_server(&addr, -1);
+  if (retcode < 0) {
     log_error(_("failed to lock on %s at %s: %s"), args->ifname, addr.sun_path, strerror(errno));
-    // if (errno == EEXIST) {
-    //   FILE* lock_file = fopen(lock, "r");
-    //   if (lock_file) {
-    //     struct lock_content lock_content;
-    //     if (lock_read(lock_file, &lock_content) == 0) {
-    //       log_error(_("hint: is another Mimic process (PID %d) running on this interface?"), lock_content.pid);
-    //     } else {
-    //       log_error(_("hint: check %s"), lock);
-    //     }
-    //     fclose(lock_file);
-    //   }
-    // }
-    return -errno;
+    if (retcode == -EEXIST) {
+      _cleanup_fd int lock_sk = try(lock_create_client());
+      char ver_buf[32];
+      int retcode2 = lock_check_version(lock_sk, &addr, -1, ver_buf, sizeof(ver_buf));
+      if (retcode2 < 0) {
+        log_error(_("hint: check %s"), addr.sun_path);
+      } else if (retcode2) {
+        // Version matches
+        struct lock_info info;
+        if (lock_read_info(lock_sk, &addr, -1, &info) == 0) {
+          log_error(_("hint: is another Mimic process (PID %d) running on this interface?"), info.pid);
+        } else {
+          log_error(_("hint: check %s"), addr.sun_path);
+        }
+      } else {
+        ver_buf[sizeof(ver_buf) - 1] = '\0';
+        log_error(_("hint: is another Mimic process (version %s) running on this interface?"), ver_buf);
+      }
+    }
+    return retcode;
   }
+  int lock_sk = retcode;
 
   libbpf_set_print(libbpf_print_fn);
-  int retcode = run_bpf(args, filters, lock_fd, ifindex);
-  close(lock_fd);
+  retcode = run_bpf(args, filters, lock_sk, ifindex);
+  close(lock_sk);
   remove(addr.sun_path);
   return retcode;
 }

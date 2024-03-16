@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/signalfd.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #include "log.h"
@@ -106,25 +107,6 @@ static inline int parse_int_bounded(const char* str, int lower, int upper, int* 
   return 0;
 }
 
-static inline int sync_settings(pid_t pid) {
-  sigset_t mask = {}, orig_mask;
-  sigaddset(&mask, SIGUSR1);
-  try_errno(sigprocmask(SIG_SETMASK, &mask, &orig_mask), _("error setting signal mask: %s"), strerror(-_ret));
-
-  try_errno(kill(pid, SIGUSR1), _("failed to send signal to instance: %s"), strerror(-_ret));
-
-  int sigfd = try_errno(signalfd(-1, &mask, SFD_NONBLOCK), _("error creating signalfd: %s"), strerror(-_ret));
-  struct pollfd pfd = {.fd = sigfd, .events = POLLIN};
-  if (try_errno(poll(&pfd, 1, 1000), _("error polling signal: %s"), strerror(-_ret)) == 0) {
-    log_warn(_("listening for returning signal timed out"));
-  }
-
-  try_errno(sigprocmask(SIG_SETMASK, &orig_mask, &mask), _("error setting signal mask: %s"), strerror(-_ret));
-  close(sigfd);
-
-  return 0;
-}
-
 int subcmd_config(struct config_arguments* args) {
   int retcode;
 
@@ -133,13 +115,20 @@ int subcmd_config(struct config_arguments* args) {
   int ifindex = if_nametoindex(args->ifname);
   if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
 
-  char lock[32];
-  snprintf(lock, sizeof(lock), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
-  FILE* lock_file = try_ptr(fopen(lock, "r"), _("failed to open lock file at %s: %s"), lock, strerror(-_ret));
-  struct lock_info lock_info;
-  try(lock_read_info(lock_file, &lock_info));
-  fclose(lock_file);
+  _cleanup_fd int sk = try(lock_create_client(), _("failed to create socket: %s"), strerror(-_ret));
+  struct sockaddr_un lock = {.sun_family = AF_UNIX};
+  snprintf(lock.sun_path, sizeof(lock.sun_path), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
 
+  char ver_buf[32];
+  bool ver_matches =
+    try(lock_check_version(sk, &lock, -1, ver_buf, sizeof(ver_buf)), _("failed to check version: %s"), strerror(-_ret));
+  if (!ver_matches) {
+    ver_buf[sizeof(ver_buf) - 1] = '\0';
+    ret(-1, "current Mimic version is %s, but lock file's is %s", argp_program_version, ver_buf);
+  }
+
+  struct lock_info lock_info;
+  try(lock_read_info(sk, &lock, -1, &lock_info));
   _cleanup_fd int settings_fd = -1, whitelist_fd = -1;
 
   if (strcmp(args->key, "log.verbosity") == 0) {
@@ -156,7 +145,7 @@ int subcmd_config(struct config_arguments* args) {
     if (args->values[0]) {
       try(bpf_map_update_elem(settings_fd, &key, &parsed, BPF_EXIST), _("failed to update value of map '%s': %s"),
           "mimic_settings", strerror(-_ret));
-      try(sync_settings(lock_info.pid));
+      lock_notify_update(sk, &lock, -1, SETTINGS_LOG_VERBOSITY);
     } else {
       printf("%d\n", value);
     }
@@ -191,6 +180,7 @@ int subcmd_config(struct config_arguments* args) {
       } else {
         ret(-1, _("need to specify either --add or --delete"));
       }
+      lock_notify_update(sk, &lock, -1, SETTINGS_WHITELIST);
     } else if (args->clear) {
       while (true) {
         retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
@@ -200,6 +190,7 @@ int subcmd_config(struct config_arguments* args) {
         }
       }
       // log_warn(_("all filters removed"))
+      lock_notify_update(sk, &lock, -1, SETTINGS_WHITELIST);
     } else {
       retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
       if (retcode < 0 && retcode != -ENOENT) {
