@@ -12,12 +12,15 @@ Currently Mimic does not ship prebuilt binaries. You have to build it from sourc
 
 To run Mimic, you need a fairly recent Linux kernel, compiled with BPF (`CONFIG_BPF_SYSCALL=y`), BPF JIT (`CONFIG_BPF_JIT=y`), and BTF (`CONFIG_DEBUG_INFO_BTF=y`) support. Most distros enable them on 64-bit systems by default. On single-board computers with custom kernel, recompilation with these options enabled is probably needed.
 
+To check if current kernel have these options enabled, run `` grep CONFIG_[...] /boot/config-`uname -r` `` or `zgrep CONFIG_[...] /proc/config.gz`, where `CONFIG_[...]` is one of the kernel configurations above.
+
 BPF support varies depending on architecture, kernel version and distro configurations. Be ready if installed kernel won't load eBPF programs JITed even when enabled, or JIT does not support calling kernel function.
 
-The following is a list of kernel versions verified to work on certain architectures; feel free to test out and contribute to the list!
+The following is a list of kernel versions verified to work on certain architectures, or reasons why it will not work; feel free to test out and contribute to the list!
 
 - x86_64: >= v6.1
 - riscv64: >= v6.7
+- i386: JIT will fail with `** NOT YET **: opcode 85` in kernel output
 
 ### Kernel Module
 
@@ -72,6 +75,14 @@ On client side, `remote` filter is used to specify the server address:
 
 ## Building from Source
 
+Arch Linux users can use `mimic-bpf` or `mimic-bpf-git` packages in AUR:
+
+```console
+$ git clone https://aur.archlinux.org/mimic-bpf.git  # or mimic-bpf-git.git
+$ cd mimic-bpf*
+$ makepkg -si
+```
+
 Debian (>= 12, bookworm or later) and Ubuntu (>= 23.04, lunar or later) users can directly build Mimic as .deb package, with DKMS support:
 
 ```console
@@ -88,6 +99,8 @@ Otherwise, the following dependencies is required:
 - pahole, bpftool (for generating BPF stuff)
 - libbpf 1.x: `apt install libbpf-dev` on Debian or similar
 - json-c: `apt install libjson-c-dev` on Debian or similar
+
+`bpf-gcc` could be used, but commit [6103df1e](https://github.com/gcc-mirror/gcc/commit/6103df1e4fae5192c507484b1d32f00c42c70b54) needs to be included/backported; see Makefile for details.
 
 Then just simply run `make` to generate dynamically linked CLI and kernel modules. To build statically linked CLI, use `make STATIC=1`.
 

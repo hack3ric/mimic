@@ -2,7 +2,7 @@ BPF_CC ?= clang
 BPFTOOL ?= /usr/sbin/bpftool
 
 # -g is required (by Clang) to generate BTF
-# for bpf-gcc, use -gbtf and -mco-re
+# for bpf-gcc, use -mcpu-v3 -gbtf -mco-re -O3
 BPF_CFLAGS ?= --target=bpf -mcpu=v3 -g -O3
 MODE ?= debug
 
