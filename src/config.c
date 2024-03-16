@@ -22,8 +22,19 @@
 static const struct argp_option options[] = {
   {"add", 'a', NULL, 0, N_("Add values to a set"), 0},
   {"delete", 'd', NULL, 0, N_("Remove values from a set"), 0},
-  {"clear", 'c' << 8, NULL, 0, N_("Clear the configuration. Set value to null, or remove all elements from a set"), 1},
+  {"clear", 'c' << 8, NULL, 0, N_("Clear the configuration. Set value to null, or remove all elements from a set."), 1},
   {}};
+
+static const char doc[] = N_(
+  "Get or set configurations of an instance\n"
+  "\n"
+  "Options:")
+  "\v" N_(
+  "Available Settings:\n"
+  "\n"
+  "  log.verbosity              Control how many information logs will produce,\n"
+  "                             ranging [0,4]. Defaults to 2.\n"
+  "  whitelist                  Specify what packets to process\n");
 
 static inline void ensure_exclusitivity(struct config_arguments* args) {
   if (args->add || args->delete || args->clear) {
@@ -78,7 +89,7 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
   return 0;
 }
 
-const struct argp config_argp = {options, args_parse_opt, N_("<interface> <key> [value...]"), NULL};
+const struct argp config_argp = {options, args_parse_opt, N_("<interface> <key> [value...]"), doc};
 
 // [lower, upper]
 static inline int parse_int_bounded(const char* str, int lower, int upper, int* value) {
