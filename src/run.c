@@ -14,7 +14,9 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/signalfd.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #include "bpf_skel.h"
@@ -186,7 +188,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
   lock_content.settings_id = _get_map_id(mimic_settings);
   lock_content.log_rb_id = _get_map_id(mimic_log_rb);
 
-  try2(lock_write(lock_fd, &lock_content));
+  // try2(lock_write(lock_fd, &lock_content));
 
   __u32 vkey = SETTINGS_LOG_VERBOSITY, vvalue = log_verbosity;
   try2(bpf_map__update_elem(skel->maps.mimic_settings, &vkey, sizeof(__u32), &vvalue, sizeof(__u32), BPF_ANY),
@@ -314,29 +316,30 @@ int subcmd_run(struct run_arguments* args) {
       ret(-errno, _("failed to stat %s: %s"), MIMIC_RUNTIME_DIR, strerror(errno));
     }
   }
-  char lock[32];
-  snprintf(lock, sizeof(lock), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
-  int lock_fd = open(lock, O_CREAT | O_EXCL | O_WRONLY, 0644);
-  if (lock_fd < 0) {
-    log_error(_("failed to lock on %s at %s: %s"), args->ifname, lock, strerror(errno));
-    if (errno == EEXIST) {
-      FILE* lock_file = fopen(lock, "r");
-      if (lock_file) {
-        struct lock_content lock_content;
-        if (lock_read(lock_file, &lock_content) == 0) {
-          log_error(_("hint: is another Mimic process (PID %d) running on this interface?"), lock_content.pid);
-        } else {
-          log_error(_("hint: check %s"), lock);
-        }
-        fclose(lock_file);
-      }
-    }
+  int lock_fd = try(socket(AF_UNIX, SOCK_DGRAM | SOCK_NONBLOCK, 0));
+  struct sockaddr_un addr = {.sun_family = AF_UNIX};
+  snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
+  if (bind(lock_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+    close(lock_fd);
+    log_error(_("failed to lock on %s at %s: %s"), args->ifname, addr.sun_path, strerror(errno));
+    // if (errno == EEXIST) {
+    //   FILE* lock_file = fopen(lock, "r");
+    //   if (lock_file) {
+    //     struct lock_content lock_content;
+    //     if (lock_read(lock_file, &lock_content) == 0) {
+    //       log_error(_("hint: is another Mimic process (PID %d) running on this interface?"), lock_content.pid);
+    //     } else {
+    //       log_error(_("hint: check %s"), lock);
+    //     }
+    //     fclose(lock_file);
+    //   }
+    // }
     return -errno;
   }
 
   libbpf_set_print(libbpf_print_fn);
   int retcode = run_bpf(args, filters, lock_fd, ifindex);
   close(lock_fd);
-  remove(lock);
+  remove(addr.sun_path);
   return retcode;
 }

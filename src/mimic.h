@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/un.h>
 
 #include "shared/filter.h"
 
@@ -51,7 +52,7 @@ struct lock_content {
   int whitelist_id, conns_id, settings_id, log_rb_id;
 };
 
-int lock_write(int fd, const struct lock_content* c);
+int lock_write(int fd, struct sockaddr_un* sk, const struct lock_content* c);
 int lock_read(FILE* file, struct lock_content* c);
 
 int parse_filter(const char* filter_str, struct pkt_filter* filter);

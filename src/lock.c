@@ -6,6 +6,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #include "mimic.h"
@@ -70,11 +72,12 @@ static inline struct json_object* lock_serialize(const struct lock_content* c) {
   return obj;
 }
 
-int lock_write(int fd, const struct lock_content* c) {
+int lock_write(int sk, struct sockaddr_un* addr, const struct lock_content* c) {
   struct json_object* lock_json = lock_serialize(c);
   const char* buf = json_object_to_json_string(lock_json);
   size_t buf_len = strlen(buf);
-  int result = try_errno(write(fd, buf, buf_len), _("failed to write lock file: %s"), strerror(-_ret));
+  int result = try_errno(sendto(sk, buf, buf_len, 0, (struct sockaddr*)addr, sizeof(*addr)),
+                         _("failed to write lock file: %s"), strerror(-_ret));
   json_object_put(lock_json);
   if (result < buf_len) {
     ret(-1, _("failed to write lock file: not enough bytes written (expected %lu, got %d)"), buf_len, result);
@@ -138,6 +141,7 @@ struct lock_content lock_deserialize(const struct json_object* obj, struct lock_
   return c;
 }
 
+// TODO: socket
 int lock_read(FILE* file, struct lock_content* c) {
   char buf[1024] = {};
   int result = try_errno(fread(buf, 1, sizeof(buf), file), _("failed to read lock file: %s"), strerror(-_ret));
