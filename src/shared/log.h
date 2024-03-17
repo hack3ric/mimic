@@ -1,7 +1,9 @@
 #ifndef _MIMIC_SHARED_LOG_H
 #define _MIMIC_SHARED_LOG_H
 
+#include "conn.h"
 #include "filter.h"
+#include "gettext.h"
 
 // need to define `log_verbosity` besides including this file.
 #define LOG_ALLOW_ERROR (log_verbosity >= LOG_LEVEL_ERROR)
@@ -10,10 +12,6 @@
 #define LOG_ALLOW_DEBUG (log_verbosity >= LOG_LEVEL_DEBUG)
 #define LOG_ALLOW_TRACE (log_verbosity >= LOG_LEVEL_TRACE)
 
-#define LOG_RB_ITEM_LEN 128
-#define LOG_RB_MSG_LEN (LOG_RB_ITEM_LEN - 4)
-#define LOG_RB_PKT_MSG_LEN 84
-
 struct log_event {
   enum log_level {
     LOG_LEVEL_ERROR,
@@ -21,22 +19,23 @@ struct log_event {
     LOG_LEVEL_INFO,
     LOG_LEVEL_DEBUG,
     LOG_LEVEL_TRACE,
-  } level : 16;
+  } level;
+  bool ingress;
   enum log_type {
-    LOG_TYPE_MSG,
-    LOG_TYPE_PKT,
-  } type : 16;
-  union {
-    char msg[LOG_RB_MSG_LEN];
-    struct pkt_info {
-      char msg[LOG_RB_PKT_MSG_LEN];
-      enum ip_proto protocol;
-      __u16 from_port, to_port;
-      union ip_value from, to;
-    } pkt;
-  } inner;
+    LOG_TYPE_MATCHED,         // quartet
+    LOG_TYPE_CONN_ESTABLISH,  // quartet
+    LOG_TYPE_TCP_PKT,         // tcp (ignore state)
+    LOG_TYPE_STATE,           // tcp
+    LOG_TYPE_RST,             // quartet
+    LOG_TYPE_CONN_DESTROY,    // quartet
+  } type;
+  union log_info {
+    struct fake_tcp_info {
+      enum conn_state state;
+      __u32 seq, ack_seq;
+    } tcp;
+    struct conn_tuple quartet;
+  } info;
 };
-
-_Static_assert(sizeof(struct log_event) == LOG_RB_ITEM_LEN, "log_event length mismatch");
 
 #endif  // _MIMIC_SHARED_LOG_H

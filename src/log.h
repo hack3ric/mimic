@@ -2,6 +2,7 @@
 #define _MIMIC_LOG_H
 
 #include <bpf/libbpf.h>
+#include <stdarg.h>
 #include <stdio.h>
 
 #include "shared/gettext.h"
@@ -19,21 +20,16 @@ static const char* _log_prefixes[] = {
   _LOG_ERROR_PREFIX, _LOG_WARN_PREFIX, _LOG_INFO_PREFIX, _LOG_DEBUG_PREFIX, _LOG_TRACE_PREFIX,
 };
 
-#define log(_l, fmt, ...)                          \
-  do {                                             \
-    if (log_verbosity >= (_l)) {                   \
-      fprintf(stderr, "%s", _(_log_prefixes[_l])); \
-      fprintf(stderr, fmt, ##__VA_ARGS__);         \
-      fprintf(stderr, "\n");                       \
-    }                                              \
-  } while (0)
+void log_any(int level, const char* fmt, ...);
 
-#define log_error(fmt, ...) log(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
-#define log_warn(fmt, ...) log(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)
-#define log_info(fmt, ...) log(LOG_LEVEL_INFO, fmt, ##__VA_ARGS__)
-#define log_debug(fmt, ...) log(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
-#define log_trace(fmt, ...) log(LOG_LEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define log_error(fmt, ...) log_any(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define log_warn(fmt, ...) log_any(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)
+#define log_info(fmt, ...) log_any(LOG_LEVEL_INFO, fmt, ##__VA_ARGS__)
+#define log_debug(fmt, ...) log_any(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define log_trace(fmt, ...) log_any(LOG_LEVEL_TRACE, fmt, ##__VA_ARGS__)
 
 int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list args);
+
+const char* log_type_to_str(bool ingress, enum log_type type);
 
 #endif  // _MIMIC_LOG_H

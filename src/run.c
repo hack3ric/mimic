@@ -22,6 +22,7 @@
 #include "bpf_skel.h"
 #include "log.h"
 #include "mimic.h"
+#include "shared/conn.h"
 #include "shared/filter.h"
 #include "shared/log.h"
 #include "shared/util.h"
@@ -89,16 +90,25 @@ static inline int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* 
 
 static int handle_event(void* ctx, void* data, size_t data_sz) {
   struct log_event* e = data;
-  if (e->type == LOG_TYPE_MSG) {
-    log(e->level, "%s", e->inner.msg);
-    return 0;
-  } else if (e->type == LOG_TYPE_PKT) {
+  const char* dir_str = e->ingress ? _("ingress") : _("egress");
+  if (e->type == LOG_TYPE_TCP_PKT) {
+    log_any(e->level, "%s: %s: seq %08x, ack %08x", dir_str, log_type_to_str(e->ingress, e->type), e->info.tcp.seq,
+            e->info.tcp.ack_seq);
+  } else if (e->type == LOG_TYPE_STATE) {
+    log_any(e->level, "%s: %s: %s, seq %08x, ack %08x", dir_str, log_type_to_str(e->ingress, e->type),
+            conn_state_to_str(e->info.tcp.state), e->info.tcp.seq, e->info.tcp.ack_seq);
+  } else {
     char from[IP_PORT_MAX_LEN], to[IP_PORT_MAX_LEN];
-    struct pkt_info* pkt = &e->inner.pkt;
-    ip_port_fmt(pkt->protocol, pkt->from, pkt->from_port, from);
-    ip_port_fmt(pkt->protocol, pkt->to, pkt->to_port, to);
-
-    log(e->level, "%s: %s -> %s", pkt->msg, from, to);
+    struct conn_tuple* pkt = &e->info.quartet;
+    // invert again, since conn_tuple passed to it is already inverted
+    if (e->ingress) {
+      ip_port_fmt(pkt->protocol, pkt->local, pkt->local_port, to);
+      ip_port_fmt(pkt->protocol, pkt->remote, pkt->remote_port, from);
+    } else {
+      ip_port_fmt(pkt->protocol, pkt->local, pkt->local_port, from);
+      ip_port_fmt(pkt->protocol, pkt->remote, pkt->remote_port, to);
+    }
+    log_any(e->level, "%s: %s: %s => %s", dir_str, log_type_to_str(e->ingress, e->type), from, to);
   }
   return 0;
 }

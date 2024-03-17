@@ -75,9 +75,8 @@ int egress_handler(struct __sk_buff* skb) {
   u32 vkey = SETTINGS_LOG_VERBOSITY;
   u32 log_verbosity = *(u32*)try_p_shot(bpf_map_lookup_elem(&mimic_settings, &vkey));
 
-  log_pkt(log_verbosity, LOG_LEVEL_DEBUG, N_("egress: matched UDP packet"), QUARTET_UDP);
-
   struct conn_tuple conn_key = gen_conn_key(QUARTET_UDP, false);
+  log_quartet(log_verbosity, LOG_LEVEL_DEBUG, false, LOG_TYPE_MATCHED, conn_key);
   struct connection* conn = try_p_shot(get_conn(&conn_key));
 
   struct udphdr old_udphdr = *udp;
@@ -86,9 +85,10 @@ int egress_handler(struct __sk_buff* skb) {
 
   u16 udp_len = bpf_ntohs(udp->len);
   u16 payload_len = udp_len - sizeof(*udp);
-  log_trace(N_("egress: payload_len = %d"), payload_len);
+  // log_trace(N_("egress: payload_len = %d"), payload_len);
 
   bool syn = false, ack = false, rst = false, newly_estab = false;
+  enum conn_state conn_state;
   u32 seq, ack_seq, conn_seq, conn_ack_seq;
   u32 random = bpf_get_prandom_u32();
   enum rst_result rst_result = RST_NONE;
@@ -132,20 +132,21 @@ int egress_handler(struct __sk_buff* skb) {
         break;
     }
   }
+  conn_state = conn->state;
   conn_seq = conn->seq;
   conn_ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
   if (rst) {
-    log_pkt(log_verbosity, LOG_LEVEL_WARN, N_("egress: sending RST"), QUARTET_UDP);
+    log_quartet(log_verbosity, LOG_LEVEL_WARN, false, LOG_TYPE_RST, conn_key);
     if (rst_result == RST_DESTROYED) {
-      log_pkt(log_verbosity, LOG_LEVEL_WARN, N_("egress: destroyed connection"), QUARTET_UDP);
+      log_quartet(log_verbosity, LOG_LEVEL_WARN, false, LOG_TYPE_CONN_DESTROY, conn_key);
     }
   }
   if (newly_estab) {
-    log_pkt(log_verbosity, LOG_LEVEL_INFO, N_("egress: established connection"), QUARTET_UDP);
+    log_quartet(log_verbosity, LOG_LEVEL_INFO, false, LOG_TYPE_CONN_ESTABLISH, conn_key);
   }
-  log_trace(N_("egress: sending TCP packet: seq = %u, ack_seq = %u"), seq, ack_seq);
-  log_trace(N_("egress: current state: seq = %u, ack_seq = %u"), conn_seq, conn_ack_seq);
+  log_tcp(log_verbosity, LOG_LEVEL_TRACE, false, LOG_TYPE_TCP_PKT, 0, seq, ack_seq);
+  log_tcp(log_verbosity, LOG_LEVEL_TRACE, false, LOG_TYPE_STATE, conn_state, conn_seq, conn_ack_seq);
 
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
