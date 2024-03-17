@@ -10,7 +10,7 @@
 int parse_filter(const char* filter_str, struct pkt_filter* filter) {
   char* delim_pos = strchr(filter_str, '=');
   if (delim_pos == NULL || delim_pos == filter_str) {
-    ret(-1, _("filter format should look like `{key}={value}`: %s"), filter_str);
+    ret(-1, _("filter format should look like `key=value`: %s"), filter_str);
   }
 
   if (strncmp("local=", filter_str, 6) == 0) {

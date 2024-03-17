@@ -81,7 +81,7 @@ static inline int parse_config_file(FILE* file, struct run_arguments* args) {
 
     char* delim_pos = strchr(line, '=');
     if (delim_pos == NULL || delim_pos == line) {
-      cleanup(-1, _("configuration format should look like `{key}={value}`: %s"), line);
+      cleanup(-1, _("configuration format should look like `key=value`: %s"), line);
     }
 
     // Overwrite delimiter and newline
