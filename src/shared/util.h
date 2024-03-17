@@ -7,6 +7,7 @@
 #include "../bpf/log.h"
 #else
 #include <linux/pkt_cls.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include "../log.h"
 #endif
@@ -197,7 +198,6 @@
 static inline void cleanup_fd(int* fd) {
   if (*fd >= 0) close(*fd);
 }
-
 static inline void cleanup_file(FILE** file) {
   if (*file) fclose(*file);
 }

@@ -26,16 +26,17 @@
 #include "shared/util.h"
 
 static const struct argp_option options[] = {
-  {"filter", 'f', N_("FILTER"), 0, N_("Specify what packets to process. This may be specified for multiple times.")},
-  {"verbose", 'v', NULL, 0, N_("Output more information")},
-  {"quiet", 'q', NULL, 0, N_("Output less information")},
+  {"filter", 'f', N_("FILTER"), 0, N_("Specify what packets to process. This may be specified for multiple times."), 0},
+  {"verbose", 'v', NULL, 0, N_("Output more information"), 0},
+  {"quiet", 'q', NULL, 0, N_("Output less information"), 0},
+  {"file", 'F', N_("PATH"), 0, N_("Load configuration from file"), 1},
   {}};
 
 static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
   struct run_arguments* args = (struct run_arguments*)state->input;
   switch (key) {
     case 'f':
-      args->filters[args->filter_count] = arg;
+      try(parse_filter(arg, &args->filters[args->filter_count]));
       if (args->filter_count++ > 8) {
         log_error(_("currently only maximum of 8 filters is supported"));
         exit(1);
@@ -46,6 +47,9 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       break;
     case 'q':
       if (log_verbosity > 0) log_verbosity--;
+      break;
+    case 'F':
+      args->file = arg;
       break;
     case ARGP_KEY_ARG:
       if (!args->ifname) {
@@ -64,6 +68,53 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
 }
 
 const struct argp run_argp = {options, args_parse_opt, N_("<interface>"), NULL};
+
+static inline int parse_config_file(FILE* file, struct run_arguments* args) {
+  int retcode;
+  char *line = NULL, *key, *value, *endptr;
+  size_t len = 0;
+  ssize_t read;
+
+  errno = 0;
+  while ((read = getline(&line, &len, file)) != -1) {
+    if (line[0] == '\n' || line[0] == '#') continue;
+
+    char* delim_pos = strchr(line, '=');
+    if (delim_pos == NULL || delim_pos == line) {
+      cleanup(-1, _("configuration format should look like `{key}={value}`: %s"), line);
+    }
+
+    // Overwrite delimiter and newline
+    delim_pos[0] = '\0';
+    if (line[read - 1] == '\n') line[read - 1] = '\0';
+
+    key = line;
+    value = delim_pos + 1;
+    endptr = NULL;
+
+    if (strcmp(key, "log.verbosity") == 0) {
+      int parsed = strtol(value, &endptr, 10);
+      if (endptr && endptr != value + strlen(value)) cleanup(-1, _("invalid integer: %s"), value);
+      if (parsed < 0) parsed = 0;
+      if (parsed > 4) parsed = 4;
+      log_verbosity = parsed;
+
+    } else if (strcmp(key, "filter") == 0) {
+      try(parse_filter(value, &args->filters[args->filter_count]));
+      if (args->filter_count++ > 8) cleanup(-1, _("currently only maximum of 8 filters is supported"));
+
+    } else {
+      cleanup(-1, _("unknown key '%s'"), key);
+    }
+  }
+
+  if (errno) cleanup(-errno, _("failed to read line: %s"), strerror(errno));
+
+  retcode = 0;
+cleanup:
+  if (line) free(line);
+  return retcode;
+}
 
 static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts,
                                       const struct bpf_program* prog, char* name) {
@@ -111,18 +162,9 @@ static int handle_event(void* ctx, void* data, size_t data_sz) {
   return 0;
 }
 
-static inline int parse_filters(struct run_arguments* args, struct pkt_filter* filters) {
-  for (int i = 0; i < args->filter_count; i++) {
-    struct pkt_filter* filter = &filters[i];
-    char* filter_str = args->filters[i];
-    try(parse_filter(filter_str, filter));
-  }
-  return 0;
-}
-
 #define MAX_EVENTS 10
 
-static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters, int lock_fd, int ifindex) {
+static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) {
   int retcode;
   _cleanup_fd int epfd = -1, sfd = -1;
 
@@ -193,11 +235,11 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
 
   bool value = true;
   for (int i = 0; i < args->filter_count; i++) {
-    retcode = bpf_map__update_elem(skel->maps.mimic_whitelist, &filters[i], sizeof(struct pkt_filter), &value,
+    retcode = bpf_map__update_elem(skel->maps.mimic_whitelist, &args->filters[i], sizeof(struct pkt_filter), &value,
                                    sizeof(bool), BPF_ANY);
     if (retcode || LOG_ALLOW_DEBUG) {
       char fmt[FILTER_FMT_MAX_LEN];
-      pkt_filter_fmt(&filters[i], fmt);
+      pkt_filter_fmt(&args->filters[i], fmt);
       if (retcode) {
         cleanup(retcode, _("failed to add filter `%s`: %s"), fmt, strerror(-retcode));
       } else if (LOG_ALLOW_DEBUG) {
@@ -226,7 +268,7 @@ static inline int run_bpf(struct run_arguments* args, struct pkt_filter* filters
     log_info(_("Mimic successfully deployed at %s with filters:"), args->ifname);
     for (int i = 0; i < args->filter_count; i++) {
       char fmt[FILTER_FMT_MAX_LEN];
-      pkt_filter_fmt(&filters[i], fmt);
+      pkt_filter_fmt(&args->filters[i], fmt);
       log_info("- %s", fmt);
     }
   }
@@ -295,11 +337,16 @@ int subcmd_run(struct run_arguments* args) {
   int ifindex = if_nametoindex(args->ifname);
   if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
 
-  struct pkt_filter filters[args->filter_count];
-  if (args->filter_count > 0) {
-    memset(filters, 0, args->filter_count * sizeof(*filters));
-    try(parse_filters(args, filters));
+  if (args->file) {
+    _cleanup_file FILE* config_file = try_p(fopen(args->file, "r"), "failed to open ");
+    try(parse_config_file(config_file, args), _("failed to read configuration file"));
   }
+
+  // struct pkt_filter filters[args->filter_count];
+  // if (args->filter_count > 0) {
+  //   memset(filters, 0, args->filter_count * sizeof(*filters));
+  //   try(parse_filters(args, filters));
+  // }
 
   // Lock file
   struct stat st = {};
@@ -332,7 +379,7 @@ int subcmd_run(struct run_arguments* args) {
   }
 
   libbpf_set_print(libbpf_print_fn);
-  retcode = run_bpf(args, filters, lock_fd, ifindex);
+  retcode = run_bpf(args, lock_fd, ifindex);
   close(lock_fd);
   remove(lock);
   return retcode;

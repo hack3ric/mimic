@@ -2,7 +2,6 @@
 #include <linux/types.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 
 #include "shared/filter.h"
 #include "shared/gettext.h"

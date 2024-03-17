@@ -3,27 +3,27 @@
 
 #include <argp.h>
 #include <stdbool.h>
-#include <sys/types.h>
 #include <stdio.h>
+#include <sys/types.h>
 
 #include "shared/filter.h"
 
 #define CONFIG_MAX_VALUES 16
 
 struct arguments {
-  enum argument_cmd {
+  enum {
     CMD_NULL,
     CMD_run,
     CMD_show,
   } cmd;
   union {
     struct run_arguments {
-      char* ifname;
-      char* filters[8];
+      const char *ifname, *file;
+      struct pkt_filter filters[8];
       unsigned int filter_count;
     } run;
     struct show_arguments {
-      char* ifname;
+      const char* ifname;
       bool show_process, show_command;
     } show;
   };
