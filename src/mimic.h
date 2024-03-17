@@ -4,8 +4,9 @@
 #include <argp.h>
 #include <stdbool.h>
 #include <sys/types.h>
+#include <stdio.h>
 
-#include "shared/util.h"
+#include "shared/filter.h"
 
 #define CONFIG_MAX_VALUES 16
 
@@ -35,38 +36,14 @@ extern const struct argp show_argp;
 int subcmd_run(struct run_arguments* args);
 int subcmd_show(struct show_arguments* args);
 
-struct lock_client {
-  int sk;
-  struct sockaddr_un* addr;
-  int addr_len;
-};
-
-struct lock_request {
-  enum lock_request_kind { REQ_VERSION, REQ_INFO, REQ_UPDATE } kind;
-  union {
-    struct {
-      enum settings_key key;
-    } update;
-  };
-};
-
-struct lock_info {
+struct lock_content {
   pid_t pid;
   int egress_id, ingress_id;
   int whitelist_id, conns_id, settings_id, log_rb_id;
 };
 
-#define VER_LEN sizeof(argp_program_version)
-
-int lock_create_client();
-int lock_create_server(const struct sockaddr_un* addr, int addr_len);
-
-int lock_check_version(int sk, const struct sockaddr_un* addr, int addr_len, char* restrict buf, size_t buf_len);
-int lock_check_version_print(int sk, const struct sockaddr_un* addr, int addr_len);
-int lock_read_info(int sk, const struct sockaddr_un* addr, int addr_len, struct lock_info* c);
-int lock_notify_update(int sk, const struct sockaddr_un* addr, int addr_len, enum settings_key key);
-int lock_server_process(int sk, struct lock_request* req_buf, struct sockaddr_un* addr_buf, struct lock_info* info,
-                        struct bpf_map* settings, struct bpf_map* whitelist);
+int lock_write(int fd, const struct lock_content* c);
+int lock_read(FILE* file, struct lock_content* c);
 
 int parse_filter(const char* filter_str, struct pkt_filter* filter);
 

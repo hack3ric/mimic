@@ -198,7 +198,12 @@ static inline void cleanup_fd(int* fd) {
   if (*fd >= 0) close(*fd);
 }
 
+static inline void cleanup_file(FILE** file) {
+  if (*file) fclose(*file);
+}
+
 #define _cleanup_fd __attribute__((__cleanup__(cleanup_fd)))
+#define _cleanup_file __attribute__((__cleanup__(cleanup_file)))
 
 #endif  // _MIMIC_BPF
 

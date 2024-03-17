@@ -1,5 +1,4 @@
 #include <argp.h>
-#include <stddef.h>
 
 #include "mimic.h"
 #include "shared/gettext.h"
