@@ -284,6 +284,7 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   // Signal handler
   sigset_t mask = {};
   sigaddset(&mask, SIGINT);
+  sigaddset(&mask, SIGTERM);
   sfd = try2_e(signalfd(-1, &mask, SFD_NONBLOCK), _("error creating signalfd: %s"), strerror(-_ret));
   ev = (struct epoll_event){.events = EPOLLIN | EPOLLET, .data.fd = sfd};
   try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
@@ -303,9 +304,9 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
       } else if (events[i].data.fd == sfd) {
         len = try2_e(read(sfd, &siginfo, sizeof(siginfo)), _("failed to read signalfd: %s"), strerror(-_ret));
         if (len != sizeof(siginfo)) cleanup(-1, "len != sizeof(siginfo)");
-        if (siginfo.ssi_signo == SIGINT) {
-          fprintf(stderr, "\r");
-          log_warn(_("SIGINT received, exiting"));
+        if (siginfo.ssi_signo == SIGINT || siginfo.ssi_signo == SIGTERM) {
+          const char* sigstr = siginfo.ssi_signo == SIGINT ? "SIGINT" : "SIGTERM";
+          log_warn(_("%s received, exiting"), sigstr);
           cleanup(0);
         }
 
