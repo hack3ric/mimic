@@ -14,7 +14,6 @@ struct arguments {
     CMD_NULL,
     CMD_run,
     CMD_show,
-    CMD_config,
   } cmd;
   union {
     struct run_arguments {
@@ -26,23 +25,15 @@ struct arguments {
       char* ifname;
       bool show_process, show_command;
     } show;
-    struct config_arguments {
-      char* ifname;
-      char* key;
-      char* values[CONFIG_MAX_VALUES];
-      bool add, delete, clear;
-    } config;
   };
 };
 
 extern const struct argp argp;
 extern const struct argp run_argp;
 extern const struct argp show_argp;
-extern const struct argp config_argp;
 
 int subcmd_run(struct run_arguments* args);
 int subcmd_show(struct show_arguments* args);
-int subcmd_config(struct config_arguments* args);
 
 struct lock_client {
   int sk;

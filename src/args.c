@@ -19,7 +19,6 @@ static const char doc[] = N_(
   "\n"
   "      run                    Run Mimic on an network interface\n"
   "      show                   Show overview of a currently running instance\n"
-  "      config                 Get or set configurations of an instance\n"
   "\n"
   "Options:");
 
@@ -56,7 +55,6 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
     case ARGP_KEY_ARG:
       gen_cmd_parse(run);
       gen_cmd_parse(show);
-      gen_cmd_parse(config);
       log_error(_("unknown command '%s'"), arg);
       exit(1);
       break;
