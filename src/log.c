@@ -13,16 +13,16 @@ void log_any(int level, const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   if (log_verbosity >= level) {
-    fprintf(stderr, "%s %s " RESET, _log_prefixes[level][0], gettext(_log_prefixes[level][1]));
+    fprintf(stderr, "%s%s " RESET, _log_prefixes[level][0], gettext(_log_prefixes[level][1]));
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\n");
   }
   va_end(ap);
 }
 
-int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list args) {
+int libbpf_print_fn(enum libbpf_print_level bpf_level, const char* format, va_list args) {
   int ret = 0;
-  if (level == LIBBPF_WARN && LOG_ALLOW_WARN) {
+  if (bpf_level == LIBBPF_WARN && LOG_ALLOW_WARN) {
     // Get rid of harmless warning when tc qdisc already exists
     // This is dirty, but there is no other way to filter it
     // See https://www.spinics.net/lists/bpf/msg44842.html
@@ -33,11 +33,23 @@ int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list a
     if (ret < 0) return ret;
     if (strstr(buf, "Exclusivity flag on, cannot modify")) return 0;
   }
-  if (level == LIBBPF_WARN && LOG_ALLOW_WARN || level == LIBBPF_INFO && LOG_ALLOW_INFO ||
-      level == LIBBPF_DEBUG && LOG_ALLOW_DEBUG) {
-    ret = fprintf(stderr, "%s %s " RESET, _log_prefixes[level][0], gettext(_log_prefixes[level][1]));
+  if ((bpf_level == LIBBPF_WARN && LOG_ALLOW_WARN) || (bpf_level == LIBBPF_INFO && LOG_ALLOW_INFO) ||
+      (bpf_level == LIBBPF_DEBUG && LOG_ALLOW_DEBUG)) {
+    int level;
+    switch (bpf_level) {
+      case LIBBPF_WARN:
+        level = LOG_LEVEL_WARN;
+        break;
+      case LIBBPF_INFO:
+        level = LOG_LEVEL_INFO;
+        break;
+      case LIBBPF_DEBUG:
+        level = LOG_LEVEL_DEBUG;
+        break;
+    }
+    ret = fprintf(stderr, "%s%s " RESET, _log_prefixes[level][0], gettext(_log_prefixes[level][1]));
+    ret = ret < 0 ? ret : vfprintf(stderr, format, args);
   }
-  ret = ret < 0 ? ret : vfprintf(stderr, format, args);
   return ret < 0 ? ret : 0;
 }
 
