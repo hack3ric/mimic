@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "log.h"
+#include "shared/gettext.h"
 #include "shared/log.h"
 
 int log_verbosity = 2;
@@ -12,7 +13,7 @@ void log_any(int level, const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   if (log_verbosity >= level) {
-    fprintf(stderr, "%s", _(_log_prefixes[level]));
+    fprintf(stderr, "%s %s " RESET, _log_prefixes[level][0], gettext(_log_prefixes[level][1]));
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\n");
   }
@@ -30,17 +31,11 @@ int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list a
     char buf[128];
     ret = vsnprintf(buf, sizeof(buf), format, backup_args);
     if (ret < 0) return ret;
-    if (strstr(buf, "Exclusivity flag on, cannot modify")) {
-      return 0;
-    } else {
-      ret = fprintf(stderr, _LOG_WARN_PREFIX);
-    }
-  } else if (level == LIBBPF_INFO && LOG_ALLOW_INFO) {
-    ret = fprintf(stderr, _LOG_INFO_PREFIX);
-  } else if (level == LIBBPF_DEBUG && LOG_ALLOW_DEBUG) {
-    ret = fprintf(stderr, _LOG_DEBUG_PREFIX);
-  } else {
-    return 0;
+    if (strstr(buf, "Exclusivity flag on, cannot modify")) return 0;
+  }
+  if (level == LIBBPF_WARN && LOG_ALLOW_WARN || level == LIBBPF_INFO && LOG_ALLOW_INFO ||
+      level == LIBBPF_DEBUG && LOG_ALLOW_DEBUG) {
+    ret = fprintf(stderr, "%s %s " RESET, _log_prefixes[level][0], gettext(_log_prefixes[level][1]));
   }
   ret = ret < 0 ? ret : vfprintf(stderr, format, args);
   return ret < 0 ? ret : 0;

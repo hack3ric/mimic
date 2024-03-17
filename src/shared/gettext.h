@@ -8,6 +8,7 @@
 #ifndef _MIMIC_BPF
 // #define _(text) text
 static inline __attribute__((__format_arg__(1))) const char* _(const char* text) { return text; }
+#define gettext(text) _(text)
 #endif
 #define N_(text) text
 

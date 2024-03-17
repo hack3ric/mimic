@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "log.h"
 #include "mimic.h"
 #include "shared/conn.h"
 #include "shared/filter.h"
@@ -65,20 +66,21 @@ int subcmd_show(struct show_arguments* args) {
   }
 
   if (args->show_process) {
-    printf(_("\x1b[1;32mMimic\x1b[0m running at %s\n"), args->ifname);
-    printf(_("- \x1b[1mpid:\x1b[0m %d\n"), lock_content.pid);
+    printf(_("%sMimic%s running at %s\n"), BOLD GREEN, RESET, args->ifname);
+    printf(_("- %spid:%s %d\n"), BOLD, RESET, lock_content.pid);
 
     whitelist_fd = try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
                        "mimic_whitelist", strerror(-_ret));
     struct pkt_filter filter;
     char buf[FILTER_FMT_MAX_LEN];
     retcode = bpf_map_get_next_key(whitelist_fd, NULL, &filter);
-    if (retcode < 0 && retcode != -ENOENT) {
+    if (retcode == -ENOENT) {
+      printf(_("- %sno active filter%s\n"), BOLD, RESET);
+    } else if (retcode < 0) {
       ret(retcode, _("failed to get next key of map '%s': %s"), "mimic_whitelist", strerror(-retcode));
-    }
-    if (retcode != -ENOENT) {
+    } else {
       pkt_filter_fmt(&filter, buf);
-      printf(_("- \x1b[1mfilter:\x1b[0m\n"));
+      printf(_("- %sfilter:%s\n"), BOLD, RESET);
       printf("  * %s\n", buf);
       while (true) {
         retcode = bpf_map_get_next_key(whitelist_fd, &filter, &filter);
@@ -87,11 +89,12 @@ int subcmd_show(struct show_arguments* args) {
           ret(retcode, _("failed to get next key of map '%s': %s"), "mimic_whitelist", strerror(-retcode));
         }
         pkt_filter_fmt(&filter, buf);
-        printf("  - %s\n", buf);
+        printf("  * %s\n", buf);
       }
     }
-    printf("\n");
   }
+
+  if (args->show_process && args->show_command) printf("\n");
 
   if (args->show_command) {
     conns_fd = try(bpf_map_get_fd_by_id(lock_content.conns_id), _("failed to get fd of map '%s': %s"), "mimic_conns",
@@ -104,18 +107,18 @@ int subcmd_show(struct show_arguments* args) {
       ret(retcode, _("failed to get next key of map '%s': %s"), "mimic_conns", strerror(-retcode));
     }
     if (retcode == -ENOENT) {
-      printf(_("\x1b[1;33m\x1b[1mConnection\x1b[0m no active connection\n"));
+      printf(_("%sConnection%s no active connection\n"), BOLD YELLOW, RESET);
     } else {
       while (true) {
         ip_port_fmt(key.protocol, key.local, key.local_port, local);
         ip_port_fmt(key.protocol, key.remote, key.remote_port, remote);
-        printf(_("\x1b[1;32mConnection\x1b[0m %s => %s\n"), local, remote);
+        printf(_("%sConnection%s %s => %s\n"), BOLD GREEN, RESET, local, remote);
 
         try(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK), _("failed to get value from map '%s': %s"),
             "mimic_conns", strerror(-_ret));
 
-        printf(_("- \x1b[1mstate:\x1b[0m %s\n"), conn_state_to_str(conn.state));
-        printf(_("- \x1b[1msequence:\x1b[0m\n"));
+        printf(_("- %sstate:%s %s\n"), BOLD, RESET, conn_state_to_str(conn.state));
+        printf(_("- %ssequence:%s\n"), BOLD, RESET);
         printf(_("  * seq: %08x\n"), conn.seq);
         printf(_("  * ack: %08x\n"), conn.ack_seq);
 
@@ -126,7 +129,6 @@ int subcmd_show(struct show_arguments* args) {
         }
       }
     }
-    printf("\n");
   }
 
   return 0;

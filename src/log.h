@@ -10,14 +10,17 @@
 
 extern int log_verbosity;
 
-#define _LOG_ERROR_PREFIX N_("\x1B[1;31mError\x1B[0m ")
-#define _LOG_WARN_PREFIX N_("\x1B[1;33m Warn\x1B[0m ")
-#define _LOG_INFO_PREFIX N_("\x1B[1;32m Info\x1B[0m ")
-#define _LOG_DEBUG_PREFIX N_("\x1B[1;34mDebug\x1B[0m ")
-#define _LOG_TRACE_PREFIX N_("\x1B[1;30mTrace\x1B[0m ")
+#define RED "\x1B[31m"
+#define YELLOW "\x1B[33m"
+#define GREEN "\x1B[32m"
+#define BLUE "\x1B[34m"
+#define GRAY "\x1B[30m"
+#define BOLD "\x1B[1m"
+#define RESET "\x1B[0m"
 
-static const char* _log_prefixes[] = {
-  _LOG_ERROR_PREFIX, _LOG_WARN_PREFIX, _LOG_INFO_PREFIX, _LOG_DEBUG_PREFIX, _LOG_TRACE_PREFIX,
+static const char* _log_prefixes[][2] = {
+  {BOLD RED, N_("Error")},  {BOLD YELLOW, N_(" Warn")}, {BOLD GREEN, N_(" Info")},
+  {BOLD BLUE, N_("Debug")}, {BOLD GRAY, N_("Trace")},
 };
 
 void log_any(int level, const char* fmt, ...);
