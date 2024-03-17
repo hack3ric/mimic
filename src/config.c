@@ -4,15 +4,12 @@
 #include <linux/bpf.h>
 #include <linux/types.h>
 #include <net/if.h>
-#include <poll.h>
-#include <signal.h>
 #include <stdbool.h>
-#include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/signalfd.h>
+#include <sys/socket.h>
 #include <sys/un.h>
-#include <unistd.h>
 
 #include "log.h"
 #include "mimic.h"

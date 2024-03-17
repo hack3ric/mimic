@@ -2,13 +2,11 @@
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <linux/bpf.h>
 #include <linux/types.h>
 #include <net/if.h>
 #include <signal.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +22,7 @@
 #include "mimic.h"
 #include "shared/conn.h"
 #include "shared/filter.h"
+#include "shared/gettext.h"
 #include "shared/log.h"
 #include "shared/util.h"
 

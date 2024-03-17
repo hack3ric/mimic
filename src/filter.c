@@ -1,10 +1,11 @@
 #include <arpa/inet.h>
-#include <asm/types.h>
+#include <linux/types.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 
 #include "shared/filter.h"
+#include "shared/gettext.h"
 #include "shared/util.h"
 
 int parse_filter(const char* filter_str, struct pkt_filter* filter) {

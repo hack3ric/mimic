@@ -3,7 +3,7 @@
 
 #include <bpf/libbpf.h>
 #include <stdarg.h>
-#include <stdio.h>
+#include <stdbool.h>
 
 #include "shared/gettext.h"
 #include "shared/log.h"

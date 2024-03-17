@@ -6,11 +6,13 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 #include "mimic.h"
 #include "shared/conn.h"
 #include "shared/filter.h"
+#include "shared/gettext.h"
 #include "shared/util.h"
 
 static const struct argp_option options[] = {

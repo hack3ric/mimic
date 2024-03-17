@@ -1,9 +1,13 @@
 #ifndef _MIMIC_SHARED_LOG_H
 #define _MIMIC_SHARED_LOG_H
 
+#ifdef _MIMIC_BPF
+#include "../bpf/vmlinux.h"
+#else
+#include <stdbool.h>
+#endif
+
 #include "conn.h"
-#include "filter.h"
-#include "gettext.h"
 
 // need to define `log_verbosity` besides including this file.
 #define LOG_ALLOW_ERROR (log_verbosity >= LOG_LEVEL_ERROR)

@@ -3,11 +3,8 @@
 
 #include <argp.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <sys/types.h>
-#include <sys/un.h>
 
-#include "shared/filter.h"
 #include "shared/util.h"
 
 #define CONFIG_MAX_VALUES 16

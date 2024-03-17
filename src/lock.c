@@ -1,16 +1,17 @@
 #include <argp.h>
 #include <bpf/libbpf.h>
 #include <errno.h>
+#include <linux/types.h>
+#include <poll.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <string.h>
-#include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
 
 #include "log.h"
 #include "mimic.h"
+#include "shared/gettext.h"
 #include "shared/util.h"
 
 #define TIMEOUT 1000
