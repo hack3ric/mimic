@@ -1,0 +1,12 @@
+[Unit]
+Description = Start Mimic on %i
+After = network.target
+Requires = modprobe@mimic.service
+
+[Service]
+ExecStart = @@MIMIC_EXEC@@ run %i -F @@MIMIC_CONFIG_PATH@@/%i.conf
+Type = exec
+Restart = always
+
+[Install]
+RequiredBy = network.target
