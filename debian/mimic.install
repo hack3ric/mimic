@@ -1,3 +1,2 @@
 out/mimic usr/bin
-debian/mimic@.service usr/lib/systemd/system
 install/eth0.conf.example etc/mimic
