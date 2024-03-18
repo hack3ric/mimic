@@ -18,7 +18,7 @@ BPF support varies depending on architecture, kernel version and distro configur
 
 The following is a list of kernel versions verified to work on certain architectures, or reasons why it will not work; feel free to test out and contribute to the list!
 
-- x86_64: >= v6.1
+- x86_64, aarch64: >= v6.1
 - riscv64: >= v6.7
 - i386: JIT will fail with `** NOT YET **: opcode 85` in kernel output
 
