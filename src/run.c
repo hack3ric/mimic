@@ -339,15 +339,10 @@ int subcmd_run(struct run_arguments* args) {
   if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
 
   if (args->file) {
-    _cleanup_file FILE* config_file = try_p(fopen(args->file, "r"), "failed to open ");
+    _cleanup_file FILE* config_file =
+      try_p(fopen(args->file, "r"), _("failed to open configuration file at %s: %s"), args->file, strerror(-_ret));
     try(parse_config_file(config_file, args), _("failed to read configuration file"));
   }
-
-  // struct pkt_filter filters[args->filter_count];
-  // if (args->filter_count > 0) {
-  //   memset(filters, 0, args->filter_count * sizeof(*filters));
-  //   try(parse_filters(args, filters));
-  // }
 
   // Lock file
   struct stat st = {};
