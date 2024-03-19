@@ -1,3 +1,9 @@
+mimic (0.2.1-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Eric Long <i@hack3r.moe>  Tue, 19 Mar 2024 18:31:55 +0800
+
 mimic (0.2.0-2) unstable; urgency=medium
 
   * Fix systemd service install

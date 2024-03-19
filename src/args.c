@@ -7,7 +7,7 @@
 #include "mimic.h"
 #include "shared/gettext.h"
 
-const char* argp_program_version = "0.2.0";
+const char* argp_program_version = "0.2.1";
 const char* argp_program_bug_address = "https://github.com/hack3ric/mimic/issues";
 
 /* mimic (global options) */
