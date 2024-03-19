@@ -8,6 +8,8 @@ Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP QoS and po
 
 Currently Mimic does not ship prebuilt binaries. You have to build it from source. See [Building from Source](#building-from-source) for more information.
 
+You may want to use systemd to manage your Mimic instances. See [Usage for Systemd](#usage-for-systemd) for more information.
+
 ### Kernel Support
 
 To run Mimic, you need a fairly recent Linux kernel, compiled with BPF (`CONFIG_BPF_SYSCALL=y`), BPF JIT (`CONFIG_BPF_JIT=y`), and BTF (`CONFIG_DEBUG_INFO_BTF=y`) support. Most distros enable them on 64-bit systems by default. On single-board computers with custom kernel, recompilation with these options enabled is probably needed.
@@ -24,7 +26,9 @@ The following is a list of kernel versions verified to work on certain architect
 
 ### Kernel Module
 
-To use Mimic, first load the kernel module which provides lower-level access of network packages for eBPF programs. If you use packaged version of Mimic (.deb), DKMS should compile it against current kernel automatically:
+If you are using systemd, skip this part as the systemd service already takes care of loading Mimic kernel module.
+
+Otherwise, first load the kernel module which provides lower-level access of network packages for eBPF programs. If you use packaged version of Mimic, DKMS should compile it against current kernel automatically:
 
 ```console
 # modprobe mimic
@@ -49,12 +53,22 @@ Deploying Mimic does not require changing much of your existing configuration, a
 
 A filter is an entry of whitelist that looks like a key-value pair: `{origin}={ip}:{port}`. Origin is either `local` or `remote`, indicating which side's IP and port is matched. For example, `remote=192.0.2.1:6000` matches the server's IP (192.0.2.1) and its listening port (6000).
 
-For IPv6, the IP field needs to be surrounded by square brackets: `local=[2001:db8::cafe]:7000`. This means packets originated from or sending to the local machine using that IP and port is processed. Multiple parallel filters can be specified by passing multiple `-f` options.
+For IPv6, the IP field needs to be surrounded by square brackets: `local=[2001:db8::cafe]:7000`. This means packets originated from or sending to the local machine using that IP and port is processed. Multiple parallel filters can be specified in configuration files as `filter={origin}={ip}:{port}`, or by passing multiple `-f` options.
 
 The general command of running a Mimic instance looks like:
 
 ```console
 # mimic run -f <filter1> [-f <filter2> [...]] <interface>
+```
+
+### Usage for Systemd
+
+Mimic ships systemd service in distro packages. To use it, first create a configuration for an interface at `/etc/mimic/<interface>.conf`. See `/etc/mimic/eth0.conf.example` for example configuration.
+
+Then simply start the per-interface service:
+
+``` console
+# systemctl start mimic@<interface>
 ```
 
 ## Examples
