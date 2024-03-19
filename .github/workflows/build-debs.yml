@@ -1,37 +1,42 @@
-name: 'Build Debian Packages'
+name: 'Build .deb Packages'
 
 on:
   workflow_dispatch:
   push:
 
 jobs:
-  build-deb:
+  build-bookworm:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Build (Debian 12)
+      - name: Build
         uses: jtdor/build-deb-action@v1
         env:
           DEB_BUILD_OPTIONS: noautodbgsym
         with:
           buildpackage-opts: -b -us -uc
           docker-image: debian:bookworm-slim
-      - name: Upload (Debian 12)
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: debian-12
+          name: bookworm
           path: debian/artifacts/*.deb
-      - name: Build (Ubuntu 23.10)
+  build-mantic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build
         uses: jtdor/build-deb-action@v1
         env:
           DEB_BUILD_OPTIONS: noautodbgsym
         with:
           buildpackage-opts: -b -us -uc
           docker-image: ubuntu:mantic
-      - name: Upload (Ubuntu 23.10)
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ubuntu-23.10
+          name: mantic
           path: debian/artifacts/*.deb
 
