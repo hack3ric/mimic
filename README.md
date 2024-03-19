@@ -6,7 +6,7 @@ Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP QoS and po
 
 ## Preparation
 
-Currently Mimic does not ship prebuilt binaries. You have to build it from source. See [Building from Source](#building-from-source) for more information.
+Mimic currently ships prebuilt packages for Debian 12 and Ubuntu 23.10 in [GitHub releases](https://github.com/hack3ric/mimic/releases).  For building from source (including AUR and other Debian and Ubuntu versions), see [Building from Source](#building-from-source) for more information.
 
 You may want to use systemd to manage your Mimic instances. See [Usage for Systemd](#usage-for-systemd) for more information.
 
