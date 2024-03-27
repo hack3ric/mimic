@@ -93,6 +93,7 @@ int egress_handler(struct __sk_buff* skb) {
   enum rst_result rst_result = RST_NONE;
   bpf_spin_lock(&conn->lock);
   if (conn->rst) {
+    conn->rst = false;
     rst = ack = true;
     seq = conn->seq;
     ack_seq = conn->ack_seq;
