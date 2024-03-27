@@ -30,6 +30,11 @@ extern struct mimic_settings_map {
   __type(value, u32);
 } mimic_settings;
 
+extern struct mimic_send_rb_map {
+  __uint(type, BPF_MAP_TYPE_RINGBUF);
+  __uint(max_entries, sizeof(struct conn_tuple) * 32);
+} mimic_send_rb;
+
 #define IPV4_CSUM_OFF (offsetof(struct iphdr, check))
 #define TCP_UDP_HEADER_DIFF (sizeof(struct tcphdr) - sizeof(struct udphdr))
 
