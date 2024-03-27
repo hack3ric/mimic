@@ -4,8 +4,12 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/bpf.h>
+#include <linux/ip.h>
+#include <linux/ipv6.h>
 #include <linux/types.h>
 #include <net/if.h>
+#include <netinet/in.h>
+#include <netinet/udp.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -13,12 +17,14 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/signalfd.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "bpf_skel.h"
 #include "log.h"
 #include "mimic.h"
+#include "shared/checksum.h"
 #include "shared/conn.h"
 #include "shared/filter.h"
 #include "shared/gettext.h"
@@ -162,8 +168,48 @@ static int handle_log_event(void* ctx, void* data, size_t data_sz) {
   return 0;
 }
 
+static inline int send_packet(struct conn_tuple* c) {
+  _cleanup_fd int sk = try(socket(c->protocol, SOCK_RAW | SOCK_NONBLOCK, IPPROTO_UDP));
+  __u32 partial_csum = 0;
+  struct sockaddr_storage saddr = {}, daddr = {};
+  if (c->protocol == AF_INET) {
+    __u32 local = ntohl(c->local.v4), remote = ntohl(c->remote.v4);
+    *(struct sockaddr_in*)&saddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = local, .sin_port = 0};
+    *(struct sockaddr_in*)&daddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = remote, .sin_port = 0};
+    update_csum_ul(&partial_csum, local);
+    update_csum_ul(&partial_csum, remote);
+  } else {
+    *(struct sockaddr_in6*)&saddr =
+      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = c->local.v6, .sin6_port = 0};
+    *(struct sockaddr_in6*)&daddr =
+      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = c->remote.v6, .sin6_port = 0};
+    for (int i = 0; i < 8; i++) {
+      update_csum(&partial_csum, ntohs(c->local.v6.in6_u.u6_addr16[i]));
+      update_csum(&partial_csum, ntohs(c->remote.v6.in6_u.u6_addr16[i]));
+    }
+  }
+  update_csum(&partial_csum, IPPROTO_UDP);
+  update_csum(&partial_csum, sizeof(struct udphdr));
+  try(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)));
+
+  // It is intentional to set length to 0 to get a bogus UDP packet. eBPF egress handler will detect this and treat the
+  // packet specially.
+  struct udphdr udp = {
+    .source = c->local_port,
+    .dest = c->remote_port,
+    .len = 0,
+    .check = htons(~csum_fold(partial_csum)),
+  };
+  __u16 csum = calc_csum(&udp, sizeof(udp));
+  udp.check = htons(csum);
+
+  try(sendto(sk, &udp, sizeof(udp), 0, (struct sockaddr*)&daddr, sizeof(daddr)));
+  return 0;
+}
+
 static int handle_send_event(void* ctx, void* data, size_t data_sz) {
-  // TODO
+  struct conn_tuple* c = data;
+  try(send_packet(c), _("error sending packet: %s"), strerror(-_ret));
   return 0;
 }
 

@@ -5,6 +5,8 @@
 #include "../bpf/vmlinux.h"
 #else
 #include <linux/types.h>
+#include <netinet/in.h>
+#include <stddef.h>
 #endif
 
 static inline __u16 csum_fold(__u32 csum) {
@@ -29,17 +31,30 @@ static inline void update_csum_ul_neg(__u32* csum, __u32 new) { update_csum(csum
 // __u32* csum, __u32 off)`.
 //
 // void update_csum_data(void* ctx, __u32* csum, __u32 off)
-#define update_csum_data(_x, csum, off)                                                     \
-  ({                                                                                        \
-    __u16* data = (void*)(__u64)_x->data + off;                                            \
-    int i = 0;                                                                              \
-    for (; i < ETH_DATA_LEN / sizeof(__u16); i++) {                                         \
+#define update_csum_data(_x, csum, off)                                                   \
+  ({                                                                                      \
+    __u16* data = (void*)(__u64)_x->data + off;                                           \
+    int i = 0;                                                                            \
+    for (; i < ETH_DATA_LEN / sizeof(__u16); i++) {                                       \
       if ((__u64)(data + i + 1) > (__u64)_x->data_end) break;                             \
-      *csum += bpf_ntohs(data[i]);                                                          \
-    }                                                                                       \
-    __u8* remainder = (__u8*)data + i * sizeof(__u16);                                      \
+      *csum += bpf_ntohs(data[i]);                                                        \
+    }                                                                                     \
+    __u8* remainder = (__u8*)data + i * sizeof(__u16);                                    \
     if ((__u64)(remainder + 1) <= (__u64)_x->data_end) *csum += (__u16)(*remainder << 8); \
   })
+
+#else
+
+__u16 calc_csum(void* data, size_t data_len) {
+  __u32 result = 0;
+  for (int i = 0; i < data_len / 2; i++) {
+    result += ntohs(*((__u16*)data + i));
+  }
+  if (data_len % 2 == 1) {
+    result += (__u16)((__u8*)data)[data_len - 1] << 8;
+  }
+  return csum_fold(result);
+}
 
 #endif  // _MIMIC_BPF
 
