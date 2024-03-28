@@ -12,10 +12,10 @@
 #include "mimic.h"
 
 // Move back n bytes, shrink socket buffer and restore data.
-static inline int restore_data(struct xdp_md* xdp, u16 offset, u32 buf_len) {
-  u8 buf[TCP_UDP_HEADER_DIFF] = {};
-  u16 data_len = buf_len - offset;
-  u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
+static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len) {
+  __u8 buf[TCP_UDP_HEADER_DIFF] = {};
+  __u16 data_len = buf_len - offset;
+  __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
   if (copy_len > 0) {
     if (copy_len < 2) copy_len = 1;  // HACK: see egress.c
     try_drop(bpf_xdp_load_bytes(xdp, buf_len - copy_len, buf, copy_len));
@@ -25,27 +25,27 @@ static inline int restore_data(struct xdp_md* xdp, u16 offset, u32 buf_len) {
   return XDP_PASS;
 }
 
-static __always_inline u32 new_ack_seq(struct tcphdr* tcp, u16 payload_len) {
+static __always_inline __u32 new_ack_seq(struct tcphdr* tcp, __u16 payload_len) {
   return bpf_ntohl(tcp->seq) + payload_len + tcp->syn;
 }
 
-static __always_inline void pre_syn_ack(u32* seq, u32* ack_seq, struct connection* conn, struct tcphdr* tcp,
-                                        u16 payload_len, u32 random) {
+static __always_inline void pre_syn_ack(__u32* seq, __u32* ack_seq, struct connection* conn, struct tcphdr* tcp,
+                                        __u16 payload_len, __u32 random) {
   conn->state = STATE_SYN_RECV;
   *seq = conn->seq = random;
   *ack_seq = conn->ack_seq = new_ack_seq(tcp, payload_len);
   conn->seq += 1;
 }
 
-static __always_inline void pre_ack(enum conn_state new_state, u32* seq, u32* ack_seq, struct connection* conn,
-                                    struct tcphdr* tcp, u16 payload_len) {
+static __always_inline void pre_ack(enum conn_state new_state, __u32* seq, __u32* ack_seq, struct connection* conn,
+                                    struct tcphdr* tcp, __u16 payload_len) {
   conn->state = new_state;
   *seq = conn->seq;
   *ack_seq = conn->ack_seq = new_ack_seq(tcp, payload_len);
 }
 
-static __always_inline void pre_rst_ack(u32* seq, u32* ack_seq, struct connection* conn, struct tcphdr* tcp,
-                                        u16 payload_len) {
+static __always_inline void pre_rst_ack(__u32* seq, __u32* ack_seq, struct connection* conn, struct tcphdr* tcp,
+                                        __u16 payload_len) {
   conn->state = STATE_IDLE;
   *seq = conn->seq = conn->ack_seq = 0;
   *ack_seq = new_ack_seq(tcp, payload_len);
@@ -54,11 +54,11 @@ static __always_inline void pre_rst_ack(u32* seq, u32* ack_seq, struct connectio
 SEC("xdp")
 int ingress_handler(struct xdp_md* xdp) {
   decl_pass(struct ethhdr, eth, 0, xdp);
-  u16 eth_proto = bpf_ntohs(eth->h_proto);
+  __u16 eth_proto = bpf_ntohs(eth->h_proto);
 
   struct iphdr* ipv4 = NULL;
   struct ipv6hdr* ipv6 = NULL;
-  u32 ip_end;
+  __u32 ip_end;
 
   if (eth_proto == ETH_P_IP) {
     redecl_drop(struct iphdr, ipv4, ETH_HLEN, xdp);
@@ -70,21 +70,21 @@ int ingress_handler(struct xdp_md* xdp) {
     return XDP_PASS;
   }
 
-  u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? ipv6->nexthdr : 0;
+  __u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? ipv6->nexthdr : 0;
   if (ip_proto != IPPROTO_TCP) return XDP_PASS;
   decl_pass(struct tcphdr, tcp, ip_end, xdp);
 
   if (!matches_whitelist(QUARTET_TCP, true)) return XDP_PASS;
 
-  u32 vkey = SETTINGS_LOG_VERBOSITY;
-  u32 log_verbosity = *(u32*)try_p_drop(bpf_map_lookup_elem(&mimic_settings, &vkey));
+  __u32 vkey = SETTINGS_LOG_VERBOSITY;
+  __u32 log_verbosity = *(__u32*)try_p_drop(bpf_map_lookup_elem(&mimic_settings, &vkey));
 
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP, true);
   log_quartet(log_verbosity, LOG_LEVEL_DEBUG, true, LOG_TYPE_MATCHED, conn_key);
   struct connection* conn = try_p_drop(get_conn(&conn_key));
 
-  u32 buf_len = bpf_xdp_get_buff_len(xdp);
-  u32 payload_len = buf_len - ip_end - sizeof(*tcp);
+  __u32 buf_len = bpf_xdp_get_buff_len(xdp);
+  __u32 payload_len = buf_len - ip_end - sizeof(*tcp);
 
   // TODO: verify checksum
 
@@ -103,8 +103,8 @@ int ingress_handler(struct xdp_md* xdp) {
   }
 
   bool syn, ack, rst, will_send_ctrl_packet, will_drop, newly_estab;
-  u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq;
-  u32 random = bpf_get_prandom_u32();
+  __u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq;
+  __u32 random = bpf_get_prandom_u32();
   enum conn_state state;
   syn = ack = rst = will_send_ctrl_packet = will_drop = newly_estab = false;
 
@@ -174,8 +174,8 @@ int ingress_handler(struct xdp_md* xdp) {
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_UDP;
 
-    u32 ipv4_csum = (u16)~bpf_ntohs(ipv4->check);
-    update_csum(&ipv4_csum, -(s32)TCP_UDP_HEADER_DIFF);
+    __u32 ipv4_csum = (__u16)~bpf_ntohs(ipv4->check);
+    update_csum(&ipv4_csum, -(__s32)TCP_UDP_HEADER_DIFF);
     update_csum(&ipv4_csum, IPPROTO_UDP - IPPROTO_TCP);
     ipv4->check = bpf_htons(csum_fold(ipv4_csum));
   } else if (ipv6) {
@@ -187,10 +187,10 @@ int ingress_handler(struct xdp_md* xdp) {
   try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len));
   decl_drop(struct udphdr, udp, ip_end, xdp);
 
-  u16 udp_len = buf_len - ip_end - TCP_UDP_HEADER_DIFF;
+  __u16 udp_len = buf_len - ip_end - TCP_UDP_HEADER_DIFF;
   udp->len = bpf_htons(udp_len);
 
-  u32 csum = 0;
+  __u32 csum = 0;
   if (ipv4) {
     update_csum_ul(&csum, bpf_ntohl(ipv4_saddr));
     update_csum_ul(&csum, bpf_ntohl(ipv4_daddr));

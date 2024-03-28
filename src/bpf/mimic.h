@@ -25,8 +25,8 @@ extern struct mimic_conns_map {
 extern struct mimic_settings_map {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 2);
-  __type(key, u32);
-  __type(value, u32);
+  __type(key, __u32);
+  __type(value, __u32);
 } mimic_settings;
 
 extern struct mimic_send_rb_map {
@@ -38,20 +38,20 @@ extern struct mimic_send_rb_map {
 #define TCP_UDP_HEADER_DIFF (sizeof(struct tcphdr) - sizeof(struct udphdr))
 
 struct ipv4_ph_part {
-  u8 _pad;
-  u8 protocol;
+  __u8 _pad;
+  __u8 protocol;
   __be16 len;
 } __attribute__((packed));
 
 struct ipv6_ph_part {
-  u8 _1[2];
+  __u8 _1[2];
   __be16 len;
-  u8 _2[3];
-  u8 nexthdr;
+  __u8 _2[3];
+  __u8 nexthdr;
 } __attribute__((packed));
 
 struct sk_buff* mimic_inspect_skb(struct __sk_buff*) __ksym;
-int mimic_change_csum_offset(struct __sk_buff*, u16) __ksym;
+int mimic_change_csum_offset(struct __sk_buff*, __u16) __ksym;
 
 // clang-format off
 #define QUARTET_DEF struct iphdr* ipv4, struct ipv6hdr* ipv6, struct udphdr* udp, struct tcphdr* tcp
@@ -128,7 +128,8 @@ static inline struct connection* get_conn(struct conn_tuple* conn_key) {
   return conn;
 }
 
-static __always_inline void send_ctrl_packet(struct conn_tuple c, bool syn, bool ack, bool rst, u32 seq, u32 ack_seq) {
+static __always_inline void send_ctrl_packet(struct conn_tuple c, bool syn, bool ack, bool rst, __u32 seq,
+                                             __u32 ack_seq) {
   struct send_options* s = bpf_ringbuf_reserve(&mimic_send_rb, sizeof(*s), 0);
   if (!s) return;
   *s = (struct send_options){.c = c, .syn = syn, .ack = ack, .rst = rst, .seq = seq, .ack_seq = ack_seq};
