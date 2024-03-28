@@ -224,7 +224,9 @@ The following shows how Mimic works visually:
 
 Support for other L2 protocols such as PPP(oE) and WLAN will be added.
 
-#### TCP SYN packets contains data
+#### (0.2.0 or earlier) TCP SYN packets contains data
+
+*Fixed in 0.3.0-alpha. TCP handshake is now emulated by using raw(7) to send TCP control packets.*
 
 This is a known quirk. Since eBPF can only *process* packets, not sending them actively, there's no way of initiating TCP handshake actively (in eBPF) but to rely on underlying protocols' communication to exchange sequence numbers. Wireshark does recognize such as valid TCP handshake, but some firewalls might block this "unconventional" practice. I plan to implement proper, regular handshake in userspace using raw sockets, though.
 
