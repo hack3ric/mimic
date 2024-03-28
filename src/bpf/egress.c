@@ -84,12 +84,10 @@ int egress_handler(struct __sk_buff* skb) {
 
   u16 udp_len = bpf_ntohs(udp->len);
   u16 payload_len = udp_len - sizeof(*udp);
-  // log_trace(N_("egress: payload_len = %d"), payload_len);
 
-  u32 seq, ack_seq, conn_seq, conn_ack_seq;
-  seq = ack_seq = conn_seq = conn_ack_seq = 0;
-  enum conn_state conn_state;
+  u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq;
   u32 random = bpf_get_prandom_u32();
+  enum conn_state conn_state;
 
   bpf_spin_lock(&conn->lock);
   if (conn->state == STATE_ESTABLISHED) {
@@ -100,7 +98,6 @@ int egress_handler(struct __sk_buff* skb) {
     switch (conn->state) {
       case STATE_IDLE:
       case STATE_SYN_SENT:
-        // SYN (re)send: seq=A -> seq=A+len+1, ack=0
         seq = conn->seq = random;
         ack_seq = conn->ack_seq = 0;
         conn->seq += 1;
@@ -110,7 +107,8 @@ int egress_handler(struct __sk_buff* skb) {
         break;
     }
     bpf_spin_unlock(&conn->lock);
-    send_ctrl_packet(false, conn_key, true, false, false, seq, ack_seq);
+    send_ctrl_packet(conn_key, true, false, false, seq, ack_seq);
+    // TODO: store packet in userspace buffer and send them after establishing
     return TC_ACT_STOLEN;
   }
   conn_state = conn->state;

@@ -32,7 +32,6 @@ struct connection {
     STATE_ESTABLISHED,
   } state;
   __u32 seq, ack_seq;
-  bool rst;
 };
 
 static inline const char* conn_state_to_str(enum conn_state s) {
@@ -66,18 +65,6 @@ static inline enum rst_result conn_reset(struct connection* conn) {
   conn->ack_seq = 0;
   conn->state = STATE_IDLE;
   return result;
-}
-
-// Reset connection on next egress packet
-static inline void conn_pre_reset(struct connection* conn, struct tcphdr* tcp, __u32 payload_len) {
-  conn->ack_seq = ntohl(tcp->seq) + payload_len + 1;
-  conn->rst = true;
-}
-
-static inline void conn_syn_recv(struct connection* conn, struct tcphdr* tcp, __u32 payload_len) {
-  conn->seq = 0;
-  conn->ack_seq = ntohl(tcp->seq) + payload_len + 1;
-  conn->state = STATE_SYN_RECV;
 }
 
 struct send_options {

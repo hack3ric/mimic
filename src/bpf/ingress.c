@@ -24,6 +24,32 @@ static inline int restore_data(struct xdp_md* xdp, u16 offset, u32 buf_len) {
   return XDP_PASS;
 }
 
+static inline u32 new_ack_seq(struct tcphdr* tcp, u16 payload_len) {
+  return bpf_ntohl(tcp->seq) + payload_len + tcp->syn;
+}
+
+static __always_inline void pre_syn_ack(u32* seq, u32* ack_seq, struct connection* conn, struct tcphdr* tcp,
+                                        u16 payload_len, u32 random) {
+  conn->state = STATE_SYN_RECV;
+  *seq = conn->seq = random;
+  *ack_seq = conn->ack_seq = new_ack_seq(tcp, payload_len);
+  conn->seq += 1;
+}
+
+static __always_inline void pre_ack(enum conn_state new_state, u32* seq, u32* ack_seq, struct connection* conn,
+                                    struct tcphdr* tcp, u16 payload_len) {
+  conn->state = new_state;
+  *seq = conn->seq;
+  *ack_seq = conn->ack_seq = new_ack_seq(tcp, payload_len);
+}
+
+static __always_inline void pre_rst_ack(u32* seq, u32* ack_seq, struct connection* conn, struct tcphdr* tcp,
+                                        u16 payload_len) {
+  conn->state = STATE_IDLE;
+  *seq = conn->seq = conn->ack_seq = 0;
+  *ack_seq = new_ack_seq(tcp, payload_len);
+}
+
 SEC("xdp")
 int ingress_handler(struct xdp_md* xdp) {
   decl_pass(struct ethhdr, eth, 0, xdp);
@@ -79,84 +105,66 @@ int ingress_handler(struct xdp_md* xdp) {
     return XDP_DROP;
   }
 
-  bool syn, ack, rst, will_send_ctrl_packet;
-  syn = ack = rst = will_send_ctrl_packet = false;
-  u32 seq = 0, ack_seq = 0;
+  bool syn, ack, rst, will_send_ctrl_packet, will_drop;
+  u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq;
   u32 random = bpf_get_prandom_u32();
+  syn = ack = rst = will_send_ctrl_packet = will_drop = false;
 
   bpf_spin_lock(&conn->lock);
-  // Do not update state before sending RST
-  // send SYN: seq++
-  // recv SYN: ack++
-  if (!conn->rst) {
-    switch (conn->state) {
-      case STATE_IDLE:
-      case STATE_SYN_RECV:
-        if (tcp->syn && !tcp->ack) {
-          // SYN (re)recv: seq=0, ack=A+len+1
-          will_send_ctrl_packet = true;
-          syn = ack = true;
-          seq = conn->seq = random;
-          ack_seq = conn->ack_seq = ntohl(tcp->seq) + payload_len + 1;
-          conn->seq += 1;
-          conn->state = STATE_SYN_RECV;
-        } else if (conn->state == STATE_SYN_RECV && !tcp->syn && tcp->ack) {
-          // ACK recv:
-          conn->ack_seq = bpf_ntohl(tcp->seq) + payload_len;
-          conn->state = STATE_ESTABLISHED;
-          newly_estab = true;
-        } else {
-          // TODO: avoid frequent sending of RST
-          will_send_ctrl_packet = true;
-          rst = true;
-          conn->ack_seq = ntohl(tcp->seq) + payload_len + tcp->syn;
-        }
-        break;
-      case STATE_SYN_SENT:
-        if (tcp->syn && tcp->ack) {
-          // SYN+ACK recv: seq=A+len+1, ack=B+len+1
-          will_send_ctrl_packet = true;
-          ack = true;
-          seq = conn->seq;
-          ack_seq = conn->ack_seq = bpf_ntohl(tcp->seq) + payload_len + 1;
-          conn->state = STATE_ESTABLISHED;
-          newly_estab = true;
-        } else if (tcp->syn && !tcp->ack) {
-          // TODO: Use simultaneous handshake
-          will_send_ctrl_packet = true;
-          ack = true;
-          seq = conn->seq;
-          ack_seq = conn->ack_seq = bpf_ntohl(tcp->seq) + payload_len + 1;
-          conn->state = STATE_SYN_RECV;
-        } else {
-          will_send_ctrl_packet = true;
-          rst = true;
-          conn->ack_seq = ntohl(tcp->seq) + payload_len + tcp->syn;
-        }
-        break;
-      case STATE_ESTABLISHED:
-        if (!tcp->syn && tcp->ack) {
-          // ACK recv: seq=seq, ack=ack+len
-          conn->ack_seq += payload_len;
-        } else if (tcp->syn && !tcp->ack) {
-          // SYN again: reset state
-          will_send_ctrl_packet = true;
-          syn = ack = true;
-          seq = conn->seq = random;
-          ack_seq = conn->ack_seq = ntohl(tcp->seq) + payload_len + 1;
-          conn->seq += 1;
-          conn->state = STATE_SYN_RECV;
-        } else {
-          will_send_ctrl_packet = true;
-          rst = true;
-          conn->ack_seq = ntohl(tcp->seq) + payload_len + tcp->syn;
-        }
-        break;
-    }
+  switch (conn->state) {
+    case STATE_IDLE:
+    case STATE_SYN_RECV:
+      if (tcp->syn && !tcp->ack) {
+        will_send_ctrl_packet = will_drop = true;
+        syn = ack = true;
+        pre_syn_ack(&seq, &ack_seq, conn, tcp, payload_len, random);
+      } else if (conn->state == STATE_SYN_RECV && !tcp->syn && tcp->ack) {
+        will_drop = true;
+        conn->ack_seq = bpf_ntohl(tcp->seq) + payload_len;
+        conn->state = STATE_ESTABLISHED;
+        newly_estab = true;
+      } else {
+        will_send_ctrl_packet = will_drop = true;
+        rst = ack = true;
+        pre_rst_ack(&seq, &ack_seq, conn, tcp, payload_len);
+      }
+      break;
+
+    case STATE_SYN_SENT:
+      if (tcp->syn && tcp->ack) {
+        will_send_ctrl_packet = will_drop = true;
+        ack = true;
+        pre_ack(STATE_ESTABLISHED, &seq, &ack_seq, conn, tcp, payload_len);
+        newly_estab = true;
+      } else if (tcp->syn && !tcp->ack) {
+        // Simultaneous open
+        will_send_ctrl_packet = will_drop = true;
+        ack = true;
+        pre_ack(STATE_SYN_RECV, &seq, &ack_seq, conn, tcp, payload_len);
+      } else {
+        will_send_ctrl_packet = will_drop = true;
+        rst = ack = true;
+        pre_rst_ack(&seq, &ack_seq, conn, tcp, payload_len);
+      }
+      break;
+
+    case STATE_ESTABLISHED:
+      if (!tcp->syn && tcp->ack) {
+        conn->ack_seq += payload_len;
+      } else if (tcp->syn && !tcp->ack) {
+        will_send_ctrl_packet = will_drop = true;
+        syn = ack = true;
+        pre_syn_ack(&seq, &ack_seq, conn, tcp, payload_len, random);
+      } else {
+        will_send_ctrl_packet = will_drop = true;
+        rst = ack = true;
+        pre_rst_ack(&seq, &ack_seq, conn, tcp, payload_len);
+      }
+      break;
   }
   state = conn->state;
-  seq = conn->seq;
-  ack_seq = conn->ack_seq;
+  conn_seq = conn->seq;
+  conn_ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
 
   if (newly_estab) {
@@ -166,7 +174,7 @@ int ingress_handler(struct xdp_md* xdp) {
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_STATE, state, seq, ack_seq);
 
   if (will_send_ctrl_packet) {
-    send_ctrl_packet(true, conn_key, syn, ack, rst, seq, ack_seq);
+    send_ctrl_packet(conn_key, syn, ack, rst, seq, ack_seq);
     return XDP_DROP;
   }
 
