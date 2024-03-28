@@ -220,10 +220,6 @@ The following shows how Mimic works visually:
 
 ## Caveats
 
-#### Currently only Ethernet packets are correctly parsed.
-
-Support for other L2 protocols such as PPP(oE) and WLAN will be added.
-
 #### (0.2.0 or earlier) TCP SYN packets contains data
 
 *Fixed in 0.3.0-alpha. TCP handshake is now emulated by using raw(7) to send TCP control packets.*
