@@ -80,4 +80,10 @@ static inline void conn_syn_recv(struct connection* conn, struct tcphdr* tcp, __
   conn->state = STATE_SYN_RECV;
 }
 
+struct send_options {
+  struct conn_tuple c;
+  bool syn, ack, rst;
+  __u32 seq, ack_seq;
+};
+
 #endif  // _MIMIC_SHARED_CONN_H

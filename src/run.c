@@ -168,49 +168,56 @@ static int handle_log_event(void* ctx, void* data, size_t data_sz) {
   return 0;
 }
 
-// TODO: send TCP control packets
-static inline int send_magic_packet(struct conn_tuple* c) {
-  _cleanup_fd int sk = try(socket(c->protocol, SOCK_RAW | SOCK_NONBLOCK, IPPROTO_UDP));
+static inline int send_ctrl_packet(struct send_options* s) {
+  _cleanup_fd int sk = try(socket(s->c.protocol, SOCK_RAW | SOCK_NONBLOCK, IPPROTO_TCP));
   __u32 csum = 0;
   struct sockaddr_storage saddr = {}, daddr = {};
-  if (c->protocol == AF_INET) {
-    __u32 local = ntohl(c->local.v4), remote = ntohl(c->remote.v4);
+  if (s->c.protocol == AF_INET) {
+    __u32 local = s->c.local.v4, remote = s->c.remote.v4;
     *(struct sockaddr_in*)&saddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = local, .sin_port = 0};
     *(struct sockaddr_in*)&daddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = remote, .sin_port = 0};
-    update_csum_ul(&csum, local);
-    update_csum_ul(&csum, remote);
+    update_csum_ul(&csum, ntohl(local));
+    update_csum_ul(&csum, ntohl(remote));
   } else {
     *(struct sockaddr_in6*)&saddr =
-      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = c->local.v6, .sin6_port = 0};
+      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->c.local.v6, .sin6_port = 0};
     *(struct sockaddr_in6*)&daddr =
-      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = c->remote.v6, .sin6_port = 0};
+      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->c.remote.v6, .sin6_port = 0};
     for (int i = 0; i < 8; i++) {
-      update_csum(&csum, ntohs(c->local.v6.in6_u.u6_addr16[i]));
-      update_csum(&csum, ntohs(c->remote.v6.in6_u.u6_addr16[i]));
+      update_csum(&csum, ntohs(s->c.local.v6.s6_addr16[i]));
+      update_csum(&csum, ntohs(s->c.remote.v6.s6_addr16[i]));
     }
   }
-  update_csum(&csum, IPPROTO_UDP);
-  update_csum(&csum, sizeof(struct udphdr));
-  try(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)));
+  update_csum(&csum, IPPROTO_TCP);
+  update_csum(&csum, sizeof(struct tcphdr));
+  try(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strerror(-_ret));
 
-  // It is intentional to set length to 0 to get a bogus UDP packet. eBPF egress handler will detect this and treat the
-  // packet specially.
-  struct udphdr udp = {
-    .source = c->local_port,
-    .dest = c->remote_port,
-    .len = 0,
+  struct tcphdr tcp = {
+    .source = s->c.local_port,
+    .dest = s->c.remote_port,
+    .seq = htonl(s->seq),
+    .ack_seq = htonl(s->ack_seq),
+    .doff = 5,
+    .syn = s->syn,
+    .ack = s->ack,
+    .rst = s->rst,
+    .window = htons(0xfff),
+    .urg_ptr = 0,
   };
-  update_csum(&csum, ntohs(udp.source));
-  update_csum(&csum, ntohs(udp.dest));
-  udp.check = htons(csum);
+  update_csum(&csum, ntohs(tcp.source));
+  update_csum(&csum, ntohs(tcp.dest));
+  update_csum_ul(&csum, s->seq);
+  update_csum_ul(&csum, s->ack_seq);
+  update_csum_ul(&csum, ntohl(tcp_flag_word(&tcp)));
+  tcp.check = htons(csum_fold(csum));
 
-  try(sendto(sk, &udp, sizeof(udp), 0, (struct sockaddr*)&daddr, sizeof(daddr)));
+  try(sendto(sk, &tcp, sizeof(tcp), 0, (struct sockaddr*)&daddr, sizeof(daddr)), _("failed to send: %s"), strerror(-_ret));
   return 0;
 }
 
 static int handle_send_event(void* ctx, void* data, size_t data_sz) {
-  struct conn_tuple* c = data;
-  try(send_magic_packet(c), _("error sending packet: %s"), strerror(-_ret));
+  struct send_options* s = data;
+  try(send_ctrl_packet(s), _("error sending packet: %s"), strerror(-_ret));
   return 0;
 }
 

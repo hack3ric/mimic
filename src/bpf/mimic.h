@@ -32,7 +32,7 @@ extern struct mimic_settings_map {
 
 extern struct mimic_send_rb_map {
   __uint(type, BPF_MAP_TYPE_RINGBUF);
-  __uint(max_entries, sizeof(struct conn_tuple) * 32);
+  __uint(max_entries, sizeof(struct send_options) * 32);
 } mimic_send_rb;
 
 #define IPV4_CSUM_OFF (offsetof(struct iphdr, check))
