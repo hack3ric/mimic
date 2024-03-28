@@ -168,6 +168,7 @@ static int handle_log_event(void* ctx, void* data, size_t data_sz) {
   return 0;
 }
 
+// TODO: send TCP control packets
 static inline int send_magic_packet(struct conn_tuple* c) {
   _cleanup_fd int sk = try(socket(c->protocol, SOCK_RAW | SOCK_NONBLOCK, IPPROTO_UDP));
   __u32 csum = 0;

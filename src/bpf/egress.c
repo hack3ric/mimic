@@ -86,12 +86,15 @@ int egress_handler(struct __sk_buff* skb) {
   u16 payload_len = udp_len - sizeof(*udp);
   // log_trace(N_("egress: payload_len = %d"), payload_len);
 
-  bool syn = false, ack = false, rst = false, newly_estab = false;
-  enum conn_state conn_state;
+  bool newly_estab, syn, ack, rst;
   u32 seq, ack_seq, conn_seq, conn_ack_seq;
   u32 random = bpf_get_prandom_u32();
+  enum conn_state conn_state;
   enum rst_result rst_result = RST_NONE;
+
   bpf_spin_lock(&conn->lock);
+  newly_estab = syn = ack = rst = false;
+  seq = ack_seq = conn_seq = conn_ack_seq = 0;
   if (conn->rst) {
     conn->rst = false;
     rst = ack = true;

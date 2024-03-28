@@ -93,6 +93,7 @@ int ingress_handler(struct xdp_md* xdp) {
           // TODO: avoid frequent sending of RST
           conn_pre_reset(conn, tcp, payload_len);
         }
+        // TODO: send
         break;
       case STATE_SYN_SENT:
         if (tcp->syn && tcp->ack) {
@@ -101,6 +102,8 @@ int ingress_handler(struct xdp_md* xdp) {
           conn->state = STATE_ESTABLISHED;
           newly_estab = true;
         } else if (tcp->syn && !tcp->ack) {
+          // TODO: Use simultaneous handshake
+
           // SYN sent from both sides: decide which side is going to transition into STATE_SYN_RECV
           // Basically `if (local < remote) state = STATE_SYN_RECV`
           //
@@ -116,9 +119,13 @@ int ingress_handler(struct xdp_md* xdp) {
             }
           }
           if (!det) det = cmp(bpf_ntohs(tcp->dest), bpf_ntohs(tcp->source));
-          if (det <= 0) conn_syn_recv(conn, tcp, payload_len);
+          if (det <= 0) {
+            conn_syn_recv(conn, tcp, payload_len);
+            // TODO: send
+          }
         } else {
           conn_pre_reset(conn, tcp, payload_len);
+          // TODO: send
         }
         break;
       case STATE_ESTABLISHED:
@@ -128,8 +135,10 @@ int ingress_handler(struct xdp_md* xdp) {
         } else if (tcp->syn && !tcp->ack) {
           // SYN again: reset state
           conn_syn_recv(conn, tcp, payload_len);
+          // TODO: send
         } else {
           conn_pre_reset(conn, tcp, payload_len);
+          // TODO: send
         }
         break;
     }
