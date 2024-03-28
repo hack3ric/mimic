@@ -168,28 +168,28 @@ static int handle_log_event(void* ctx, void* data, size_t data_sz) {
   return 0;
 }
 
-static inline int send_packet(struct conn_tuple* c) {
+static inline int send_magic_packet(struct conn_tuple* c) {
   _cleanup_fd int sk = try(socket(c->protocol, SOCK_RAW | SOCK_NONBLOCK, IPPROTO_UDP));
-  __u32 partial_csum = 0;
+  __u32 csum = 0;
   struct sockaddr_storage saddr = {}, daddr = {};
   if (c->protocol == AF_INET) {
     __u32 local = ntohl(c->local.v4), remote = ntohl(c->remote.v4);
     *(struct sockaddr_in*)&saddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = local, .sin_port = 0};
     *(struct sockaddr_in*)&daddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = remote, .sin_port = 0};
-    update_csum_ul(&partial_csum, local);
-    update_csum_ul(&partial_csum, remote);
+    update_csum_ul(&csum, local);
+    update_csum_ul(&csum, remote);
   } else {
     *(struct sockaddr_in6*)&saddr =
       (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = c->local.v6, .sin6_port = 0};
     *(struct sockaddr_in6*)&daddr =
       (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = c->remote.v6, .sin6_port = 0};
     for (int i = 0; i < 8; i++) {
-      update_csum(&partial_csum, ntohs(c->local.v6.in6_u.u6_addr16[i]));
-      update_csum(&partial_csum, ntohs(c->remote.v6.in6_u.u6_addr16[i]));
+      update_csum(&csum, ntohs(c->local.v6.in6_u.u6_addr16[i]));
+      update_csum(&csum, ntohs(c->remote.v6.in6_u.u6_addr16[i]));
     }
   }
-  update_csum(&partial_csum, IPPROTO_UDP);
-  update_csum(&partial_csum, sizeof(struct udphdr));
+  update_csum(&csum, IPPROTO_UDP);
+  update_csum(&csum, sizeof(struct udphdr));
   try(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)));
 
   // It is intentional to set length to 0 to get a bogus UDP packet. eBPF egress handler will detect this and treat the
@@ -198,9 +198,9 @@ static inline int send_packet(struct conn_tuple* c) {
     .source = c->local_port,
     .dest = c->remote_port,
     .len = 0,
-    .check = htons(~csum_fold(partial_csum)),
   };
-  __u16 csum = calc_csum(&udp, sizeof(udp));
+  update_csum(&csum, ntohs(udp.source));
+  update_csum(&csum, ntohs(udp.dest));
   udp.check = htons(csum);
 
   try(sendto(sk, &udp, sizeof(udp), 0, (struct sockaddr*)&daddr, sizeof(daddr)));
@@ -209,7 +209,7 @@ static inline int send_packet(struct conn_tuple* c) {
 
 static int handle_send_event(void* ctx, void* data, size_t data_sz) {
   struct conn_tuple* c = data;
-  try(send_packet(c), _("error sending packet: %s"), strerror(-_ret));
+  try(send_magic_packet(c), _("error sending packet: %s"), strerror(-_ret));
   return 0;
 }
 
