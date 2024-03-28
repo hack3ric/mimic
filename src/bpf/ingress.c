@@ -24,7 +24,7 @@ static inline int restore_data(struct xdp_md* xdp, u16 offset, u32 buf_len) {
   return XDP_PASS;
 }
 
-static inline u32 new_ack_seq(struct tcphdr* tcp, u16 payload_len) {
+static __always_inline u32 new_ack_seq(struct tcphdr* tcp, u16 payload_len) {
   return bpf_ntohl(tcp->seq) + payload_len + tcp->syn;
 }
 
