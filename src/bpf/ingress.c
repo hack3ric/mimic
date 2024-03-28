@@ -84,7 +84,6 @@ int ingress_handler(struct xdp_md* xdp) {
 
   u32 buf_len = bpf_xdp_get_buff_len(xdp);
   u32 payload_len = buf_len - ip_end - sizeof(*tcp);
-  // log_trace("ingress: payload_len = %d", payload_len);
 
   // TODO: verify checksum
 
@@ -173,10 +172,8 @@ int ingress_handler(struct xdp_md* xdp) {
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_TCP_PKT, 0, bpf_ntohl(tcp->seq), bpf_ntohl(tcp->ack_seq));
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_STATE, state, seq, ack_seq);
 
-  if (will_send_ctrl_packet) {
-    send_ctrl_packet(conn_key, syn, ack, rst, seq, ack_seq);
-    return XDP_DROP;
-  }
+  if (will_send_ctrl_packet) send_ctrl_packet(conn_key, syn, ack, rst, seq, ack_seq);
+  if (will_drop) return XDP_DROP;
 
   __be32 ipv4_saddr = 0, ipv4_daddr = 0;
   struct in6_addr ipv6_saddr = {}, ipv6_daddr = {};
