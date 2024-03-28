@@ -88,9 +88,6 @@ int ingress_handler(struct xdp_md* xdp) {
   // TODO: verify checksum
 
   enum rst_result rst_result = RST_NONE;
-  enum conn_state state;
-  bool newly_estab = false;
-
   if (tcp->rst) {
     bpf_spin_lock(&conn->lock);
     rst_result = conn_reset(conn);
@@ -104,45 +101,39 @@ int ingress_handler(struct xdp_md* xdp) {
     return XDP_DROP;
   }
 
-  bool syn, ack, rst, will_send_ctrl_packet, will_drop;
+  bool syn, ack, rst, will_send_ctrl_packet, will_drop, newly_estab;
   u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq;
   u32 random = bpf_get_prandom_u32();
-  syn = ack = rst = will_send_ctrl_packet = will_drop = false;
+  enum conn_state state;
+  syn = ack = rst = will_send_ctrl_packet = will_drop = newly_estab = false;
 
   bpf_spin_lock(&conn->lock);
   switch (conn->state) {
     case STATE_IDLE:
     case STATE_SYN_RECV:
       if (tcp->syn && !tcp->ack) {
-        will_send_ctrl_packet = will_drop = true;
-        syn = ack = true;
+        syn = ack = will_send_ctrl_packet = will_drop = true;
         pre_syn_ack(&seq, &ack_seq, conn, tcp, payload_len, random);
       } else if (conn->state == STATE_SYN_RECV && !tcp->syn && tcp->ack) {
-        will_drop = true;
-        conn->ack_seq = bpf_ntohl(tcp->seq) + payload_len;
+        will_drop = newly_estab = true;
+        conn->ack_seq = new_ack_seq(tcp, payload_len);
         conn->state = STATE_ESTABLISHED;
-        newly_estab = true;
       } else {
-        will_send_ctrl_packet = will_drop = true;
-        rst = ack = true;
+        rst = ack = will_send_ctrl_packet = will_drop = true;
         pre_rst_ack(&seq, &ack_seq, conn, tcp, payload_len);
       }
       break;
 
     case STATE_SYN_SENT:
       if (tcp->syn && tcp->ack) {
-        will_send_ctrl_packet = will_drop = true;
-        ack = true;
+        ack = will_send_ctrl_packet = will_drop = newly_estab = true;
         pre_ack(STATE_ESTABLISHED, &seq, &ack_seq, conn, tcp, payload_len);
-        newly_estab = true;
       } else if (tcp->syn && !tcp->ack) {
         // Simultaneous open
-        will_send_ctrl_packet = will_drop = true;
-        ack = true;
+        ack = will_send_ctrl_packet = will_drop = true;
         pre_ack(STATE_SYN_RECV, &seq, &ack_seq, conn, tcp, payload_len);
       } else {
-        will_send_ctrl_packet = will_drop = true;
-        rst = ack = true;
+        rst = ack = will_send_ctrl_packet = will_drop = true;
         pre_rst_ack(&seq, &ack_seq, conn, tcp, payload_len);
       }
       break;
@@ -151,12 +142,10 @@ int ingress_handler(struct xdp_md* xdp) {
       if (!tcp->syn && tcp->ack) {
         conn->ack_seq += payload_len;
       } else if (tcp->syn && !tcp->ack) {
-        will_send_ctrl_packet = will_drop = true;
-        syn = ack = true;
+        syn = ack = will_send_ctrl_packet = will_drop = true;
         pre_syn_ack(&seq, &ack_seq, conn, tcp, payload_len, random);
       } else {
-        will_send_ctrl_packet = will_drop = true;
-        rst = ack = true;
+        rst = ack = will_send_ctrl_packet = will_drop = true;
         pre_rst_ack(&seq, &ack_seq, conn, tcp, payload_len);
       }
       break;
