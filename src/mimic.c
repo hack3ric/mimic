@@ -2,7 +2,7 @@
 
 #include "mimic.h"
 #include "shared/gettext.h"
-#include "shared/util.h"
+#include "shared/try.h"
 
 int main(int argc, char** argv) {
   struct arguments args = {};

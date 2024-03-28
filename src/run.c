@@ -4,12 +4,11 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/bpf.h>
-#include <linux/ip.h>
-#include <linux/ipv6.h>
+#include <linux/in6.h>
+#include <linux/tcp.h>
 #include <linux/types.h>
 #include <net/if.h>
 #include <netinet/in.h>
-#include <netinet/udp.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -29,6 +28,7 @@
 #include "shared/filter.h"
 #include "shared/gettext.h"
 #include "shared/log.h"
+#include "shared/try.h"
 #include "shared/util.h"
 
 static const struct argp_option options[] = {
@@ -211,7 +211,8 @@ static inline int send_ctrl_packet(struct send_options* s) {
   update_csum_ul(&csum, ntohl(tcp_flag_word(&tcp)));
   tcp.check = htons(csum_fold(csum));
 
-  try(sendto(sk, &tcp, sizeof(tcp), 0, (struct sockaddr*)&daddr, sizeof(daddr)), _("failed to send: %s"), strerror(-_ret));
+  try(sendto(sk, &tcp, sizeof(tcp), 0, (struct sockaddr*)&daddr, sizeof(daddr)), _("failed to send: %s"),
+      strerror(-_ret));
   return 0;
 }
 

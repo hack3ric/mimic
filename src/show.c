@@ -12,6 +12,7 @@
 #include "shared/conn.h"
 #include "shared/filter.h"
 #include "shared/gettext.h"
+#include "shared/try.h"
 #include "shared/util.h"
 
 static const struct argp_option options[] = {

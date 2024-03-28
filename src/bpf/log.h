@@ -5,9 +5,7 @@
 
 #include <bpf/bpf_helpers.h>
 
-#include "../shared/filter.h"
 #include "../shared/log.h"
-#include "mimic.h"
 
 extern struct mimic_log_rb_map {
   __uint(type, BPF_MAP_TYPE_RINGBUF);

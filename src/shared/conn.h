@@ -8,9 +8,7 @@
 #define ntohl bpf_ntohl
 // clang-format on
 #else
-#include <arpa/inet.h>
 #include <linux/bpf.h>
-#include <linux/tcp.h>
 #include <linux/types.h>
 #include <stdbool.h>
 #endif

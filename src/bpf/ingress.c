@@ -6,6 +6,7 @@
 #include "../shared/checksum.h"
 #include "../shared/conn.h"
 #include "../shared/log.h"
+#include "../shared/try.h"
 #include "../shared/util.h"
 #include "log.h"
 #include "mimic.h"

@@ -1,11 +1,13 @@
 #include <arpa/inet.h>
 #include <linux/types.h>
+#include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 
 #include "shared/filter.h"
 #include "shared/gettext.h"
-#include "shared/util.h"
+#include "shared/try.h"
 
 int parse_filter(const char* filter_str, struct pkt_filter* filter) {
   char* delim_pos = strchr(filter_str, '=');
