@@ -129,4 +129,19 @@ static inline struct connection* get_conn(struct conn_tuple* conn_key) {
   return conn;
 }
 
+static __always_inline void send_ctrl_packet(bool ingress, struct conn_tuple c, bool syn, bool ack, bool rst, u32 seq, u32 ack_seq) {
+  struct send_options* s = bpf_ringbuf_reserve(&mimic_send_rb, sizeof(*s), 0);
+  if (!s) return;
+  if (ingress) {
+    union ip_value t1 = c.local;
+    c.local = c.remote;
+    c.remote = t1;
+    __be16 t2 = c.local_port;
+    c.local_port = c.remote_port;
+    c.remote_port = t2;
+  }
+  *s = (struct send_options){.c = c, .syn = syn, .ack = ack, .rst = rst, .seq = seq, .ack_seq = ack_seq};
+  bpf_ringbuf_submit(s, 0);
+}
+
 #endif  // _MIMIC_BPF_MIMIC_H

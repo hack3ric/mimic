@@ -86,68 +86,38 @@ int egress_handler(struct __sk_buff* skb) {
   u16 payload_len = udp_len - sizeof(*udp);
   // log_trace(N_("egress: payload_len = %d"), payload_len);
 
-  bool newly_estab, syn, ack, rst;
   u32 seq, ack_seq, conn_seq, conn_ack_seq;
-  u32 random = bpf_get_prandom_u32();
+  seq = ack_seq = conn_seq = conn_ack_seq = 0;
   enum conn_state conn_state;
-  enum rst_result rst_result = RST_NONE;
+  u32 random = bpf_get_prandom_u32();
 
   bpf_spin_lock(&conn->lock);
-  newly_estab = syn = ack = rst = false;
-  seq = ack_seq = conn_seq = conn_ack_seq = 0;
-  if (conn->rst) {
-    conn->rst = false;
-    rst = ack = true;
+  if (conn->state == STATE_ESTABLISHED) {
     seq = conn->seq;
     ack_seq = conn->ack_seq;
-    rst_result = conn_reset(conn);
+    conn->seq += payload_len;
   } else {
     switch (conn->state) {
       case STATE_IDLE:
-        // SYN send: seq=A -> seq=A+len+1, ack=0
-        syn = true;
+      case STATE_SYN_SENT:
+        // SYN (re)send: seq=A -> seq=A+len+1, ack=0
         seq = conn->seq = random;
         ack_seq = conn->ack_seq = 0;
-        conn->seq += payload_len + 1;  // seq=A+len+1
+        conn->seq += 1;
         conn->state = STATE_SYN_SENT;
         break;
-      case STATE_SYN_SENT:
-        // duplicate SYN without response: resend
-        syn = true;
-        seq = conn->seq;
-        ack_seq = conn->ack_seq;
-        break;
-      case STATE_SYN_RECV:
-        // SYN+ACK send: seq=B -> seq=B+len+1, ack=A+len+1
-        syn = ack = true;
-        seq = conn->seq = random;
-        ack_seq = conn->ack_seq;  // ack_seq set at ingress
-        conn->seq += payload_len + 1;
-        conn->state = STATE_ESTABLISHED;
-        newly_estab = true;
-        break;
-      case STATE_ESTABLISHED:
-        // ACK send: seq=seq -> seq=seq+len, ack=ack
-        ack = true;
-        seq = conn->seq;
-        ack_seq = conn->ack_seq;
-        conn->seq += payload_len;
+      default:
         break;
     }
+    bpf_spin_unlock(&conn->lock);
+    send_ctrl_packet(false, conn_key, true, false, false, seq, ack_seq);
+    return TC_ACT_STOLEN;
   }
   conn_state = conn->state;
   conn_seq = conn->seq;
   conn_ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
-  if (rst) {
-    log_quartet(log_verbosity, LOG_LEVEL_WARN, false, LOG_TYPE_RST, conn_key);
-    if (rst_result == RST_DESTROYED) {
-      log_quartet(log_verbosity, LOG_LEVEL_WARN, false, LOG_TYPE_CONN_DESTROY, conn_key);
-    }
-  }
-  if (newly_estab) {
-    log_quartet(log_verbosity, LOG_LEVEL_INFO, false, LOG_TYPE_CONN_ESTABLISH, conn_key);
-  }
+
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, false, LOG_TYPE_TCP_PKT, 0, seq, ack_seq);
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, false, LOG_TYPE_STATE, conn_state, conn_seq, conn_ack_seq);
 
@@ -166,7 +136,7 @@ int egress_handler(struct __sk_buff* skb) {
 
   try(mangle_data(skb, ip_end + sizeof(*udp)));
   decl_shot(struct tcphdr, tcp, ip_end, skb);
-  update_tcp_header(tcp, udp_len, syn, ack, rst, seq, ack_seq);
+  update_tcp_header(tcp, udp_len, false, true, false, seq, ack_seq);
 
   tcp->check = 0;
   s64 csum_diff = bpf_csum_diff((__be32*)&old_udphdr, sizeof(struct udphdr), (__be32*)tcp, sizeof(struct tcphdr), 0);
