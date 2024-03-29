@@ -8,6 +8,7 @@
 #include "../shared/conn.h"
 #include "../shared/filter.h"
 #include "../shared/log.h"
+#include "../shared/util.h"
 
 extern struct mimic_whitelist_map {
   __uint(type, BPF_MAP_TYPE_HASH);
@@ -30,15 +31,10 @@ extern struct mimic_settings_map {
   __type(value, __u32);
 } mimic_settings;
 
-extern struct mimic_log_rb_map {
+extern struct mimic_rb_map {
   __uint(type, BPF_MAP_TYPE_RINGBUF);
   __uint(max_entries, sizeof(struct log_event) * 32);
-} mimic_log_rb;
-
-extern struct mimic_send_rb_map {
-  __uint(type, BPF_MAP_TYPE_RINGBUF);
-  __uint(max_entries, sizeof(struct send_options) * 32);
-} mimic_send_rb;
+} mimic_rb;
 
 #define IPV4_CSUM_OFF (offsetof(struct iphdr, check))
 #define TCP_UDP_HEADER_DIFF (sizeof(struct tcphdr) - sizeof(struct udphdr))
@@ -134,24 +130,17 @@ static inline struct connection* get_conn(struct conn_tuple* conn_key) {
   return conn;
 }
 
-static __always_inline void send_ctrl_packet(struct conn_tuple c, bool syn, bool ack, bool rst, __u32 seq,
-                                             __u32 ack_seq) {
-  struct send_options* s = bpf_ringbuf_reserve(&mimic_send_rb, sizeof(*s), 0);
-  if (!s) return;
-  *s = (struct send_options){.c = c, .syn = syn, .ack = ack, .rst = rst, .seq = seq, .ack_seq = ack_seq};
-  bpf_ringbuf_submit(s, 0);
-}
-
 static inline void log_any(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
                            union log_info info) {
   if (log_verbosity < level) return;
-  struct log_event* e = bpf_ringbuf_reserve(&mimic_log_rb, sizeof(*e), 0);
-  if (!e) return;
-  e->level = level;
-  e->type = type;
-  e->ingress = ingress;
-  e->info = info;
-  bpf_ringbuf_submit(e, 0);
+  struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
+  if (!item) return;
+  item->type = RB_ITEM_LOG_EVENT;
+  item->log_event.level = level;
+  item->log_event.type = type;
+  item->log_event.ingress = ingress;
+  item->log_event.info = info;
+  bpf_ringbuf_submit(item, 0);
 }
 
 static inline void log_quartet(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
@@ -163,6 +152,22 @@ static __always_inline void log_tcp(__u32 log_verbosity, enum log_level level, b
                                     enum conn_state state, __u32 seq, __u32 ack_seq) {
   log_any(log_verbosity, level, ingress, type,
           (union log_info){.tcp = {.state = state, .seq = seq, .ack_seq = ack_seq}});
+}
+
+static __always_inline void send_ctrl_packet(struct conn_tuple c, bool syn, bool ack, bool rst, __u32 seq,
+                                             __u32 ack_seq) {
+  struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
+  if (!item) return;
+  item->type = RB_ITEM_SEND_OPTIONS;
+  item->send_options = (struct send_options){
+    .c = c,
+    .syn = syn,
+    .ack = ack,
+    .rst = rst,
+    .seq = seq,
+    .ack_seq = ack_seq,
+  };
+  bpf_ringbuf_submit(item, 0);
 }
 
 #endif  // _MIMIC_BPF_MIMIC_H

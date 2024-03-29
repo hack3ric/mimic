@@ -143,8 +143,7 @@ static inline int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* 
   return ret ?: bpf_tc_hook_destroy(hook);
 }
 
-static int handle_log_event(void* ctx, void* data, size_t data_sz) {
-  struct log_event* e = data;
+static int handle_log_event(struct log_event* e) {
   const char* dir_str = e->ingress ? _("ingress") : _("egress");
   if (e->type == LOG_TYPE_TCP_PKT) {
     log_any(e->level, "%s: %s: seq %08x, ack %08x", dir_str, log_type_to_str(e->ingress, e->type), e->info.tcp.seq,
@@ -216,10 +215,19 @@ static inline int send_ctrl_packet(struct send_options* s) {
   return 0;
 }
 
-static int handle_send_event(void* ctx, void* data, size_t data_sz) {
-  struct send_options* s = data;
+static int handle_send_event(struct send_options* s) {
   try(send_ctrl_packet(s), _("error sending packet: %s"), strerror(-_ret));
   return 0;
+}
+
+static int handle_rb_event(void* ctx, void* data, size_t data_sz) {
+  struct rb_item* item = data;
+  switch (item->type) {
+    case RB_ITEM_LOG_EVENT:
+      return handle_log_event(&item->log_event);
+    case RB_ITEM_SEND_OPTIONS:
+      return handle_send_event(&item->send_options);
+  }
 }
 
 #define MAX_EVENTS 10
@@ -233,13 +241,13 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   // These fds are actually reference of skel, so no need to use _cleanup_fd
   int egress_handler_fd = -1, ingress_handler_fd = -1;
   int mimic_whitelist_fd = -1, mimic_conns_fd = -1, mimic_settings_fd = -1;
-  int mimic_log_rb_fd = -1, mimic_send_rb_fd = -1;
+  int mimic_rb_fd = -1;
 
   bool tc_hook_created = false;
   struct bpf_tc_hook tc_hook_egress;
   struct bpf_tc_opts tc_opts_egress;
   struct bpf_link* xdp_ingress = NULL;
-  struct ring_buffer *log_rb = NULL, *send_rb = NULL;
+  struct ring_buffer* rb = NULL;
 
   skel = try2_p(mimic_bpf__open(), _("failed to open BPF program: %s"), strerror(-_ret));
 
@@ -286,8 +294,7 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   lock_content.whitelist_id = _get_map_id(mimic_whitelist);
   lock_content.conns_id = _get_map_id(mimic_conns);
   lock_content.settings_id = _get_map_id(mimic_settings);
-  lock_content.log_rb_id = _get_map_id(mimic_log_rb);
-  _get_map_id(mimic_send_rb);
+  _get_map_id(mimic_rb);
 
   try2(lock_write(lock_fd, &lock_content));
 
@@ -311,10 +318,8 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   }
 
   // Get ring buffers in advance so we can return earlier if error
-  log_rb = try2_p(ring_buffer__new(mimic_log_rb_fd, handle_log_event, NULL, NULL),
-                  _("failed to attach BPF ring buffer '%s': %s"), "mimic_log_rb", strerror(-_ret));
-  send_rb = try2_p(ring_buffer__new(mimic_send_rb_fd, handle_send_event, NULL, NULL),
-                   _("failed to attach BPF ring buffer '%s': %s"), "mimic_send_rb", strerror(-_ret));
+  rb = try2_p(ring_buffer__new(mimic_rb_fd, handle_rb_event, NULL, NULL),
+              _("failed to attach BPF ring buffer '%s': %s"), "mimic_rb", strerror(-_ret));
 
   // TC and XDP
   tc_hook_egress =
@@ -339,16 +344,11 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
 
   epfd = try_e(epoll_create1(0), _("failed to create epoll: %s"), strerror(-_ret));
 
-  // BPF log handler
-  int log_rb_epfd = ring_buffer__epoll_fd(log_rb), nfds, i;
-  struct epoll_event ev = {.events = EPOLLIN | EPOLLET, .data.fd = log_rb_epfd};
+  // BPF log handler / packet sending handler
+  int rb_epfd = ring_buffer__epoll_fd(rb), nfds, i;
+  struct epoll_event ev = {.events = EPOLLIN | EPOLLET, .data.fd = rb_epfd};
   struct epoll_event events[MAX_EVENTS];
-  try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, log_rb_epfd, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
-
-  // BPF packet sending handler
-  int send_rb_epfd = ring_buffer__epoll_fd(send_rb);
-  ev = (struct epoll_event){.events = EPOLLIN | EPOLLET, .data.fd = send_rb_epfd};
-  try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, send_rb_epfd, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
+  try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, rb_epfd, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
 
   // Signal handler
   sigset_t mask = {};
@@ -367,11 +367,8 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
     nfds = try2_e(epoll_wait(epfd, events, MAX_EVENTS, -1), _("error waiting for epoll: %s"), strerror(-_ret));
 
     for (i = 0; i < nfds; i++) {
-      if (events[i].data.fd == log_rb_epfd) {
-        try2(ring_buffer__poll(log_rb, 0), _("failed to poll ring buffer '%s': %s"), "mimic_log_rb", strerror(-_ret));
-
-      } else if (events[i].data.fd == send_rb_epfd) {
-        try2(ring_buffer__poll(send_rb, 0), _("failed to poll ring buffer '%s': %s"), "mimic_send_rb", strerror(-_ret));
+      if (events[i].data.fd == rb_epfd) {
+        try2(ring_buffer__poll(rb, 0), _("failed to poll ring buffer '%s': %s"), "mimic_rb", strerror(-_ret));
 
       } else if (events[i].data.fd == sfd) {
         len = try2_e(read(sfd, &siginfo, sizeof(siginfo)), _("failed to read signalfd: %s"), strerror(-_ret));
@@ -393,8 +390,7 @@ cleanup:
   log_info("cleaning up");
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
   if (xdp_ingress) bpf_link__destroy(xdp_ingress);
-  if (log_rb) ring_buffer__free(log_rb);
-  if (send_rb) ring_buffer__free(send_rb);
+  if (rb) ring_buffer__free(rb);
   if (skel) mimic_bpf__destroy(skel);
   return retcode;
 }

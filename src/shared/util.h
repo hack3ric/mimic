@@ -3,9 +3,12 @@
 
 #ifdef _MIMIC_BPF
 #else
-#include <unistd.h>
 #include <stdio.h>
+#include <unistd.h>
 #endif
+
+#include "conn.h"
+#include "log.h"
 
 #ifndef MIMIC_RUNTIME_DIR
 #define MIMIC_RUNTIME_DIR "/var/mimic"
@@ -58,6 +61,17 @@ static inline void cleanup_file(FILE** file) {
 enum settings_key {
   SETTINGS_LOG_VERBOSITY,
   SETTINGS_WHITELIST,  // not stored in mimic_settings map
+};
+
+struct rb_item {
+  enum rb_item_type {
+    RB_ITEM_LOG_EVENT,
+    RB_ITEM_SEND_OPTIONS,
+  } type;
+  union {
+    struct log_event log_event;
+    struct send_options send_options;
+  };
 };
 
 #endif  // _MIMIC_SHARED_UTIL_H
