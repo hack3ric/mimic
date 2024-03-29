@@ -140,6 +140,7 @@ struct log_event {
     LOG_TYPE_STATE,           // tcp
     LOG_TYPE_RST,             // quartet
     LOG_TYPE_CONN_DESTROY,    // quartet
+    LOG_TYPE_QUICK_MSG,       // msg
   } type;
   union log_info {
     struct fake_tcp_info {
@@ -147,6 +148,7 @@ struct log_event {
       __u32 seq, ack_seq;
     } tcp;
     struct conn_tuple quartet;
+    char msg[40];
   } info;
 };
 
@@ -160,11 +162,54 @@ struct rb_item {
   enum rb_item_type {
     RB_ITEM_LOG_EVENT,
     RB_ITEM_SEND_OPTIONS,
+    RB_ITEM_STORE_PACKET,
   } type;
   union {
     struct log_event log_event;
     struct send_options send_options;
+    struct {
+      struct conn_tuple conn;
+      bool l4_csum_partial;
+    } store_packet;
   };
+  // additional buffer follows
 };
+
+#ifdef _MIMIC_BPF
+
+#define _log_a(_0, _1, _2, _3, N, ...) _##N
+#define _log_b_0() (u64[0]){}, 0
+#define _log_b_1(_a) (u64[1]){(u64)(_a)}, sizeof(u64)
+#define _log_b_2(_a, _b) (u64[2]){(u64)(_a), (u64)(_b)}, 2 * sizeof(u64)
+#define _log_b_3(_a, _b, _c) (u64[2]){(u64)(_a), (u64)(_b), (u64)(_c)}, 3 * sizeof(u64)
+#define _log_c(...) _log_a(__VA_ARGS__, 3, 2, 1, 0)
+#define _log_d(_x, _y) _x##_y
+#define _log_e(_x, _y) _log_d(_x, _y)
+#define _log_f(_str, _size, _fmt, ...) \
+  bpf_snprintf((_str), (_size), (_fmt), _log_e(_log_b, _log_c(_0 __VA_OPT__(, ) __VA_ARGS__))(__VA_ARGS__))
+
+#define _log_rbprintf(_l, _fmt, ...)                                                         \
+  ({                                                                                         \
+    struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);                 \
+    if (item) {                                                                              \
+      item->log_event.level = (_l);                                                          \
+      item->log_event.type = LOG_TYPE_QUICK_MSG;                                             \
+      _log_f(item->log_event.info.msg, sizeof(item->log_event.info.msg), _fmt, __VA_ARGS__); \
+      bpf_ringbuf_submit(item, 0);                                                           \
+    }                                                                                        \
+  })
+
+#define log_error(fmt, ...) \
+  if (LOG_ALLOW_ERROR) _log_rbprintf(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define log_warn(fmt, ...) \
+  if (LOG_ALLOW_WARN) _log_rbprintf(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)
+#define log_info(fmt, ...) \
+  if (LOG_ALLOW_INFO) _log_rbprintf(LOG_LEVEL_INFO, fmt, ##__VA_ARGS__)
+#define log_debug(fmt, ...) \
+  if (LOG_ALLOW_DEBUG) _log_rbprintf(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define log_trace(fmt, ...) \
+  if (LOG_ALLOW_TRACE) _log_rbprintf(LOG_LEVEL_TRACE, fmt, ##__VA_ARGS__)
+
+#endif  // _MIMIC_BPF
 
 #endif  // _MIMIC_SHARED_MISC_H

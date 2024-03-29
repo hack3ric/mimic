@@ -115,7 +115,6 @@ static inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress) {
   return key;
 }
 
-// TODO: GC connections
 static inline struct connection* get_conn(struct conn_tuple* conn_key) {
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, conn_key);
   if (!conn) {
