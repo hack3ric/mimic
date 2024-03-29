@@ -44,10 +44,10 @@ static __always_inline void pre_ack(enum conn_state new_state, __u32* seq, __u32
   *ack_seq = conn->ack_seq = new_ack_seq(tcp, payload_len);
 }
 
-static __always_inline void pre_rst_ack(__u32* seq, __u32* ack_seq, struct connection* conn, struct tcphdr* tcp,
-                                        __u16 payload_len) {
-  conn->state = STATE_IDLE;
-  *seq = conn->seq = conn->ack_seq = 0;
+static __always_inline void pre_rst_ack(__u32* seq, __u32* ack_seq, struct tcphdr* tcp, __u16 payload_len) {
+  // conn->state = STATE_IDLE;
+  // *seq = conn->seq = conn->ack_seq = 0;
+  *seq = 0;
   *ack_seq = new_ack_seq(tcp, payload_len);
 }
 
@@ -89,8 +89,15 @@ int ingress_handler(struct xdp_md* xdp) {
   if (tcp->rst) {
     if (conn) {
       bpf_spin_lock(&conn->lock);
-      rst_result = conn_reset(conn);
+      if (conn->state == STATE_ESTABLISHED) {
+        rst_result = RST_DESTROYED;
+      } else if (conn->state == STATE_IDLE) {
+        rst_result = RST_NONE;
+      } else {
+        rst_result = RST_ABORTED;
+      }
       bpf_spin_unlock(&conn->lock);
+      bpf_map_delete_elem(&mimic_conns, &conn_key);
     }
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
@@ -129,7 +136,7 @@ int ingress_handler(struct xdp_md* xdp) {
         conn->state = STATE_ESTABLISHED;
       } else {
         rst = ack = will_send_ctrl_packet = will_drop = true;
-        pre_rst_ack(&seq, &ack_seq, conn, tcp, payload_len);
+        pre_rst_ack(&seq, &ack_seq, tcp, payload_len);
       }
       break;
 
@@ -143,7 +150,7 @@ int ingress_handler(struct xdp_md* xdp) {
         pre_ack(STATE_SYN_RECV, &seq, &ack_seq, conn, tcp, payload_len);
       } else {
         rst = ack = will_send_ctrl_packet = will_drop = true;
-        pre_rst_ack(&seq, &ack_seq, conn, tcp, payload_len);
+        pre_rst_ack(&seq, &ack_seq, tcp, payload_len);
       }
       break;
 
@@ -155,7 +162,7 @@ int ingress_handler(struct xdp_md* xdp) {
         pre_syn_ack(&seq, &ack_seq, conn, tcp, payload_len, random);
       } else {
         rst = ack = will_send_ctrl_packet = will_drop = true;
-        pre_rst_ack(&seq, &ack_seq, conn, tcp, payload_len);
+        pre_rst_ack(&seq, &ack_seq, tcp, payload_len);
       }
       break;
   }
@@ -170,6 +177,7 @@ int ingress_handler(struct xdp_md* xdp) {
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_TCP_PKT, 0, bpf_ntohl(tcp->seq), bpf_ntohl(tcp->ack_seq));
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_STATE, state, seq, ack_seq);
 
+  if (rst) bpf_map_delete_elem(&mimic_conns, &conn_key);
   if (will_send_ctrl_packet) send_ctrl_packet(conn_key, syn, ack, rst, seq, ack_seq);
   if (will_drop) return XDP_DROP;
 

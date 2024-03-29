@@ -51,20 +51,6 @@ enum rst_result {
   RST_DESTROYED,
 };
 
-static inline enum rst_result conn_reset(struct connection* conn) {
-  enum rst_result result;
-  if (conn->state == STATE_ESTABLISHED) {
-    result = RST_DESTROYED;
-  } else if (conn->state == STATE_IDLE) {
-    result = RST_NONE;
-  } else {
-    result = RST_ABORTED;
-  }
-  conn->ack_seq = 0;
-  conn->state = STATE_IDLE;
-  return result;
-}
-
 struct send_options {
   struct conn_tuple c;
   bool syn, ack, rst;
