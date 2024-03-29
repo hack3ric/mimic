@@ -8,7 +8,6 @@
 #include "../shared/log.h"
 #include "../shared/try.h"
 #include "../shared/util.h"
-#include "log.h"
 #include "mimic.h"
 
 // Move back n bytes, shrink socket buffer and restore data.

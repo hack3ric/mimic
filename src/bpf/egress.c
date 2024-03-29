@@ -7,7 +7,6 @@
 #include "../shared/log.h"
 #include "../shared/try.h"
 #include "../shared/util.h"
-#include "log.h"
 #include "mimic.h"
 
 // Extend socket buffer and move n bytes from front to back.

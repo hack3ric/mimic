@@ -2,7 +2,7 @@
 #define _MIMIC_SHARED_TRY_H
 
 #ifdef _MIMIC_BPF
-#include "../bpf/log.h"
+#include "../bpf/mimic.h"
 #else
 #include "../log.h"
 #endif
