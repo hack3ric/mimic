@@ -9,9 +9,9 @@ int main(int argc, char** argv) {
   try(argp_parse(&argp, argc, argv, ARGP_IN_ORDER, NULL, &args), _("error parsing arguments"));
 
   switch (args.cmd) {
-    case CMD_run:
+    case CMD_RUN:
       return -subcmd_run(&args.run);
-    case CMD_show:
+    case CMD_SHOW:
       return -subcmd_show(&args.show);
     default:
       break;

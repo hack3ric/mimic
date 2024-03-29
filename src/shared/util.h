@@ -15,8 +15,9 @@
 #define max(x, y) ((x) < (y) ? (y) : (x))
 #define cmp(x, y) ((x) > (y) - (x) < (y))
 
-// Some missing declaration of vmlinux.h
 #ifdef _MIMIC_BPF
+
+// Some missing declaration of vmlinux.h
 
 #define htons bpf_htons
 #define htonl bpf_htonl

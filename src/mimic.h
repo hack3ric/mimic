@@ -13,8 +13,8 @@
 struct arguments {
   enum {
     CMD_NULL,
-    CMD_run,
-    CMD_show,
+    CMD_RUN,
+    CMD_SHOW,
   } cmd;
   union {
     struct run_arguments {

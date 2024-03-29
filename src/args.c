@@ -1,5 +1,6 @@
 #include <argp.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -41,20 +42,19 @@ static inline error_t argp_parse_cmd(struct argp_state* state, const char* cmdna
   return result;
 }
 
-#define gen_cmd_parse(_cmd)                                           \
-  if (strcmp(arg, #_cmd) == 0) {                                      \
-    args->cmd = CMD_##_cmd;                                           \
-    return argp_parse_cmd(state, #_cmd, &(_cmd##_argp), &args->_cmd); \
-  }
-
 static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
   struct arguments* args = (struct arguments*)state->input;
   if (args->cmd != CMD_NULL) return ARGP_ERR_UNKNOWN;
 
   switch (key) {
     case ARGP_KEY_ARG:
-      gen_cmd_parse(run);
-      gen_cmd_parse(show);
+      if (strcmp(arg, "run") == 0) {
+        args->cmd = CMD_RUN;
+        return argp_parse_cmd(state, "run", &run_argp, &args->run);
+      } else if (strcmp(arg, "show") == 0) {
+        args->cmd = CMD_SHOW;
+        return argp_parse_cmd(state, "show", &show_argp, &args->show);
+      };
       log_error(_("unknown command '%s'"), arg);
       exit(1);
       break;
