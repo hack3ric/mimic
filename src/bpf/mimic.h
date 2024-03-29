@@ -30,7 +30,7 @@ extern struct mimic_settings_map {
 
 extern struct mimic_rb_map {
   __uint(type, BPF_MAP_TYPE_RINGBUF);
-  __uint(max_entries, sizeof(struct log_event) * 32);
+  __uint(max_entries, sizeof(struct rb_item) * 32);
 } mimic_rb;
 
 #define IPV4_CSUM_OFF (offsetof(struct iphdr, check))
