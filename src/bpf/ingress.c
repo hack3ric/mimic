@@ -81,18 +81,17 @@ int ingress_handler(struct xdp_md* xdp) {
 
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP, true);
   log_quartet(log_verbosity, LOG_LEVEL_DEBUG, true, LOG_TYPE_MATCHED, conn_key);
-  struct connection* conn = try_p_drop(get_conn(&conn_key));
-
-  __u32 buf_len = bpf_xdp_get_buff_len(xdp);
-  __u32 payload_len = buf_len - ip_end - sizeof(*tcp);
+  struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
 
   // TODO: verify checksum
 
   enum rst_result rst_result = RST_NONE;
   if (tcp->rst) {
-    bpf_spin_lock(&conn->lock);
-    rst_result = conn_reset(conn);
-    bpf_spin_unlock(&conn->lock);
+    if (conn) {
+      bpf_spin_lock(&conn->lock);
+      rst_result = conn_reset(conn);
+      bpf_spin_unlock(&conn->lock);
+    }
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
     log_quartet(log_verbosity, LOG_LEVEL_WARN, true, LOG_TYPE_RST, conn_key);
@@ -101,6 +100,15 @@ int ingress_handler(struct xdp_md* xdp) {
     }
     return XDP_DROP;
   }
+
+  if (!conn) {
+    struct connection conn_value = {};
+    try_drop(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
+    conn = try_p_drop(bpf_map_lookup_elem(&mimic_conns, &conn_key));
+  }
+
+  __u32 buf_len = bpf_xdp_get_buff_len(xdp);
+  __u32 payload_len = buf_len - ip_end - sizeof(*tcp);
 
   bool syn, ack, rst, will_send_ctrl_packet, will_drop, newly_estab;
   __u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq;
