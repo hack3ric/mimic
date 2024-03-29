@@ -2,6 +2,7 @@
 
 #include "mimic.h"
 #include "shared/try.h"
+#include "shared/util.h"
 
 int main(int argc, char** argv) {
   struct arguments args = {};

@@ -6,6 +6,7 @@
 #include <stdbool.h>
 
 #include "shared/misc.h"
+#include "shared/util.h"
 
 extern int log_verbosity;
 

@@ -3,16 +3,15 @@
 
 #ifdef _MIMIC_BPF
 #include "../bpf/vmlinux.h"
-
-#include <bpf/bpf_endian.h>
 #else
+#include <arpa/inet.h>
 #include <linux/bpf.h>
 #include <linux/types.h>
+#include <netinet/in.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <arpa/inet.h>
 #include <string.h>
+#include <sys/socket.h>
 #endif
 
 #include "util.h"

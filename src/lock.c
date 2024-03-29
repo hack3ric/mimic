@@ -10,6 +10,7 @@
 
 #include "mimic.h"
 #include "shared/try.h"
+#include "shared/util.h"
 
 struct lock_error {
   enum lock_error_kind {

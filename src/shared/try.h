@@ -2,10 +2,11 @@
 #define _MIMIC_SHARED_TRY_H
 
 #ifdef _MIMIC_BPF
-#include "../bpf/mimic.h"
 #else
 #include "../log.h"
 #endif
+
+#include "util.h"
 
 #define redecl(_type, _name, _off, _ctx, _ret)                              \
   _name = ({                                                                \
