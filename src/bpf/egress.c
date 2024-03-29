@@ -27,11 +27,11 @@ static int mangle_data(struct __sk_buff* skb, __u16 offset) {
 }
 
 static inline void update_tcp_header(struct tcphdr* tcp, __u16 udp_len, __u32 seq, __u32 ack_seq) {
-  tcp->seq = bpf_htonl(seq);
-  tcp->ack_seq = bpf_htonl(ack_seq);
+  tcp->seq = htonl(seq);
+  tcp->ack_seq = htonl(ack_seq);
   tcp_flag_word(tcp) = 0;
   tcp->doff = 5;
-  tcp->window = bpf_htons(0xfff);
+  tcp->window = htons(0xfff);
   tcp->ack = true;
   tcp->urg_ptr = 0;
 }
@@ -39,7 +39,7 @@ static inline void update_tcp_header(struct tcphdr* tcp, __u16 udp_len, __u32 se
 SEC("tc")
 int egress_handler(struct __sk_buff* skb) {
   decl_ok(struct ethhdr, eth, 0, skb);
-  __u16 eth_proto = bpf_ntohs(eth->h_proto);
+  __u16 eth_proto = ntohs(eth->h_proto);
 
   struct iphdr* ipv4 = NULL;
   struct ipv6hdr* ipv6 = NULL;
@@ -72,7 +72,7 @@ int egress_handler(struct __sk_buff* skb) {
   old_udphdr.check = 0;
   __be16 old_udp_csum = udp->check;
 
-  __u16 udp_len = bpf_ntohs(udp->len);
+  __u16 udp_len = ntohs(udp->len);
   __u16 payload_len = udp_len - sizeof(*udp);
 
   __u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq;
@@ -111,14 +111,14 @@ int egress_handler(struct __sk_buff* skb) {
 
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
-    __be16 new_len = bpf_htons(bpf_ntohs(old_len) + TCP_UDP_HEADER_DIFF);
+    __be16 new_len = htons(ntohs(old_len) + TCP_UDP_HEADER_DIFF);
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_TCP;
 
     try_shot(bpf_l3_csum_replace(skb, ETH_HLEN + IPV4_CSUM_OFF, old_len, new_len, 2));
-    try_shot(bpf_l3_csum_replace(skb, ETH_HLEN + IPV4_CSUM_OFF, bpf_htons(IPPROTO_UDP), bpf_htons(IPPROTO_TCP), 2));
+    try_shot(bpf_l3_csum_replace(skb, ETH_HLEN + IPV4_CSUM_OFF, htons(IPPROTO_UDP), htons(IPPROTO_TCP), 2));
   } else if (ipv6) {
-    ipv6->payload_len = bpf_htons(bpf_ntohs(ipv6->payload_len) + TCP_UDP_HEADER_DIFF);
+    ipv6->payload_len = htons(ntohs(ipv6->payload_len) + TCP_UDP_HEADER_DIFF);
     ipv6->nexthdr = IPPROTO_TCP;
   }
 
@@ -133,18 +133,16 @@ int egress_handler(struct __sk_buff* skb) {
   __u32 off = ip_end + offsetof(struct tcphdr, check);
   bpf_l4_csum_replace(skb, off, 0, csum_diff, 0);
 
-  __be16 newlen = bpf_htons(udp_len + TCP_UDP_HEADER_DIFF);
+  __be16 newlen = htons(udp_len + TCP_UDP_HEADER_DIFF);
   __s64 diff = 0;
   if (ipv4) {
-    struct ipv4_ph_part oldph = {._pad = 0, .protocol = IPPROTO_UDP, .len = old_udphdr.len};
-    struct ipv4_ph_part newph = {._pad = 0, .protocol = IPPROTO_TCP, .len = newlen};
-    __u32 size = sizeof(struct ipv4_ph_part);
-    diff = bpf_csum_diff((__be32*)&oldph, size, (__be32*)&newph, size, 0);
+    struct ipv4_ph_part oldph = {.protocol = IPPROTO_UDP, .len = old_udphdr.len};
+    struct ipv4_ph_part newph = {.protocol = IPPROTO_TCP, .len = newlen};
+    diff = bpf_csum_diff((__be32*)&oldph, sizeof(struct ipv4_ph_part), (__be32*)&newph, sizeof(struct ipv4_ph_part), 0);
   } else if (ipv6) {
-    struct ipv6_ph_part oldph = {._1 = {}, .len = old_udphdr.len, ._2 = {}, .nexthdr = IPPROTO_UDP};
-    struct ipv6_ph_part newph = {._1 = {}, .len = newlen, ._2 = {}, .nexthdr = IPPROTO_TCP};
-    __u32 size = sizeof(struct ipv6_ph_part);
-    diff = bpf_csum_diff((__be32*)&oldph, size, (__be32*)&newph, size, 0);
+    struct ipv6_ph_part oldph = {.len = old_udphdr.len, .nexthdr = IPPROTO_UDP};
+    struct ipv6_ph_part newph = {.len = newlen, .nexthdr = IPPROTO_TCP};
+    diff = bpf_csum_diff((__be32*)&oldph, sizeof(struct ipv6_ph_part), (__be32*)&newph, sizeof(struct ipv6_ph_part), 0);
   }
   bpf_l4_csum_replace(skb, off, 0, diff, BPF_F_PSEUDO_HDR);
 

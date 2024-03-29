@@ -33,7 +33,8 @@ static const struct argp_option options[] = {
   {"verbose", 'v', NULL, 0, N_("Output more information"), 0},
   {"quiet", 'q', NULL, 0, N_("Output less information"), 0},
   {"file", 'F', N_("PATH"), 0, N_("Load configuration from file"), 1},
-  {}};
+  {},
+};
 
 static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
   struct run_arguments* args = (struct run_arguments*)state->input;

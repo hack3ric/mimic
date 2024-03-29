@@ -4,8 +4,9 @@
 #include <bpf/bpf_helpers.h>
 
 #include "../shared/checksum.h"
-#include "../shared/try.h"
 #include "../shared/misc.h"
+#include "../shared/try.h"
+#include "../shared/util.h"
 #include "mimic.h"
 
 // Move back n bytes, shrink socket buffer and restore data.
@@ -23,7 +24,7 @@ static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len) 
 }
 
 static __always_inline __u32 new_ack_seq(struct tcphdr* tcp, __u16 payload_len) {
-  return bpf_ntohl(tcp->seq) + payload_len + tcp->syn;
+  return ntohl(tcp->seq) + payload_len + tcp->syn;
 }
 
 static __always_inline void pre_syn_ack(__u32* seq, __u32* ack_seq, struct connection* conn, struct tcphdr* tcp,
@@ -51,7 +52,7 @@ static __always_inline void pre_rst_ack(__u32* seq, __u32* ack_seq, struct tcphd
 SEC("xdp")
 int ingress_handler(struct xdp_md* xdp) {
   decl_pass(struct ethhdr, eth, 0, xdp);
-  __u16 eth_proto = bpf_ntohs(eth->h_proto);
+  __u16 eth_proto = ntohs(eth->h_proto);
 
   struct iphdr* ipv4 = NULL;
   struct ipv6hdr* ipv6 = NULL;
@@ -171,7 +172,7 @@ int ingress_handler(struct xdp_md* xdp) {
   if (newly_estab) {
     log_quartet(log_verbosity, LOG_LEVEL_INFO, true, LOG_TYPE_CONN_ESTABLISH, conn_key);
   }
-  log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_TCP_PKT, 0, bpf_ntohl(tcp->seq), bpf_ntohl(tcp->ack_seq));
+  log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_TCP_PKT, 0, ntohl(tcp->seq), ntohl(tcp->ack_seq));
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_STATE, state, seq, ack_seq);
 
   if (rst) bpf_map_delete_elem(&mimic_conns, &conn_key);
@@ -183,17 +184,17 @@ int ingress_handler(struct xdp_md* xdp) {
   if (ipv4) {
     ipv4_saddr = ipv4->saddr, ipv4_daddr = ipv4->daddr;
     __be16 old_len = ipv4->tot_len;
-    __be16 new_len = bpf_htons(bpf_ntohs(old_len) - TCP_UDP_HEADER_DIFF);
+    __be16 new_len = htons(ntohs(old_len) - TCP_UDP_HEADER_DIFF);
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_UDP;
 
-    __u32 ipv4_csum = (__u16)~bpf_ntohs(ipv4->check);
+    __u32 ipv4_csum = (__u16)~ntohs(ipv4->check);
     update_csum(&ipv4_csum, -(__s32)TCP_UDP_HEADER_DIFF);
     update_csum(&ipv4_csum, IPPROTO_UDP - IPPROTO_TCP);
-    ipv4->check = bpf_htons(csum_fold(ipv4_csum));
+    ipv4->check = htons(csum_fold(ipv4_csum));
   } else if (ipv6) {
     ipv6_saddr = ipv6->saddr, ipv6_daddr = ipv6->daddr;
-    ipv6->payload_len = bpf_htons(bpf_ntohs(ipv6->payload_len) - TCP_UDP_HEADER_DIFF);
+    ipv6->payload_len = htons(ntohs(ipv6->payload_len) - TCP_UDP_HEADER_DIFF);
     ipv6->nexthdr = IPPROTO_UDP;
   }
 
@@ -201,26 +202,26 @@ int ingress_handler(struct xdp_md* xdp) {
   decl_drop(struct udphdr, udp, ip_end, xdp);
 
   __u16 udp_len = buf_len - ip_end - TCP_UDP_HEADER_DIFF;
-  udp->len = bpf_htons(udp_len);
+  udp->len = htons(udp_len);
 
   __u32 csum = 0;
   if (ipv4) {
-    update_csum_ul(&csum, bpf_ntohl(ipv4_saddr));
-    update_csum_ul(&csum, bpf_ntohl(ipv4_daddr));
+    update_csum_ul(&csum, ntohl(ipv4_saddr));
+    update_csum_ul(&csum, ntohl(ipv4_daddr));
   } else if (ipv6) {
     for (int i = 0; i < 8; i++) {
-      update_csum(&csum, bpf_ntohs(ipv6_saddr.in6_u.u6_addr16[i]));
-      update_csum(&csum, bpf_ntohs(ipv6_daddr.in6_u.u6_addr16[i]));
+      update_csum(&csum, ntohs(ipv6_saddr.in6_u.u6_addr16[i]));
+      update_csum(&csum, ntohs(ipv6_daddr.in6_u.u6_addr16[i]));
     }
   }
   update_csum(&csum, IPPROTO_UDP);
   update_csum(&csum, udp_len);
-  update_csum(&csum, bpf_ntohs(udp->source));
-  update_csum(&csum, bpf_ntohs(udp->dest));
+  update_csum(&csum, ntohs(udp->source));
+  update_csum(&csum, ntohs(udp->dest));
   update_csum(&csum, udp_len);
 
   update_csum_data(xdp, &csum, ip_end + sizeof(*udp));
-  udp->check = bpf_htons(csum_fold(csum));
+  udp->check = htons(csum_fold(csum));
 
   return XDP_PASS;
 }

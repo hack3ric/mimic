@@ -14,7 +14,10 @@
 #include "shared/util.h"
 
 static const struct argp_option options[] = {
-  {"process", 'p', NULL, 0, N_("Show process information")}, {"connections", 'c', NULL, 0, N_("Show connections")}, {}};
+  {"process", 'p', NULL, 0, N_("Show process information")},
+  {"connections", 'c', NULL, 0, N_("Show connections")},
+  {},
+};
 
 static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
   struct show_arguments* args = (struct show_arguments*)state->input;
