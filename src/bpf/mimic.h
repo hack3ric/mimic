@@ -5,9 +5,7 @@
 
 #include <bpf/bpf_helpers.h>
 
-#include "../shared/conn.h"
-#include "../shared/filter.h"
-#include "../shared/log.h"
+#include "../shared/misc.h"
 #include "../shared/util.h"
 
 extern struct mimic_whitelist_map {

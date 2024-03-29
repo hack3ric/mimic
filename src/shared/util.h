@@ -7,9 +7,6 @@
 #include <unistd.h>
 #endif
 
-#include "conn.h"
-#include "log.h"
-
 #ifndef MIMIC_RUNTIME_DIR
 #define MIMIC_RUNTIME_DIR "/var/mimic"
 #endif
@@ -20,6 +17,14 @@
 
 // Some missing declaration of vmlinux.h
 #ifdef _MIMIC_BPF
+
+#define htons bpf_htons
+#define htonl bpf_htonl
+#define ntohs bpf_ntohs
+#define ntohl bpf_ntohl
+
+#define AF_INET 2
+#define AF_INET6 10
 
 // defined in linux/pkt_cls.h
 #define TC_ACT_OK 0
@@ -40,10 +45,9 @@
 // defined in linux/tcp.h
 #define tcp_flag_word(tp) (((union tcp_word_hdr*)(tp))->words[3])
 
-#endif  // _MIMIC_BPF
+#else  // _MIMIC_BPF
 
 // Cleanup utilities
-#ifndef _MIMIC_BPF
 
 static inline void cleanup_fd(int* fd) {
   if (*fd >= 0) close(*fd);
@@ -57,21 +61,15 @@ static inline void cleanup_file(FILE** file) {
 
 #endif  // _MIMIC_BPF
 
-// mimic_settings keys
-enum settings_key {
-  SETTINGS_LOG_VERBOSITY,
-  SETTINGS_WHITELIST,  // not stored in mimic_settings map
-};
-
-struct rb_item {
-  enum rb_item_type {
-    RB_ITEM_LOG_EVENT,
-    RB_ITEM_SEND_OPTIONS,
-  } type;
-  union {
-    struct log_event log_event;
-    struct send_options send_options;
-  };
-};
+// Reserved for gettext use in the future.
+//
+// On eBPF, these markers are just for convenience, so that I can get a comprehensive list of texts. In the future,
+// logging should be rewritten so that eBPF should only send structurized information and let userspace call gettext.
+#ifndef _MIMIC_BPF
+// #define _(text) text
+static inline __attribute__((__format_arg__(1))) const char* _(const char* text) { return text; }
+#define gettext(text) _(text)
+#endif
+#define N_(text) text
 
 #endif  // _MIMIC_SHARED_UTIL_H

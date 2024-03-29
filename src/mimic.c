@@ -1,7 +1,6 @@
 #include <argp.h>
 
 #include "mimic.h"
-#include "shared/gettext.h"
 #include "shared/try.h"
 
 int main(int argc, char** argv) {

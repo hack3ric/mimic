@@ -5,8 +5,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 
-#include "shared/gettext.h"
-#include "shared/log.h"
+#include "shared/misc.h"
 
 extern int log_verbosity;
 

@@ -5,7 +5,6 @@
 
 #include "log.h"
 #include "mimic.h"
-#include "shared/gettext.h"
 
 const char* argp_program_version = "0.3.0-alpha";
 const char* argp_program_bug_address = "https://github.com/hack3ric/mimic/issues";

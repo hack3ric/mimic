@@ -5,8 +5,6 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#include "shared/filter.h"
-#include "shared/gettext.h"
 #include "shared/try.h"
 
 int parse_filter(const char* filter_str, struct pkt_filter* filter) {

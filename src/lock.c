@@ -9,7 +9,6 @@
 #include <unistd.h>
 
 #include "mimic.h"
-#include "shared/gettext.h"
 #include "shared/try.h"
 
 struct lock_error {

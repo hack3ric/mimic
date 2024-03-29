@@ -24,10 +24,7 @@
 #include "log.h"
 #include "mimic.h"
 #include "shared/checksum.h"
-#include "shared/conn.h"
-#include "shared/filter.h"
-#include "shared/gettext.h"
-#include "shared/log.h"
+#include "shared/misc.h"
 #include "shared/try.h"
 #include "shared/util.h"
 
