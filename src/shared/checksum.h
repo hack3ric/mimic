@@ -55,7 +55,7 @@ static inline void update_csum_ul_neg(__u32* csum, __u32 new) {
 
 #else
 
-__u16 calc_csum(void* data, size_t data_len) {
+__u32 calc_csum(void* data, size_t data_len) {
   __u32 result = 0;
   for (int i = 0; i < data_len / 2; i++) {
     result += ntohs(*((__u16*)data + i));
@@ -63,7 +63,7 @@ __u16 calc_csum(void* data, size_t data_len) {
   if (data_len % 2 == 1) {
     result += (__u16)((__u8*)data)[data_len - 1] << 8;
   }
-  return csum_fold(result);
+  return result;
 }
 
 #endif  // _MIMIC_BPF

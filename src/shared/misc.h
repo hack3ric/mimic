@@ -168,7 +168,7 @@ struct rb_item {
     struct log_event log_event;
     struct send_options send_options;
     struct {
-      struct conn_tuple conn;
+      struct conn_tuple conn_key;
       bool l4_csum_partial;
     } store_packet;
   };
