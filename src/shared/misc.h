@@ -162,15 +162,10 @@ struct rb_item {
   enum rb_item_type {
     RB_ITEM_LOG_EVENT,
     RB_ITEM_SEND_OPTIONS,
-    RB_ITEM_STORE_PACKET,
   } type;
   union {
     struct log_event log_event;
     struct send_options send_options;
-    struct {
-      struct conn_tuple conn_key;
-      bool l4_csum_partial;
-    } store_packet;
   };
   // additional buffer follows
 };
