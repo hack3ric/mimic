@@ -221,19 +221,22 @@ static inline int send_ctrl_packet(struct send_options* s) {
   return 0;
 }
 
-static int handle_send_event(struct send_options* s) {
-  try(send_ctrl_packet(s), _("error sending packet: %s"), strerror(-_ret));
-  return 0;
-}
-
 static int handle_rb_event(void* ctx, void* data, size_t data_sz) {
   struct rb_item* item = data;
+  const char* name;
+  int ret;
   switch (item->type) {
     case RB_ITEM_LOG_EVENT:
-      return handle_log_event(&item->log_event);
+      name = N_("logging event");
+      ret = handle_log_event(&item->log_event);
+      break;
     case RB_ITEM_SEND_OPTIONS:
-      return handle_send_event(&item->send_options);
+      name = N_("sending control packets");
+      ret = send_ctrl_packet(&item->send_options);
+      break;
   }
+  if (ret < 0) log_error(_("error %s: %s"), gettext(name), strerror(-ret));
+  return 0;
 }
 
 #define MAX_EVENTS 10

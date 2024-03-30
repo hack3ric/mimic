@@ -3,6 +3,8 @@
 
 #ifdef _MIMIC_BPF
 #else
+#include <errno.h>
+
 #include "../log.h"
 #endif
 
