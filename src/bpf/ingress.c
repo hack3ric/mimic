@@ -78,7 +78,7 @@ int ingress_handler(struct xdp_md* xdp) {
   __u32 log_verbosity = *(__u32*)try_p_drop(bpf_map_lookup_elem(&mimic_settings, &vkey));
 
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP, true);
-  log_quartet(log_verbosity, LOG_LEVEL_DEBUG, true, LOG_TYPE_MATCHED, conn_key);
+  log_conn(log_verbosity, LOG_LEVEL_DEBUG, true, LOG_TYPE_MATCHED, &conn_key);
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
 
   // TODO: verify checksum
@@ -99,9 +99,9 @@ int ingress_handler(struct xdp_md* xdp) {
     }
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
-    log_quartet(log_verbosity, LOG_LEVEL_WARN, true, LOG_TYPE_RST, conn_key);
+    log_conn(log_verbosity, LOG_LEVEL_WARN, true, LOG_TYPE_RST, &conn_key);
     if (rst_result == RST_DESTROYED) {
-      log_quartet(log_verbosity, LOG_LEVEL_WARN, true, LOG_TYPE_CONN_DESTROY, conn_key);
+      log_conn(log_verbosity, LOG_LEVEL_WARN, true, LOG_TYPE_CONN_DESTROY, &conn_key);
     }
     return XDP_DROP;
   }
@@ -170,13 +170,15 @@ int ingress_handler(struct xdp_md* xdp) {
   bpf_spin_unlock(&conn->lock);
 
   if (newly_estab) {
-    log_quartet(log_verbosity, LOG_LEVEL_INFO, true, LOG_TYPE_CONN_ESTABLISH, conn_key);
+    log_conn(log_verbosity, LOG_LEVEL_INFO, true, LOG_TYPE_CONN_ESTABLISH, &conn_key);
   }
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_TCP_PKT, 0, ntohl(tcp->seq), ntohl(tcp->ack_seq));
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_STATE, state, seq, ack_seq);
 
   if (rst) bpf_map_delete_elem(&mimic_conns, &conn_key);
-  if (will_send_ctrl_packet) send_ctrl_packet(conn_key, syn, ack, rst, seq, ack_seq);
+  if (will_send_ctrl_packet) {
+    send_ctrl_packet(&conn_key, (syn ? SYN : 0) | (ack ? ACK : 0) | (rst ? RST : 0), seq, ack_seq);
+  }
   if (will_drop) return XDP_DROP;
 
   __be32 ipv4_saddr = 0, ipv4_daddr = 0;

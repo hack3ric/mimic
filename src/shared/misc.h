@@ -112,7 +112,7 @@ enum rst_result {
 };
 
 struct send_options {
-  struct conn_tuple c;
+  struct conn_tuple conn;
   bool syn, ack, rst;
   __u32 seq, ack_seq;
 };
@@ -134,12 +134,12 @@ struct log_event {
   } level;
   bool ingress;
   enum log_type {
-    LOG_TYPE_MATCHED,         // quartet
-    LOG_TYPE_CONN_ESTABLISH,  // quartet
+    LOG_TYPE_MATCHED,         // conn
+    LOG_TYPE_CONN_ESTABLISH,  // conn
     LOG_TYPE_TCP_PKT,         // tcp (ignore state)
     LOG_TYPE_STATE,           // tcp
-    LOG_TYPE_RST,             // quartet
-    LOG_TYPE_CONN_DESTROY,    // quartet
+    LOG_TYPE_RST,             // conn
+    LOG_TYPE_CONN_DESTROY,    // conn
     LOG_TYPE_QUICK_MSG,       // msg
   } type;
   union log_info {
@@ -147,7 +147,7 @@ struct log_event {
       enum conn_state state;
       __u32 seq, ack_seq;
     } tcp;
-    struct conn_tuple quartet;
+    struct conn_tuple conn;
     char msg[40];
   } info;
 };

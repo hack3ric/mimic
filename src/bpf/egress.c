@@ -65,7 +65,7 @@ int egress_handler(struct __sk_buff* skb) {
   __u32 log_verbosity = *(__u32*)try_p_shot(bpf_map_lookup_elem(&mimic_settings, &vkey));
 
   struct conn_tuple conn_key = gen_conn_key(QUARTET_UDP, false);
-  log_quartet(log_verbosity, LOG_LEVEL_DEBUG, false, LOG_TYPE_MATCHED, conn_key);
+  log_conn(log_verbosity, LOG_LEVEL_DEBUG, false, LOG_TYPE_MATCHED, &conn_key);
   struct connection* conn = try_p_shot(get_conn(&conn_key));
 
   struct udphdr old_udphdr = *udp;
@@ -97,7 +97,7 @@ int egress_handler(struct __sk_buff* skb) {
         break;
     }
     bpf_spin_unlock(&conn->lock);
-    send_ctrl_packet(conn_key, true, false, false, seq, ack_seq);
+    send_ctrl_packet(&conn_key, SYN, seq, ack_seq);
     // TODO: store packet in userspace buffer and send them after establishing
     return TC_ACT_STOLEN;
   }

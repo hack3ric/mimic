@@ -49,8 +49,8 @@ struct ipv6_ph_part {
   __u8 nexthdr;
 } __attribute__((packed));
 
-struct sk_buff* mimic_inspect_skb(struct __sk_buff*) __ksym;
-int mimic_change_csum_offset(struct __sk_buff*, __u16) __ksym;
+struct sk_buff* mimic_inspect_skb(struct __sk_buff* skb) __ksym;
+int mimic_change_csum_offset(struct __sk_buff* skb, __u16 protocol) __ksym;
 
 // clang-format off
 #define QUARTET_DEF struct iphdr* ipv4, struct ipv6hdr* ipv6, struct udphdr* udp, struct tcphdr* tcp
@@ -58,33 +58,7 @@ int mimic_change_csum_offset(struct __sk_buff*, __u16) __ksym;
 #define QUARTET_TCP ipv4, ipv6, NULL, tcp
 // clang-format on
 
-static inline bool matches_whitelist(QUARTET_DEF, bool ingress) {
-  struct pkt_filter local = {.origin = ORIGIN_LOCAL}, remote = {.origin = ORIGIN_REMOTE};
-  if (udp) {
-    local.port = udp->source;
-    remote.port = udp->dest;
-  } else if (tcp) {
-    local.port = tcp->source;
-    remote.port = tcp->dest;
-  }
-  if (ipv4) {
-    local.protocol = remote.protocol = PROTO_IPV4;
-    local.ip.v4 = ipv4->saddr;
-    remote.ip.v4 = ipv4->daddr;
-  } else if (ipv6) {
-    local.protocol = remote.protocol = PROTO_IPV6;
-    local.ip.v6 = ipv6->saddr;
-    remote.ip.v6 = ipv6->daddr;
-  }
-  if (ingress) {
-    struct pkt_filter t = local;
-    local = remote;
-    remote = t;
-    local.origin = ORIGIN_LOCAL;
-    remote.origin = ORIGIN_REMOTE;
-  }
-  return bpf_map_lookup_elem(&mimic_whitelist, &local) || bpf_map_lookup_elem(&mimic_whitelist, &remote);
-}
+bool matches_whitelist(QUARTET_DEF, bool ingress);
 
 static inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress) {
   struct conn_tuple key = {};
@@ -115,62 +89,42 @@ static inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress) {
   return key;
 }
 
-static inline struct connection* get_conn(struct conn_tuple* conn_key) {
-  struct connection* conn = bpf_map_lookup_elem(&mimic_conns, conn_key);
+static inline struct connection* get_conn(struct conn_tuple* key) {
+  struct connection* conn = bpf_map_lookup_elem(&mimic_conns, key);
   if (!conn) {
     struct connection conn_value = {};
-    if (bpf_map_update_elem(&mimic_conns, conn_key, &conn_value, BPF_ANY)) return NULL;
-    conn = bpf_map_lookup_elem(&mimic_conns, conn_key);
+    if (bpf_map_update_elem(&mimic_conns, key, &conn_value, BPF_ANY)) return NULL;
+    conn = bpf_map_lookup_elem(&mimic_conns, key);
     if (!conn) return NULL;
   }
   return conn;
 }
 
-static inline void log_any(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
-                           union log_info info) {
-  if (log_verbosity < level) return;
-  struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
-  if (!item) return;
-  item->type = RB_ITEM_LOG_EVENT;
-  item->log_event.level = level;
-  item->log_event.type = type;
-  item->log_event.ingress = ingress;
-  item->log_event.info = info;
-  bpf_ringbuf_submit(item, 0);
+int log_any(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type, union log_info* info);
+
+static inline int log_conn(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
+                           struct conn_tuple* conn) {
+  if (!conn) return -1;
+  return log_any(log_verbosity, level, ingress, type, &(union log_info){.conn = *conn});
 }
 
-static inline void log_quartet(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
-                               struct conn_tuple quartet) {
-  log_any(log_verbosity, level, ingress, type, (union log_info){.quartet = quartet});
+static inline int log_tcp(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
+                          enum conn_state state, __u32 seq, __u32 ack_seq) {
+  return log_any(log_verbosity, level, ingress, type,
+                 &(union log_info){.tcp = {.state = state, .seq = seq, .ack_seq = ack_seq}});
 }
 
-static __always_inline void log_tcp(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
-                                    enum conn_state state, __u32 seq, __u32 ack_seq) {
-  log_any(log_verbosity, level, ingress, type,
-          (union log_info){.tcp = {.state = state, .seq = seq, .ack_seq = ack_seq}});
-}
+#define SYN 1
+#define ACK 1 << 1
+#define RST 1 << 2
 
-static __always_inline void send_ctrl_packet(struct conn_tuple c, bool syn, bool ack, bool rst, __u32 seq,
-                                             __u32 ack_seq) {
-  struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
-  if (!item) return;
-  item->type = RB_ITEM_SEND_OPTIONS;
-  item->send_options = (struct send_options){
-    .c = c,
-    .syn = syn,
-    .ack = ack,
-    .rst = rst,
-    .seq = seq,
-    .ack_seq = ack_seq,
-  };
-  bpf_ringbuf_submit(item, 0);
-}
+int send_ctrl_packet(struct conn_tuple* conn, __u32 flags, __u32 seq, __u32 ack_seq);
 
 #define _log_a(_0, _1, _2, _3, N, ...) _##N
-#define _log_b_0() (u64[0]){}, 0
-#define _log_b_1(_a) (u64[1]){(u64)(_a)}, sizeof(u64)
-#define _log_b_2(_a, _b) (u64[2]){(u64)(_a), (u64)(_b)}, 2 * sizeof(u64)
-#define _log_b_3(_a, _b, _c) (u64[2]){(u64)(_a), (u64)(_b), (u64)(_c)}, 3 * sizeof(u64)
+#define _log_b_0() (__u64[0]){}, 0
+#define _log_b_1(_a) (__u64[1]){(__u64)(_a)}, sizeof(__u64)
+#define _log_b_2(_a, _b) (__u64[2]){(__u64)(_a), (__u64)(_b)}, 2 * sizeof(__u64)
+#define _log_b_3(_a, _b, _c) (__u64[2]){(__u64)(_a), (__u64)(_b), (__u64)(_c)}, 3 * sizeof(__u64)
 #define _log_c(...) _log_a(__VA_ARGS__, 3, 2, 1, 0)
 #define _log_d(_x, _y) _x##_y
 #define _log_e(_x, _y) _log_d(_x, _y)

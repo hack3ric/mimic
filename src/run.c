@@ -157,7 +157,7 @@ static int handle_log_event(struct log_event* e) {
       break;
     default: {
       char from[IP_PORT_MAX_LEN], to[IP_PORT_MAX_LEN];
-      struct conn_tuple* pkt = &e->info.quartet;
+      struct conn_tuple* pkt = &e->info.conn;
       // invert again, since conn_tuple passed to it is already inverted
       if (e->ingress) {
         ip_port_fmt(pkt->protocol, pkt->local, pkt->local_port, to);
@@ -174,23 +174,23 @@ static int handle_log_event(struct log_event* e) {
 }
 
 static inline int send_ctrl_packet(struct send_options* s) {
-  _cleanup_fd int sk = try(socket(s->c.protocol, SOCK_RAW | SOCK_NONBLOCK, IPPROTO_TCP));
+  _cleanup_fd int sk = try(socket(s->conn.protocol, SOCK_RAW | SOCK_NONBLOCK, IPPROTO_TCP));
   __u32 csum = 0;
   struct sockaddr_storage saddr = {}, daddr = {};
-  if (s->c.protocol == AF_INET) {
-    __u32 local = s->c.local.v4, remote = s->c.remote.v4;
+  if (s->conn.protocol == AF_INET) {
+    __u32 local = s->conn.local.v4, remote = s->conn.remote.v4;
     *(struct sockaddr_in*)&saddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = local, .sin_port = 0};
     *(struct sockaddr_in*)&daddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = remote, .sin_port = 0};
     update_csum_ul(&csum, ntohl(local));
     update_csum_ul(&csum, ntohl(remote));
   } else {
     *(struct sockaddr_in6*)&saddr =
-      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->c.local.v6, .sin6_port = 0};
+      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->conn.local.v6, .sin6_port = 0};
     *(struct sockaddr_in6*)&daddr =
-      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->c.remote.v6, .sin6_port = 0};
+      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->conn.remote.v6, .sin6_port = 0};
     for (int i = 0; i < 8; i++) {
-      update_csum(&csum, ntohs(s->c.local.v6.s6_addr16[i]));
-      update_csum(&csum, ntohs(s->c.remote.v6.s6_addr16[i]));
+      update_csum(&csum, ntohs(s->conn.local.v6.s6_addr16[i]));
+      update_csum(&csum, ntohs(s->conn.remote.v6.s6_addr16[i]));
     }
   }
   update_csum(&csum, IPPROTO_TCP);
@@ -198,8 +198,8 @@ static inline int send_ctrl_packet(struct send_options* s) {
   try(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strerror(-_ret));
 
   struct tcphdr tcp = {
-    .source = s->c.local_port,
-    .dest = s->c.remote_port,
+    .source = s->conn.local_port,
+    .dest = s->conn.remote_port,
     .seq = htonl(s->seq),
     .ack_seq = htonl(s->ack_seq),
     .doff = 5,
