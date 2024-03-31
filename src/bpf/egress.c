@@ -36,8 +36,6 @@ static inline void update_tcp_header(struct tcphdr* tcp, __u16 udp_len, __u32 se
   tcp->urg_ptr = 0;
 }
 
-#define SEG_LEN 256
-
 static inline int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key) {
   int retcode;
   __u32 data_len = skb->len - pkt_off;
