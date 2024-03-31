@@ -67,6 +67,14 @@
   })
 
 // Same as `try` with one arguments, but runs XDP subroutine
+#define try_tc(expr)                    \
+  ({                                    \
+    int _ret = (expr);                  \
+    if (_ret != TC_ACT_OK) return _ret; \
+    _ret;                               \
+  })
+
+// Same as `try` with one arguments, but runs XDP subroutine
 #define try_xdp(expr)                  \
   ({                                   \
     int _ret = (expr);                 \
@@ -156,7 +164,5 @@
 #define try_p_shot(x) try_p_ret(x, TC_ACT_SHOT)
 #define try_p_pass(x) try_p_ret(x, XDP_PASS)
 #define try_p_drop(x) try_p_ret(x, XDP_DROP)
-
-
 
 #endif  // _MIMIC_SHARED_TRY_H

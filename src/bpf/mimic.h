@@ -60,7 +60,7 @@ int mimic_change_csum_offset(struct __sk_buff* skb, __u16 protocol) __ksym;
 
 bool matches_whitelist(QUARTET_DEF, bool ingress);
 
-static inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress) {
+static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress) {
   struct conn_tuple key = {};
   if (udp) {
     key.local_port = udp->source;

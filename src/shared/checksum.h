@@ -43,7 +43,7 @@ static inline void update_csum_ul_neg(__u32* csum, __u32 new) {
   ({                                                          \
     __u16* data = (void*)(__u64)_x->data + off;               \
     int i = 0;                                                \
-    for (; i < ETH_DATA_LEN / sizeof(__u16); i++) {           \
+    for (; i < MAX_PACKET_SIZE / sizeof(__u16); i++) {        \
       if ((__u64)(data + i + 1) > (__u64)_x->data_end) break; \
       *csum += ntohs(data[i]);                                \
     }                                                         \

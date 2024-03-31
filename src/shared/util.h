@@ -46,6 +46,11 @@
 // defined in linux/tcp.h
 #define tcp_flag_word(tp) (((union tcp_word_hdr*)(tp))->words[3])
 
+#define CHECKSUM_NONE 0
+#define CHECKSUM_UNNECESSARY 1
+#define CHECKSUM_COMPLETE 2
+#define CHECKSUM_PARTIAL 3
+
 #else  // _MIMIC_BPF
 
 // Cleanup utilities
@@ -72,5 +77,11 @@ static inline __attribute__((__format_arg__(1))) const char* _(const char* text)
 #define gettext(text) _(text)
 #endif
 #define N_(text) text
+
+// Mainly used for limiting loop counts
+#define MAX_PACKET_SIZE 9000
+
+// Used for reading packet data in bulk
+#define SEGMENT_SIZE 256
 
 #endif  // _MIMIC_SHARED_UTIL_H

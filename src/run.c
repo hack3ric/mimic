@@ -7,6 +7,7 @@
 #include <linux/in6.h>
 #include <linux/tcp.h>
 #include <linux/types.h>
+#include <linux/udp.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <signal.h>
@@ -224,7 +225,7 @@ static inline int send_ctrl_packet(struct send_options* s) {
 static int handle_rb_event(void* ctx, void* data, size_t data_sz) {
   struct rb_item* item = data;
   const char* name;
-  int ret;
+  int ret = 0;
   switch (item->type) {
     case RB_ITEM_LOG_EVENT:
       name = N_("logging event");
@@ -233,6 +234,17 @@ static int handle_rb_event(void* ctx, void* data, size_t data_sz) {
     case RB_ITEM_SEND_OPTIONS:
       name = N_("sending control packets");
       ret = send_ctrl_packet(&item->send_options);
+      break;
+    case RB_ITEM_STORE_PACKET:
+      name = N_("storing packet");
+      log_warn(_("userspace received packet with UDP length %d, checksum partial %d"), item->store_packet.len,
+               item->store_packet.l4_csum_partial);
+      if (item->store_packet.len > data_sz - sizeof(*item)) break;
+      // TODO: handle packet store
+      break;
+    default:
+      name = N_("handling unknown ring buffer item");
+      log_warn(_("unknown ring buffer item type %d, size %d"), item->type, data_sz);
       break;
   }
   if (ret < 0) log_error(_("error %s: %s"), gettext(name), strerror(-ret));

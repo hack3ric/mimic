@@ -169,6 +169,7 @@ struct rb_item {
     struct send_options send_options;
     struct {
       struct conn_tuple conn_key;
+      __u16 len;
       bool l4_csum_partial;
     } store_packet;
   };
