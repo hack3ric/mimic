@@ -15,7 +15,9 @@ static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len) 
   __u16 data_len = buf_len - offset;
   __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
   if (copy_len > 0) {
-    if (copy_len < 2) copy_len = 1;  // HACK: see egress.c
+    // HACK: see egress.c
+    if (copy_len < 2) copy_len = 1;
+
     try_drop(bpf_xdp_load_bytes(xdp, buf_len - copy_len, buf, copy_len));
     try_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf, copy_len));
   }
@@ -43,8 +45,6 @@ static __always_inline void pre_ack(enum conn_state new_state, __u32* seq, __u32
 }
 
 static __always_inline void pre_rst_ack(__u32* seq, __u32* ack_seq, struct tcphdr* tcp, __u16 payload_len) {
-  // conn->state = STATE_IDLE;
-  // *seq = conn->seq = conn->ack_seq = 0;
   *seq = 0;
   *ack_seq = new_ack_seq(tcp, payload_len);
 }
@@ -56,19 +56,27 @@ int ingress_handler(struct xdp_md* xdp) {
 
   struct iphdr* ipv4 = NULL;
   struct ipv6hdr* ipv6 = NULL;
-  __u32 ip_end;
+  __u32 ip_end, nexthdr = 0;
 
   if (eth_proto == ETH_P_IP) {
     redecl_drop(struct iphdr, ipv4, ETH_HLEN, xdp);
-    ip_end = ETH_HLEN + sizeof(*ipv4);
+    ip_end = ETH_HLEN + (ipv4->ihl << 2);
   } else if (eth_proto == ETH_P_IPV6) {
     redecl_drop(struct ipv6hdr, ipv6, ETH_HLEN, xdp);
+    nexthdr = ipv6->nexthdr;
     ip_end = ETH_HLEN + sizeof(*ipv6);
+    struct ipv6_opt_hdr* opt = NULL;
+    for (int i = 0; i < 7; i++) {
+      if (!ipv6_is_ext(nexthdr)) break;
+      redecl_drop(struct ipv6_opt_hdr, opt, ip_end, xdp);
+      nexthdr = opt->nexthdr;
+      ip_end += (opt->hdrlen + 1) << 3;
+    }
   } else {
     return XDP_PASS;
   }
 
-  __u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? ipv6->nexthdr : 0;
+  __u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? nexthdr : 0;
   if (ip_proto != IPPROTO_TCP) return XDP_PASS;
   decl_pass(struct tcphdr, tcp, ip_end, xdp);
 
@@ -218,10 +226,8 @@ int ingress_handler(struct xdp_md* xdp) {
   }
   csum += IPPROTO_UDP;
   csum += udp_len;
-  csum += ntohs(udp->source);
-  csum += ntohs(udp->dest);
-  csum += udp_len;
-  csum += calc_csum_ctx(xdp, ip_end + sizeof(*udp));
+  udp->check = 0;
+  csum += calc_ctx_csum(xdp->data, xdp->data_end, ip_end);
   udp->check = htons(csum_fold(csum));
 
   return XDP_PASS;

@@ -153,4 +153,17 @@ int send_ctrl_packet(struct conn_tuple* conn, __u32 flags, __u32 seq, __u32 ack_
 #define log_trace(fmt, ...) \
   if (LOG_ALLOW_TRACE) _log_rbprintf(LOG_LEVEL_TRACE, fmt, ##__VA_ARGS__)
 
+static inline bool ipv6_is_ext(__u8 nexthdr) {
+  switch (nexthdr) {
+    case IPPROTO_HOPOPTS:
+    case IPPROTO_ROUTING:
+    case IPPROTO_FRAGMENT:
+    case IPPROTO_DSTOPTS:
+    case IPPROTO_MH:
+      return true;
+    default:
+      return false;
+  }
+}
+
 #endif  // _MIMIC_BPF_MIMIC_H

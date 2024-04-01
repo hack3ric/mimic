@@ -2,6 +2,9 @@
 #define _MIMIC_SHARED_UTIL_H
 
 #ifdef _MIMIC_BPF
+#include "../bpf/vmlinux.h"
+
+#include <bpf/bpf_endian.h>
 #else
 #include <stdio.h>
 #include <unistd.h>
@@ -50,6 +53,14 @@
 #define CHECKSUM_UNNECESSARY 1
 #define CHECKSUM_COMPLETE 2
 #define CHECKSUM_PARTIAL 3
+
+#define IPPROTO_HOPOPTS 0
+#define IPPROTO_ROUTING 43
+#define IPPROTO_FRAGMENT 44
+#define IPPROTO_ICMPV6 58
+#define IPPROTO_NONE 59
+#define IPPROTO_DSTOPTS 60
+#define IPPROTO_MH 135
 
 #else  // _MIMIC_BPF
 

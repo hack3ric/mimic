@@ -90,19 +90,27 @@ int egress_handler(struct __sk_buff* skb) {
 
   struct iphdr* ipv4 = NULL;
   struct ipv6hdr* ipv6 = NULL;
-  __u32 ip_end;
+  __u32 ip_end, nexthdr = 0;
 
   if (eth_proto == ETH_P_IP) {
     redecl_shot(struct iphdr, ipv4, ETH_HLEN, skb);
-    ip_end = ETH_HLEN + sizeof(*ipv4);
+    ip_end = ETH_HLEN + (ipv4->ihl << 2);
   } else if (eth_proto == ETH_P_IPV6) {
     redecl_shot(struct ipv6hdr, ipv6, ETH_HLEN, skb);
+    nexthdr = ipv6->nexthdr;
     ip_end = ETH_HLEN + sizeof(*ipv6);
+    struct ipv6_opt_hdr* opt = NULL;
+    for (int i = 0; i < 5; i++) {
+      if (!ipv6_is_ext(nexthdr)) break;
+      redecl_drop(struct ipv6_opt_hdr, opt, ip_end, skb);
+      nexthdr = opt->nexthdr;
+      ip_end += (opt->hdrlen + 1) << 3;
+    }
   } else {
     return TC_ACT_OK;
   }
 
-  __u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? ipv6->nexthdr : 0;
+  __u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? nexthdr : 0;
   if (ip_proto != IPPROTO_UDP) return TC_ACT_OK;
   decl_ok(struct udphdr, udp, ip_end, skb);
 
