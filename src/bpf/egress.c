@@ -45,9 +45,7 @@ static inline int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn
   __u32 segments = data_len / SEGMENT_SIZE + has_remainder;
   __u32 alloc_size = sizeof(struct rb_item) + segments * SEGMENT_SIZE;
   struct bpf_dynptr ptr = {};
-  if (bpf_ringbuf_reserve_dynptr(&mimic_rb, alloc_size, 0, &ptr) < 0) {
-    cleanup(TC_ACT_SHOT);
-  }
+  if (bpf_ringbuf_reserve_dynptr(&mimic_rb, alloc_size, 0, &ptr) < 0) cleanup(TC_ACT_SHOT);
 
   struct rb_item* item = bpf_dynptr_data(&ptr, 0, sizeof(*item));
   if (!item) cleanup(TC_ACT_SHOT);
@@ -69,8 +67,9 @@ static inline int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn
     offset = i * SEGMENT_SIZE;
     __u32 copy_len = data_len - offset;
     if (copy_len > 0 && copy_len < SEGMENT_SIZE) {
+      // HACK: see above
       if (copy_len < 2) copy_len = 1;
-      if (copy_len < 3) copy_len = 2;
+      if (copy_len > SEGMENT_SIZE - 2) copy_len = SEGMENT_SIZE - 1;
 
       packet = bpf_dynptr_data(&ptr, sizeof(*item) + offset, SEGMENT_SIZE);
       if (!packet) cleanup(TC_ACT_SHOT);
