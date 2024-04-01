@@ -190,9 +190,10 @@ int ingress_handler(struct xdp_md* xdp) {
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_UDP;
 
+    // See RFC 1624
     __u32 ipv4_csum = (__u16)~ntohs(ipv4->check);
-    update_csum(&ipv4_csum, -(__s32)TCP_UDP_HEADER_DIFF);
-    update_csum(&ipv4_csum, IPPROTO_UDP - IPPROTO_TCP);
+    ipv4_csum += 0xffff - TCP_UDP_HEADER_DIFF;
+    ipv4_csum += ~IPPROTO_UDP + IPPROTO_TCP;
     ipv4->check = htons(csum_fold(ipv4_csum));
   } else if (ipv6) {
     ipv6_saddr = ipv6->saddr, ipv6_daddr = ipv6->daddr;
@@ -208,21 +209,20 @@ int ingress_handler(struct xdp_md* xdp) {
 
   __u32 csum = 0;
   if (ipv4) {
-    update_csum_ul(&csum, ntohl(ipv4_saddr));
-    update_csum_ul(&csum, ntohl(ipv4_daddr));
+    csum += u32_fold(ntohl(ipv4_saddr));
+    csum += u32_fold(ntohl(ipv4_daddr));
   } else if (ipv6) {
     for (int i = 0; i < 8; i++) {
-      update_csum(&csum, ntohs(ipv6_saddr.in6_u.u6_addr16[i]));
-      update_csum(&csum, ntohs(ipv6_daddr.in6_u.u6_addr16[i]));
+      csum += ntohs(ipv6_saddr.in6_u.u6_addr16[i]);
+      csum += ntohs(ipv6_daddr.in6_u.u6_addr16[i]);
     }
   }
-  update_csum(&csum, IPPROTO_UDP);
-  update_csum(&csum, udp_len);
-  update_csum(&csum, ntohs(udp->source));
-  update_csum(&csum, ntohs(udp->dest));
-  update_csum(&csum, udp_len);
-
-  update_csum_data(xdp, &csum, ip_end + sizeof(*udp));
+  csum += IPPROTO_UDP;
+  csum += udp_len;
+  csum += ntohs(udp->source);
+  csum += ntohs(udp->dest);
+  csum += udp_len;
+  csum += calc_csum_ctx(xdp, ip_end + sizeof(*udp));
   udp->check = htons(csum_fold(csum));
 
   return XDP_PASS;

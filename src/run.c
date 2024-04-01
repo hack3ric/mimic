@@ -182,20 +182,20 @@ static inline int send_ctrl_packet(struct send_options* s) {
     __u32 local = s->conn.local.v4, remote = s->conn.remote.v4;
     *(struct sockaddr_in*)&saddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = local, .sin_port = 0};
     *(struct sockaddr_in*)&daddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = remote, .sin_port = 0};
-    update_csum_ul(&csum, ntohl(local));
-    update_csum_ul(&csum, ntohl(remote));
+    csum += u32_fold(ntohl(local));
+    csum += u32_fold(ntohl(remote));
   } else {
     *(struct sockaddr_in6*)&saddr =
       (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->conn.local.v6, .sin6_port = 0};
     *(struct sockaddr_in6*)&daddr =
       (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->conn.remote.v6, .sin6_port = 0};
     for (int i = 0; i < 8; i++) {
-      update_csum(&csum, ntohs(s->conn.local.v6.s6_addr16[i]));
-      update_csum(&csum, ntohs(s->conn.remote.v6.s6_addr16[i]));
+      csum += ntohs(s->conn.local.v6.s6_addr16[i]);
+      csum += ntohs(s->conn.remote.v6.s6_addr16[i]);
     }
   }
-  update_csum(&csum, IPPROTO_TCP);
-  update_csum(&csum, sizeof(struct tcphdr));
+  csum += IPPROTO_TCP;
+  csum += sizeof(struct tcphdr);
   try(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strerror(-_ret));
 
   struct tcphdr tcp = {
@@ -210,11 +210,11 @@ static inline int send_ctrl_packet(struct send_options* s) {
     .window = htons(0xfff),
     .urg_ptr = 0,
   };
-  update_csum(&csum, ntohs(tcp.source));
-  update_csum(&csum, ntohs(tcp.dest));
-  update_csum_ul(&csum, s->seq);
-  update_csum_ul(&csum, s->ack_seq);
-  update_csum_ul(&csum, ntohl(tcp_flag_word(&tcp)));
+  csum += ntohs(tcp.source);
+  csum += ntohs(tcp.dest);
+  csum += u32_fold(s->seq);
+  csum += u32_fold(s->ack_seq);
+  csum += u32_fold(ntohl(tcp_flag_word(&tcp)));
   tcp.check = htons(csum_fold(csum));
 
   try(sendto(sk, &tcp, sizeof(tcp), 0, (struct sockaddr*)&daddr, sizeof(daddr)), _("failed to send: %s"),

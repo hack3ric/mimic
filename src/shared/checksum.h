@@ -11,26 +11,8 @@
 
 #include "util.h"
 
-static inline __u16 csum_fold(__u32 csum) {
-  csum = (csum & 0xffff) + (csum >> 16);
-  csum = (csum & 0xffff) + (csum >> 16);
-  return (__u16)~csum;
-}
-
-static inline void update_csum(__u32* csum, __s32 delta) {
-  if (delta < 0) delta += 0xffff;
-  *csum += delta;
-}
-
-static inline void update_csum_ul(__u32* csum, __u32 new) {
-  __s32 value = (new >> 16) + (new & 0xffff);
-  update_csum(csum, value);
-}
-
-static inline void update_csum_ul_neg(__u32* csum, __u32 new) {
-  __s32 value = -(new >> 16) - (new & 0xffff);
-  update_csum(csum, value);
-}
+static inline __u32 u32_fold(__u32 num) { return (num & 0xffff) + (num >> 16); }
+static inline __u16 csum_fold(__u32 csum) { return ~u32_fold(u32_fold(csum)); }
 
 #ifdef _MIMIC_BPF
 
@@ -38,19 +20,21 @@ static inline void update_csum_ul_neg(__u32* csum, __u32 new) {
 // {skb,xdp}->{data,data_end} using the signature `void update_csum_data(__u32 data, __u32 data_end,
 // __u32* csum, __u32 off)`.
 //
-// void update_csum_data(void* ctx, __u32* csum, __u32 off)
-#define update_csum_data(_x, csum, off)                       \
+// __u32 calc_csum_ctx(void* ctx, __u32 off)
+#define calc_csum_ctx(_x, off)                                \
   ({                                                          \
+    __u32 csum = 0;                                           \
     __u16* data = (void*)(__u64)_x->data + off;               \
     int i = 0;                                                \
     for (; i < MAX_PACKET_SIZE / sizeof(__u16); i++) {        \
       if ((__u64)(data + i + 1) > (__u64)_x->data_end) break; \
-      *csum += ntohs(data[i]);                                \
+      csum += ntohs(data[i]);                                 \
     }                                                         \
     __u8* remainder = (__u8*)data + i * sizeof(__u16);        \
     if ((__u64)(remainder + 1) <= (__u64)_x->data_end) {      \
-      *csum += (__u16)(*remainder << 8);                      \
+      csum += (__u16)(*remainder << 8);                       \
     }                                                         \
+    csum;                                                     \
   })
 
 #else
