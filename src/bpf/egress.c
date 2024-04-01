@@ -9,10 +9,10 @@
 #include "mimic.h"
 
 // Extend socket buffer and move n bytes from front to back.
-static int mangle_data(struct __sk_buff* skb, __u16 offset) {
+static int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_diff) {
   __u16 data_len = skb->len - offset;
   try_shot(bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0));
-  __u8 buf[TCP_UDP_HEADER_DIFF] = {};
+  __u8 buf[TCP_UDP_HEADER_DIFF + 4] = {};
   __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
   if (copy_len > 0) {
     // HACK: make verifier happy
@@ -20,8 +20,14 @@ static int mangle_data(struct __sk_buff* skb, __u16 offset) {
     // https://lore.kernel.org/bpf/f464186c-0353-9f9e-0271-e70a30e2fcdb@linux.dev/T/
     if (copy_len < 2) copy_len = 1;
 
-    try_shot(bpf_skb_load_bytes(skb, offset, buf, copy_len));
-    try_shot(bpf_skb_store_bytes(skb, skb->len - copy_len, buf, copy_len, 0));
+    try_shot(bpf_skb_load_bytes(skb, offset, buf + 1, copy_len));
+    try_shot(bpf_skb_store_bytes(skb, skb->len - copy_len, buf + 1, copy_len, 0));
+  }
+  // Fix checksum when moved bytes does not align with u16 boundaries
+  if (copy_len == TCP_UDP_HEADER_DIFF && data_len % 2 != 0) {
+    *csum_diff = bpf_csum_diff((__be32*)(buf + 1), copy_len, (__be32*)buf, sizeof(buf), 0);
+  } else {
+    *csum_diff = 0;
   }
   return TC_ACT_OK;
 }
@@ -100,7 +106,7 @@ int egress_handler(struct __sk_buff* skb) {
     nexthdr = ipv6->nexthdr;
     ip_end = ETH_HLEN + sizeof(*ipv6);
     struct ipv6_opt_hdr* opt = NULL;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 8; i++) {
       if (!ipv6_is_ext(nexthdr)) break;
       redecl_drop(struct ipv6_opt_hdr, opt, ip_end, skb);
       nexthdr = opt->nexthdr;
@@ -123,8 +129,8 @@ int egress_handler(struct __sk_buff* skb) {
   log_conn(log_verbosity, LOG_LEVEL_DEBUG, false, LOG_TYPE_MATCHED, &conn_key);
   struct connection* conn = try_p_shot(get_conn(&conn_key));
 
-  struct udphdr old_udphdr = *udp;
-  old_udphdr.check = 0;
+  struct udphdr old_udp = *udp;
+  old_udp.check = 0;
   __be16 old_udp_csum = udp->check;
 
   __u16 udp_len = ntohs(udp->len);
@@ -176,29 +182,25 @@ int egress_handler(struct __sk_buff* skb) {
     ipv6->nexthdr = IPPROTO_TCP;
   }
 
-  try_tc(mangle_data(skb, ip_end + sizeof(*udp)));
+  __be32 csum_diff2 = 0;
+  try_tc(mangle_data(skb, ip_end + sizeof(*udp), &csum_diff2));
   decl_shot(struct tcphdr, tcp, ip_end, skb);
   update_tcp_header(tcp, udp_len, seq, ack_seq);
 
-  tcp->check = 0;
-  __s64 csum_diff = bpf_csum_diff((__be32*)&old_udphdr, sizeof(struct udphdr), (__be32*)tcp, sizeof(struct tcphdr), 0);
-  tcp->check = old_udp_csum;
+  __u32 csum_off = ip_end + offsetof(struct tcphdr, check);
+  redecl_shot(struct tcphdr, tcp, ip_end, skb);
 
-  __u32 off = ip_end + offsetof(struct tcphdr, check);
-  bpf_l4_csum_replace(skb, off, 0, csum_diff, 0);
+  tcp->check = 0;
+  __be32 csum_diff = bpf_csum_diff((__be32*)&old_udp, sizeof(old_udp), (__be32*)tcp, sizeof(*tcp), 0);
+  tcp->check = old_udp_csum;
+  bpf_l4_csum_replace(skb, csum_off, 0, csum_diff, 0);
+  bpf_l4_csum_replace(skb, csum_off, 0, csum_diff2, 0);
 
   __be16 newlen = htons(udp_len + TCP_UDP_HEADER_DIFF);
-  __s64 diff = 0;
-  if (ipv4) {
-    struct ipv4_ph_part oldph = {.protocol = IPPROTO_UDP, .len = old_udphdr.len};
-    struct ipv4_ph_part newph = {.protocol = IPPROTO_TCP, .len = newlen};
-    diff = bpf_csum_diff((__be32*)&oldph, sizeof(struct ipv4_ph_part), (__be32*)&newph, sizeof(struct ipv4_ph_part), 0);
-  } else if (ipv6) {
-    struct ipv6_ph_part oldph = {.len = old_udphdr.len, .nexthdr = IPPROTO_UDP};
-    struct ipv6_ph_part newph = {.len = newlen, .nexthdr = IPPROTO_TCP};
-    diff = bpf_csum_diff((__be32*)&oldph, sizeof(struct ipv6_ph_part), (__be32*)&newph, sizeof(struct ipv6_ph_part), 0);
-  }
-  bpf_l4_csum_replace(skb, off, 0, diff, BPF_F_PSEUDO_HDR);
+  struct ph_part old_ph = {.protocol = IPPROTO_UDP, .len = old_udp.len};
+  struct ph_part new_ph = {.protocol = IPPROTO_TCP, .len = newlen};
+  csum_diff = bpf_csum_diff((__be32*)&old_ph, sizeof(old_ph), (__be32*)&new_ph, sizeof(new_ph), 0);
+  bpf_l4_csum_replace(skb, csum_off, 0, csum_diff, BPF_F_PSEUDO_HDR);
 
   mimic_change_csum_offset(skb, IPPROTO_TCP);
 

@@ -36,17 +36,10 @@ extern struct mimic_rb_map {
 #define IPV4_CSUM_OFF (offsetof(struct iphdr, check))
 #define TCP_UDP_HEADER_DIFF (sizeof(struct tcphdr) - sizeof(struct udphdr))
 
-struct ipv4_ph_part {
+struct ph_part {
   __u8 _pad;
   __u8 protocol;
   __be16 len;
-} __attribute__((packed));
-
-struct ipv6_ph_part {
-  __u8 _1[2];
-  __be16 len;
-  __u8 _2[3];
-  __u8 nexthdr;
 } __attribute__((packed));
 
 struct sk_buff* mimic_inspect_skb(struct __sk_buff* skb) __ksym;

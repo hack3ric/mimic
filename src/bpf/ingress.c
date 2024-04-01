@@ -10,16 +10,22 @@
 #include "mimic.h"
 
 // Move back n bytes, shrink socket buffer and restore data.
-static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len) {
-  __u8 buf[TCP_UDP_HEADER_DIFF] = {};
+static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, __be32* csum_diff) {
+  __u8 buf[TCP_UDP_HEADER_DIFF + 4] = {};
   __u16 data_len = buf_len - offset;
   __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
   if (copy_len > 0) {
     // HACK: see egress.c
     if (copy_len < 2) copy_len = 1;
 
-    try_drop(bpf_xdp_load_bytes(xdp, buf_len - copy_len, buf, copy_len));
-    try_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf, copy_len));
+    try_drop(bpf_xdp_load_bytes(xdp, buf_len - copy_len, buf + 1, copy_len));
+    try_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf + 1, copy_len));
+  }
+  // Fix checksum when moved bytes does not align with u16 boundaries
+  if (copy_len == TCP_UDP_HEADER_DIFF && data_len % 2 != 0) {
+    *csum_diff = bpf_csum_diff((__be32*)buf, sizeof(buf), (__be32*)(buf + 1), copy_len, 0);
+  } else {
+    *csum_diff = 0;
   }
   try_drop(bpf_xdp_adjust_tail(xdp, -(int)TCP_UDP_HEADER_DIFF));
   return XDP_PASS;
@@ -66,7 +72,7 @@ int ingress_handler(struct xdp_md* xdp) {
     nexthdr = ipv6->nexthdr;
     ip_end = ETH_HLEN + sizeof(*ipv6);
     struct ipv6_opt_hdr* opt = NULL;
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
       if (!ipv6_is_ext(nexthdr)) break;
       redecl_drop(struct ipv6_opt_hdr, opt, ip_end, xdp);
       nexthdr = opt->nexthdr;
@@ -89,7 +95,11 @@ int ingress_handler(struct xdp_md* xdp) {
   log_conn(log_verbosity, LOG_LEVEL_DEBUG, true, LOG_TYPE_MATCHED, &conn_key);
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
 
-  // TODO: verify checksum
+  // TODO: verify checksum (probably not needed?)
+
+  struct tcphdr old_tcp = *tcp;
+  old_tcp.check = 0;
+  __be16 old_tcp_csum = tcp->check;
 
   enum rst_result rst_result = RST_NONE;
   if (tcp->rst) {
@@ -208,26 +218,26 @@ int ingress_handler(struct xdp_md* xdp) {
     ipv6->nexthdr = IPPROTO_UDP;
   }
 
-  try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len));
+  __u32 csum = (__u16)~ntohs(old_tcp_csum);
+
+  __be32 csum_diff = 0;
+  try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len, &csum_diff));
   decl_drop(struct udphdr, udp, ip_end, xdp);
+  csum += u32_fold(ntohl(csum_diff));
 
   __u16 udp_len = buf_len - ip_end - TCP_UDP_HEADER_DIFF;
   udp->len = htons(udp_len);
 
-  __u32 csum = 0;
-  if (ipv4) {
-    csum += u32_fold(ntohl(ipv4_saddr));
-    csum += u32_fold(ntohl(ipv4_daddr));
-  } else if (ipv6) {
-    for (int i = 0; i < 8; i++) {
-      csum += ntohs(ipv6_saddr.in6_u.u6_addr16[i]);
-      csum += ntohs(ipv6_daddr.in6_u.u6_addr16[i]);
-    }
-  }
-  csum += IPPROTO_UDP;
-  csum += udp_len;
   udp->check = 0;
-  csum += calc_ctx_csum(xdp->data, xdp->data_end, ip_end);
+  csum_diff = bpf_csum_diff((__be32*)&old_tcp, sizeof(old_tcp), (__be32*)udp, sizeof(*udp), 0);
+  csum += u32_fold(ntohl(csum_diff));
+
+  __be16 oldlen = htons(buf_len - ip_end);
+  struct ph_part old_ph = {.protocol = IPPROTO_TCP, .len = oldlen};
+  struct ph_part new_ph = {.protocol = IPPROTO_UDP, .len = udp->len};
+  csum_diff = bpf_csum_diff((__be32*)&old_ph, sizeof(old_ph), (__be32*)&new_ph, sizeof(new_ph), 0);
+  csum += u32_fold(ntohl(csum_diff));
+
   udp->check = htons(csum_fold(csum));
 
   return XDP_PASS;
