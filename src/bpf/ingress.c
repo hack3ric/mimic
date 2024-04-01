@@ -190,10 +190,9 @@ int ingress_handler(struct xdp_md* xdp) {
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_UDP;
 
-    // See RFC 1624
     __u32 ipv4_csum = (__u16)~ntohs(ipv4->check);
-    ipv4_csum += 0xffff - TCP_UDP_HEADER_DIFF;
-    ipv4_csum += ~IPPROTO_UDP + IPPROTO_TCP;
+    ipv4_csum -= TCP_UDP_HEADER_DIFF;
+    ipv4_csum += IPPROTO_UDP - IPPROTO_TCP;
     ipv4->check = htons(csum_fold(ipv4_csum));
   } else if (ipv6) {
     ipv6_saddr = ipv6->saddr, ipv6_daddr = ipv6->daddr;
