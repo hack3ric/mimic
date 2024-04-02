@@ -10,6 +10,11 @@
 #include "mimic.h"
 
 // Move back n bytes, shrink socket buffer and restore data.
+//
+// TODO: handle TCP options appended by middleboxes. This requires `bpf_xdp_adjust_head` and `memmove`ing bytes from the
+// start of the buffer to destination port, which is expensive when applied to every data packet. For the same reason,
+// middleboxes probably only append options like MSS on handshake packets since there is no data at the end to move, so
+// not finishing this TODO is probably going to be fine.
 static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, __be32* csum_diff) {
   __u8 buf[TCP_UDP_HEADER_DIFF + 4] = {};
   __u16 data_len = buf_len - offset;
