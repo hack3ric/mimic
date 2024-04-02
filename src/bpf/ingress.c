@@ -131,7 +131,7 @@ int ingress_handler(struct xdp_md* xdp) {
   }
 
   __u32 buf_len = bpf_xdp_get_buff_len(xdp);
-  __u32 payload_len = buf_len - ip_end - sizeof(*tcp);
+  __u32 payload_len = buf_len - ip_end - (tcp->doff << 2);
 
   bool syn, ack, rst, will_send_ctrl_packet, will_drop;
   __u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq;
