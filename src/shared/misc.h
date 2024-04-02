@@ -90,6 +90,7 @@ struct connection {
     STATE_ESTABLISHED,
   } state;
   __u32 seq, ack_seq;
+  struct pktbuf* pktbuf;
 };
 
 static inline const char* conn_state_to_str(enum conn_state s) {
@@ -163,6 +164,8 @@ struct rb_item {
     RB_ITEM_LOG_EVENT,
     RB_ITEM_SEND_OPTIONS,
     RB_ITEM_STORE_PACKET,
+    RB_ITEM_CONSUME_PKTBUF,
+    RB_ITEM_FREE_PKTBUF,
   } type;
   union {
     struct log_event log_event;
@@ -172,6 +175,7 @@ struct rb_item {
       __u16 len;
       bool l4_csum_partial;
     } store_packet;
+    struct pktbuf* pktbuf;
   };
   // additional buffer follows
 };

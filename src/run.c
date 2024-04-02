@@ -196,7 +196,7 @@ static inline int send_ctrl_packet(struct send_options* s) {
   }
   csum += IPPROTO_TCP;
   csum += sizeof(struct tcphdr);
-  try(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strerror(-_ret));
+  try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strerror(-_ret));
 
   struct tcphdr tcp = {
     .source = s->conn.local_port,
@@ -217,8 +217,8 @@ static inline int send_ctrl_packet(struct send_options* s) {
   csum += u32_fold(ntohl(tcp_flag_word(&tcp)));
   tcp.check = htons(csum_fold(csum));
 
-  try(sendto(sk, &tcp, sizeof(tcp), 0, (struct sockaddr*)&daddr, sizeof(daddr)), _("failed to send: %s"),
-      strerror(-_ret));
+  try_e(sendto(sk, &tcp, sizeof(tcp), 0, (struct sockaddr*)&daddr, sizeof(daddr)), _("failed to send: %s"),
+        strerror(-_ret));
   return 0;
 }
 

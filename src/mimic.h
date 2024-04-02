@@ -47,4 +47,20 @@ int lock_read(FILE* file, struct lock_content* c);
 
 int parse_filter(const char* filter_str, struct pkt_filter* filter);
 
+struct packet {
+  struct packet* next;
+  char* data;
+  size_t len;
+};
+
+struct pktbuf {
+  struct conn_tuple conn;
+  struct packet *head, *tail;
+};
+
+struct pktbuf* pktbuf_new(struct conn_tuple* conn);
+int pktbuf_push(struct pktbuf* buf, const char* data, size_t len, bool l4_csum_partial);
+int pktbuf_consume(struct pktbuf* buf, bool* consumed);
+void pktbuf_free(struct pktbuf* buf);
+
 #endif  // _MIMIC_MIMIC_H
