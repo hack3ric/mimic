@@ -97,10 +97,6 @@ int ingress_handler(struct xdp_md* xdp) {
 
   // TODO: verify checksum (probably not needed?)
 
-  struct tcphdr old_tcp = *tcp;
-  old_tcp.check = 0;
-  __be16 old_tcp_csum = tcp->check;
-
   enum rst_result rst_result = RST_NONE;
   if (tcp->rst) {
     if (conn) {
@@ -218,7 +214,9 @@ int ingress_handler(struct xdp_md* xdp) {
     ipv6->nexthdr = IPPROTO_UDP;
   }
 
-  __u32 csum = (__u16)~ntohs(old_tcp_csum);
+  struct tcphdr old_tcp = *tcp;
+  old_tcp.check = 0;
+  __u32 csum = (__u16)~ntohs(tcp->check);
 
   __be32 csum_diff = 0;
   try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len, &csum_diff));

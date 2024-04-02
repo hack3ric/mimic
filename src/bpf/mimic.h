@@ -112,6 +112,7 @@ static inline int log_tcp(__u32 log_verbosity, enum log_level level, bool ingres
 #define RST 1 << 2
 
 int send_ctrl_packet(struct conn_tuple* conn, __u32 flags, __u32 seq, __u32 ack_seq);
+int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key);
 
 #define _log_a(_0, _1, _2, _3, N, ...) _##N
 #define _log_b_0() (__u64[0]){}, 0
