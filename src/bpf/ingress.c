@@ -98,6 +98,7 @@ int ingress_handler(struct xdp_md* xdp) {
   // TODO: verify checksum (probably not needed?)
 
   enum rst_result rst_result = RST_NONE;
+  uintptr_t pktbuf = 0;
   if (tcp->rst) {
     if (conn) {
       bpf_spin_lock(&conn->lock);
@@ -108,8 +109,11 @@ int ingress_handler(struct xdp_md* xdp) {
       } else {
         rst_result = RST_ABORTED;
       }
+      pktbuf = conn->pktbuf;
+      conn->pktbuf = 0;
       bpf_spin_unlock(&conn->lock);
       bpf_map_delete_elem(&mimic_conns, &conn_key);
+      free_pktbuf(pktbuf);
     }
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
@@ -129,51 +133,62 @@ int ingress_handler(struct xdp_md* xdp) {
   __u32 buf_len = bpf_xdp_get_buff_len(xdp);
   __u32 payload_len = buf_len - ip_end - sizeof(*tcp);
 
-  bool syn, ack, rst, will_send_ctrl_packet, will_drop, newly_estab;
+  bool syn, ack, rst, will_send_ctrl_packet, will_drop;
   __u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq;
   __u32 random = bpf_get_prandom_u32();
   enum conn_state state;
-  syn = ack = rst = will_send_ctrl_packet = will_drop = newly_estab = false;
+  syn = ack = rst = will_send_ctrl_packet = false;
+  will_drop = true;
 
   bpf_spin_lock(&conn->lock);
   switch (conn->state) {
     case STATE_IDLE:
     case STATE_SYN_RECV:
       if (tcp->syn && !tcp->ack) {
-        syn = ack = will_send_ctrl_packet = will_drop = true;
+        syn = ack = will_send_ctrl_packet = true;
         pre_syn_ack(&seq, &ack_seq, conn, tcp, payload_len, random);
       } else if (conn->state == STATE_SYN_RECV && !tcp->syn && tcp->ack) {
-        will_drop = newly_estab = true;
+        pktbuf = conn->pktbuf;
+        conn->pktbuf = 0;
         conn->ack_seq = new_ack_seq(tcp, payload_len);
         conn->state = STATE_ESTABLISHED;
       } else {
-        rst = ack = will_send_ctrl_packet = will_drop = true;
+        rst = ack = will_send_ctrl_packet = true;
+        pktbuf = conn->pktbuf;
+        conn->pktbuf = 0;
         pre_rst_ack(&seq, &ack_seq, tcp, payload_len);
       }
       break;
 
     case STATE_SYN_SENT:
       if (tcp->syn && tcp->ack) {
-        ack = will_send_ctrl_packet = will_drop = newly_estab = true;
+        ack = will_send_ctrl_packet = true;
+        pktbuf = conn->pktbuf;
+        conn->pktbuf = 0;
         pre_ack(STATE_ESTABLISHED, &seq, &ack_seq, conn, tcp, payload_len);
       } else if (tcp->syn && !tcp->ack) {
         // Simultaneous open
-        ack = will_send_ctrl_packet = will_drop = true;
+        ack = will_send_ctrl_packet = true;
         pre_ack(STATE_SYN_RECV, &seq, &ack_seq, conn, tcp, payload_len);
       } else {
-        rst = ack = will_send_ctrl_packet = will_drop = true;
+        rst = ack = will_send_ctrl_packet = true;
+        pktbuf = conn->pktbuf;
+        conn->pktbuf = 0;
         pre_rst_ack(&seq, &ack_seq, tcp, payload_len);
       }
       break;
 
     case STATE_ESTABLISHED:
       if (!tcp->syn && tcp->ack) {
+        will_drop = false;
         conn->ack_seq += payload_len;
       } else if (tcp->syn && !tcp->ack) {
-        syn = ack = will_send_ctrl_packet = will_drop = true;
+        syn = ack = will_send_ctrl_packet = true;
         pre_syn_ack(&seq, &ack_seq, conn, tcp, payload_len, random);
       } else {
-        rst = ack = will_send_ctrl_packet = will_drop = true;
+        rst = ack = will_send_ctrl_packet = true;
+        pktbuf = conn->pktbuf;
+        conn->pktbuf = 0;
         pre_rst_ack(&seq, &ack_seq, tcp, payload_len);
       }
       break;
@@ -183,13 +198,16 @@ int ingress_handler(struct xdp_md* xdp) {
   conn_ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
 
-  if (newly_estab) {
-    log_conn(log_verbosity, LOG_LEVEL_INFO, true, LOG_TYPE_CONN_ESTABLISH, &conn_key);
-  }
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_TCP_PKT, 0, ntohl(tcp->seq), ntohl(tcp->ack_seq));
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_STATE, state, seq, ack_seq);
 
-  if (rst) bpf_map_delete_elem(&mimic_conns, &conn_key);
+  if (rst) {
+    bpf_map_delete_elem(&mimic_conns, &conn_key);
+    if (pktbuf) free_pktbuf(pktbuf);
+  } else if (pktbuf) {
+    log_conn(log_verbosity, LOG_LEVEL_INFO, true, LOG_TYPE_CONN_ESTABLISH, &conn_key);
+    consume_pktbuf(pktbuf);
+  }
   if (will_send_ctrl_packet) {
     send_ctrl_packet(&conn_key, (syn ? SYN : 0) | (ack ? ACK : 0) | (rst ? RST : 0), seq, ack_seq);
   }

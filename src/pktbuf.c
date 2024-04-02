@@ -82,10 +82,10 @@ int pktbuf_consume(struct pktbuf* buf, bool* consumed) {
 }
 
 void pktbuf_free(struct pktbuf* buf) {
-  for (struct packet *p = buf->head, *oldp; p; p = p->next) {
+  for (struct packet *p = buf->head, *oldp; p;) {
     oldp = p;
     p = p->next;
-    packet_free(p);
+    packet_free(oldp);
   }
   free(buf);
 }

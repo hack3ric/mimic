@@ -3,6 +3,7 @@
 #include <bpf/libbpf.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <ffi.h>
 #include <linux/bpf.h>
 #include <linux/in6.h>
 #include <linux/tcp.h>
@@ -12,6 +13,7 @@
 #include <netinet/in.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -222,7 +224,25 @@ static inline int send_ctrl_packet(struct send_options* s) {
   return 0;
 }
 
-static int handle_rb_event(void* ctx, void* data, size_t data_sz) {
+static inline int store_packet(struct bpf_map* conns, struct conn_tuple* conn_key, const char* data, __u16 len,
+                               bool l4_csum_partial) {
+  int retcode;
+  struct connection conn = {};
+  try2(bpf_map__lookup_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn), BPF_F_LOCK));
+  if (!conn.pktbuf) conn.pktbuf = (uintptr_t)try2_p(pktbuf_new(conn_key));
+  try2_e(pktbuf_push((struct pktbuf*)conn.pktbuf, data, len, l4_csum_partial));
+  try2(bpf_map__update_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn), BPF_EXIST | BPF_F_LOCK));
+  return 0;
+cleanup:
+  if (retcode == -ENOENT) {
+    log_debug(_("connection released when attempting to store packet; freeing packet buffer"));
+    retcode = 0;
+  }
+  if (conn.pktbuf) pktbuf_free((struct pktbuf*)conn.pktbuf);
+  return retcode;
+}
+
+static int _handle_rb_event(struct bpf_map* conns, void* ctx, void* data, size_t data_sz) {
   struct rb_item* item = data;
   const char* name;
   int ret = 0;
@@ -237,10 +257,17 @@ static int handle_rb_event(void* ctx, void* data, size_t data_sz) {
       break;
     case RB_ITEM_STORE_PACKET:
       name = N_("storing packet");
-      log_warn(_("userspace received packet with UDP length %d, checksum partial %d"), item->store_packet.len,
-               item->store_packet.l4_csum_partial);
+      log_debug(_("userspace received packet with UDP length %d, checksum partial %d"), item->store_packet.len,
+                item->store_packet.l4_csum_partial);
       if (item->store_packet.len > data_sz - sizeof(*item)) break;
-      // TODO: handle packet store
+      ret = store_packet(conns, &item->store_packet.conn_key, (char*)(item + 1), item->store_packet.len,
+                         item->store_packet.l4_csum_partial);
+      break;
+    case RB_ITEM_CONSUME_PKTBUF:
+    case RB_ITEM_FREE_PKTBUF:
+      name = N_("freeing packet buffer");
+      pktbuf_free((struct pktbuf*)item->pktbuf);
+      log_debug(_("freed packet buffer"));
       break;
     default:
       name = N_("handling unknown ring buffer item");
@@ -249,6 +276,25 @@ static int handle_rb_event(void* ctx, void* data, size_t data_sz) {
   }
   if (ret < 0) log_error(_("error %s: %s"), gettext(name), strerror(-ret));
   return 0;
+}
+
+static ffi_type* _handle_rb_event_args[] = {
+  &ffi_type_pointer,
+  &ffi_type_pointer,
+  sizeof(void*) == 8 ? &ffi_type_sint64 : &ffi_type_sint32,
+};
+
+static void _handle_rb_event_binding(ffi_cif* cif, void* ret, void** args, void* conns) {
+  *(int*)ret = _handle_rb_event((struct bpf_map*)conns, *(void**)args[0], *(void**)args[1], *(size_t*)args[2]);
+}
+
+static ring_buffer_sample_fn handle_rb_event(struct bpf_map* conns, ffi_cif* cif, ffi_closure** closure) {
+  ring_buffer_sample_fn fn;
+  *closure = ffi_closure_alloc(sizeof(ffi_closure), (void**)&fn);
+  if (!closure) return NULL;
+  if (ffi_prep_cif(cif, FFI_DEFAULT_ABI, 3, &ffi_type_sint, _handle_rb_event_args) != FFI_OK) return NULL;
+  if (ffi_prep_closure_loc(*closure, cif, _handle_rb_event_binding, conns, fn) != FFI_OK) return NULL;
+  return fn;
 }
 
 #define MAX_EVENTS 10
@@ -269,6 +315,8 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   struct bpf_tc_opts tc_opts_egress;
   struct bpf_link* xdp_ingress = NULL;
   struct ring_buffer* rb = NULL;
+  ffi_closure* closure = NULL;
+  ffi_cif cif;
 
   skel = try2_p(mimic_bpf__open(), _("failed to open BPF program: %s"), strerror(-_ret));
 
@@ -339,7 +387,7 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   }
 
   // Get ring buffers in advance so we can return earlier if error
-  rb = try2_p(ring_buffer__new(mimic_rb_fd, handle_rb_event, NULL, NULL),
+  rb = try2_p(ring_buffer__new(mimic_rb_fd, handle_rb_event(skel->maps.mimic_conns, &cif, &closure), NULL, NULL),
               _("failed to attach BPF ring buffer '%s': %s"), "mimic_rb", strerror(-_ret));
 
   // TC and XDP
@@ -412,6 +460,7 @@ cleanup:
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
   if (xdp_ingress) bpf_link__destroy(xdp_ingress);
   if (rb) ring_buffer__free(rb);
+  if (closure) ffi_closure_free(closure);
   if (skel) mimic_bpf__destroy(skel);
   return retcode;
 }

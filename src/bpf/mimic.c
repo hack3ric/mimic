@@ -115,4 +115,24 @@ cleanup:
   return retcode;
 }
 
+// Need to manually clear conn.pktbuf in eBPF
+int consume_pktbuf(uintptr_t buf) {
+  struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
+  if (!item) return -1;
+  item->type = RB_ITEM_CONSUME_PKTBUF;
+  item->pktbuf = buf;
+  bpf_ringbuf_submit(item, 0);
+  return 0;
+}
+
+// Need to manually clear conn.pktbuf in eBPF
+int free_pktbuf(uintptr_t buf) {
+  struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
+  if (!item) return -1;
+  item->type = RB_ITEM_FREE_PKTBUF;
+  item->pktbuf = buf;
+  bpf_ringbuf_submit(item, 0);
+  return 0;
+}
+
 char _license[] SEC("license") = "GPL";

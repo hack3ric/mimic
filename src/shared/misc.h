@@ -9,6 +9,7 @@
 #include <linux/types.h>
 #include <netinet/in.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -90,7 +91,7 @@ struct connection {
     STATE_ESTABLISHED,
   } state;
   __u32 seq, ack_seq;
-  struct pktbuf* pktbuf;
+  uintptr_t pktbuf;
 };
 
 static inline const char* conn_state_to_str(enum conn_state s) {
@@ -175,7 +176,7 @@ struct rb_item {
       __u16 len;
       bool l4_csum_partial;
     } store_packet;
-    struct pktbuf* pktbuf;
+    uintptr_t pktbuf;
   };
   // additional buffer follows
 };

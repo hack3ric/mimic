@@ -10,6 +10,7 @@ Build-Depends:
  python3,
  libbpf-dev,
  libjson-c-dev,
+ libffi-dev,
  linux-source,
  linux-headers-generic,
  bpftool
