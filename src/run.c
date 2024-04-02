@@ -229,6 +229,10 @@ static inline int store_packet(struct bpf_map* conns, struct conn_tuple* conn_ke
   int retcode;
   struct connection conn = {};
   try2(bpf_map__lookup_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn), BPF_F_LOCK));
+  if (conn.state == STATE_ESTABLISHED) {
+    log_warn(_("store packet event processed after connection was established"));
+    return 0;
+  }
   if (!conn.pktbuf) conn.pktbuf = (uintptr_t)try2_p(pktbuf_new(conn_key));
   try2_e(pktbuf_push((struct pktbuf*)conn.pktbuf, data, len, l4_csum_partial));
   try2(bpf_map__update_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn), BPF_EXIST | BPF_F_LOCK));
@@ -246,6 +250,7 @@ static int _handle_rb_event(struct bpf_map* conns, void* ctx, void* data, size_t
   struct rb_item* item = data;
   const char* name;
   int ret = 0;
+  bool consumed = false;
   switch (item->type) {
     case RB_ITEM_LOG_EVENT:
       name = N_("logging event");
@@ -264,6 +269,10 @@ static int _handle_rb_event(struct bpf_map* conns, void* ctx, void* data, size_t
                          item->store_packet.l4_csum_partial);
       break;
     case RB_ITEM_CONSUME_PKTBUF:
+      name = N_("consuming packet buffer");
+      ret = pktbuf_consume((struct pktbuf*)item->pktbuf, &consumed);
+      if (!consumed) pktbuf_free((struct pktbuf*)item->pktbuf);
+      break;
     case RB_ITEM_FREE_PKTBUF:
       name = N_("freeing packet buffer");
       pktbuf_free((struct pktbuf*)item->pktbuf);
@@ -415,7 +424,7 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
 
   // BPF log handler / packet sending handler
   int rb_epfd = ring_buffer__epoll_fd(rb), nfds, i;
-  struct epoll_event ev = {.events = EPOLLIN | EPOLLET, .data.fd = rb_epfd};
+  struct epoll_event ev = {.events = EPOLLIN, .data.fd = rb_epfd};
   struct epoll_event events[MAX_EVENTS];
   try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, rb_epfd, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
 

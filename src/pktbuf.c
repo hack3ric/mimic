@@ -1,3 +1,4 @@
+#include <linux/udp.h>
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,6 +6,7 @@
 
 #include "log.h"
 #include "mimic.h"
+#include "shared/checksum.h"
 #include "shared/misc.h"
 #include "shared/try.h"
 
@@ -15,7 +17,10 @@ static inline struct packet* packet_new(const char* data, size_t len, bool l4_cs
   result->data = malloc(len);
   result->len = len;
   memcpy(result->data, data, len);
-  // TODO: finish checksum
+  if (l4_csum_partial) {
+    __u32 csum = calc_csum(result->data, len);
+    *(__be16*)(result->data + offsetof(struct udphdr, check)) = htons(csum_fold(csum));
+  }
   return result;
 }
 
