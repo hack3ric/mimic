@@ -128,7 +128,7 @@ Otherwise, the following dependencies is required:
 - json-c: `apt install libjson-c-dev` on Debian or similar
 - libffi: `apt install libffi-dev` on Debian or similar
 
-`bpf-gcc` could be used, but commit [6103df1e](https://github.com/gcc-mirror/gcc/commit/6103df1e4fae5192c507484b1d32f00c42c70b54) needs to be included/backported; see Makefile for details.
+`bpf-gcc` could be used, but commit [6103df1e](https://github.com/gcc-mirror/gcc/commit/6103df1e4fae5192c507484b1d32f00c42c70b54) needs to be included/backported; see Makefile for details. Note that although it did compile, it probably wouldn't pass the verifier.
 
 Then just simply run `make` to generate dynamically linked CLI and kernel modules. To build statically linked CLI, use `make STATIC=1`.
 
