@@ -59,9 +59,6 @@ bench() {
     _dest=$_wg_ip2
   fi
 
-  # Workaround for Mimic throwing away first packet
-  ping -c1 $_wg_ip2
-
   ip netns exec $_netns iperf3 -s -D -I "$_tmp"
   iperf3 -c $_dest $@
   kill $(cat $_tmp)
