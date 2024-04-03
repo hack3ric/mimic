@@ -183,9 +183,6 @@ int ingress_handler(struct xdp_md* xdp) {
       if (!tcp->syn && tcp->ack) {
         will_drop = false;
         conn->ack_seq += payload_len;
-      } else if (tcp->syn && !tcp->ack) {
-        syn = ack = will_send_ctrl_packet = true;
-        pre_syn_ack(&seq, &ack_seq, conn, tcp, payload_len, random);
       } else {
         rst = ack = will_send_ctrl_packet = true;
         swap(pktbuf, conn->pktbuf);
