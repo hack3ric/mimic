@@ -72,12 +72,8 @@ static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress)
     key.remote.v6 = ipv6->daddr;
   }
   if (ingress) {
-    __be16 tp = key.local_port;
-    key.local_port = key.remote_port;
-    key.remote_port = tp;
-    union ip_value ti = key.local;
-    key.local = key.remote;
-    key.remote = ti;
+    swap(key.local, key.remote);
+    swap(key.local_port, key.remote_port);
   }
   return key;
 }
@@ -113,8 +109,7 @@ static inline int log_tcp(__u32 log_verbosity, enum log_level level, bool ingres
 
 int send_ctrl_packet(struct conn_tuple* conn, __u32 flags, __u32 seq, __u32 ack_seq);
 int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key);
-int consume_pktbuf(uintptr_t buf);
-int free_pktbuf(uintptr_t buf);
+int use_pktbuf(enum rb_item_type type, uintptr_t buf);
 
 #define _log_a(_0, _1, _2, _3, N, ...) _##N
 #define _log_b_0() (__u64[0]){}, 0

@@ -29,9 +29,7 @@ bool matches_whitelist(QUARTET_DEF, bool ingress) {
     remote.ip.v6 = ipv6->daddr;
   }
   if (ingress) {
-    struct pkt_filter t = local;
-    local = remote;
-    remote = t;
+    swap(local, remote);
     local.origin = ORIGIN_LOCAL;
     remote.origin = ORIGIN_REMOTE;
   }
@@ -43,10 +41,12 @@ int log_any(__u32 log_verbosity, enum log_level level, bool ingress, enum log_ty
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
   if (!item) return -1;
   item->type = RB_ITEM_LOG_EVENT;
-  item->log_event.level = level;
-  item->log_event.type = type;
-  item->log_event.ingress = ingress;
-  item->log_event.info = *info;
+  item->log_event = (struct log_event){
+    .level = level,
+    .type = type,
+    .ingress = ingress,
+    .info = *info,
+  };
   bpf_ringbuf_submit(item, 0);
   return 0;
 }
@@ -116,22 +116,12 @@ cleanup:
 }
 
 // Need to manually clear conn.pktbuf in eBPF
-int consume_pktbuf(uintptr_t buf) {
+int use_pktbuf(enum rb_item_type type, uintptr_t buf) {
+  if (type != RB_ITEM_CONSUME_PKTBUF || type != RB_ITEM_FREE_PKTBUF) return -1;
   if (!buf) return 0;
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
   if (!item) return -1;
-  item->type = RB_ITEM_CONSUME_PKTBUF;
-  item->pktbuf = buf;
-  bpf_ringbuf_submit(item, 0);
-  return 0;
-}
-
-// Need to manually clear conn.pktbuf in eBPF
-int free_pktbuf(uintptr_t buf) {
-  if (!buf) return 0;
-  struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
-  if (!item) return -1;
-  item->type = RB_ITEM_FREE_PKTBUF;
+  item->type = type;
   item->pktbuf = buf;
   bpf_ringbuf_submit(item, 0);
   return 0;

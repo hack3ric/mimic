@@ -66,5 +66,7 @@ const char* log_type_to_str(bool ingress, enum log_type type) {
       return ingress ? _("received RST") : _("sending RST");
     case LOG_TYPE_CONN_DESTROY:
       return _("connection destroyed");
+    case LOG_TYPE_QUICK_MSG:
+      return "";
   }
 }
