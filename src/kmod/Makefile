@@ -23,11 +23,9 @@ endif
 
 all:
 ifdef DEBIAN_HACK_RESOLVE_BTFIDS_PATH
-	cp -rs $(SYSTEM_BUILD_DIR) $(BUILD)
+	cp -rL $(SYSTEM_BUILD_DIR) $(BUILD) || true
 	[ -f $(BUILD)/vmlinux ] || cp /sys/kernel/btf/vmlinux $(BUILD)
 	if [ ! -f $(BUILD)/tools/bpf/resolve_btfids/resolve_btfids ]; then \
-		rm -rf tools; \
-		cp -rL $(SYSTEM_BUILD_DIR)/tools $(BUILD)/tools; \
 		install -Dm755 $(DEBIAN_HACK_RESOLVE_BTFIDS_PATH) $(BUILD)/tools/bpf/resolve_btfids/resolve_btfids; \
 	fi
 endif
