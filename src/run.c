@@ -8,7 +8,6 @@
 #include <linux/in6.h>
 #include <linux/tcp.h>
 #include <linux/types.h>
-#include <linux/udp.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <signal.h>

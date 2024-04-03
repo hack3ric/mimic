@@ -1,5 +1,9 @@
+#include <errno.h>
+#include <linux/types.h>
 #include <linux/udp.h>
 #include <netinet/in.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -9,6 +13,7 @@
 #include "shared/checksum.h"
 #include "shared/misc.h"
 #include "shared/try.h"
+#include "shared/util.h"
 
 static inline struct packet* packet_new(const char* data, size_t len, bool l4_csum_partial) {
   struct packet* result = malloc(sizeof(*result));
