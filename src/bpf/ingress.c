@@ -114,11 +114,10 @@ int ingress_handler(struct xdp_md* xdp) {
       } else {
         rst_result = RST_ABORTED;
       }
-      pktbuf = conn->pktbuf;
-      conn->pktbuf = 0;
+      swap(pktbuf, conn->pktbuf);
       bpf_spin_unlock(&conn->lock);
       bpf_map_delete_elem(&mimic_conns, &conn_key);
-      if (pktbuf) free_pktbuf(pktbuf);
+      free_pktbuf(pktbuf);
     }
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
@@ -154,14 +153,12 @@ int ingress_handler(struct xdp_md* xdp) {
         pre_syn_ack(&seq, &ack_seq, conn, tcp, payload_len, random);
       } else if (conn->state == STATE_SYN_RECV && !tcp->syn && tcp->ack) {
         newly_estab = true;
-        pktbuf = conn->pktbuf;
-        conn->pktbuf = 0;
+        swap(pktbuf, conn->pktbuf);
         conn->ack_seq = new_ack_seq(tcp, payload_len);
         conn->state = STATE_ESTABLISHED;
       } else {
         rst = ack = will_send_ctrl_packet = true;
-        pktbuf = conn->pktbuf;
-        conn->pktbuf = 0;
+        swap(pktbuf, conn->pktbuf);
         pre_rst_ack(&seq, &ack_seq, tcp, payload_len);
       }
       break;
@@ -169,8 +166,7 @@ int ingress_handler(struct xdp_md* xdp) {
     case STATE_SYN_SENT:
       if (tcp->syn && tcp->ack) {
         ack = will_send_ctrl_packet = newly_estab = true;
-        pktbuf = conn->pktbuf;
-        conn->pktbuf = 0;
+        swap(pktbuf, conn->pktbuf);
         pre_ack(STATE_ESTABLISHED, &seq, &ack_seq, conn, tcp, payload_len);
       } else if (tcp->syn && !tcp->ack) {
         // Simultaneous open
@@ -178,8 +174,7 @@ int ingress_handler(struct xdp_md* xdp) {
         pre_ack(STATE_SYN_RECV, &seq, &ack_seq, conn, tcp, payload_len);
       } else {
         rst = ack = will_send_ctrl_packet = true;
-        pktbuf = conn->pktbuf;
-        conn->pktbuf = 0;
+        swap(pktbuf, conn->pktbuf);
         pre_rst_ack(&seq, &ack_seq, tcp, payload_len);
       }
       break;
@@ -193,8 +188,7 @@ int ingress_handler(struct xdp_md* xdp) {
         pre_syn_ack(&seq, &ack_seq, conn, tcp, payload_len, random);
       } else {
         rst = ack = will_send_ctrl_packet = true;
-        pktbuf = conn->pktbuf;
-        conn->pktbuf = 0;
+        swap(pktbuf, conn->pktbuf);
         pre_rst_ack(&seq, &ack_seq, tcp, payload_len);
       }
       break;
@@ -212,10 +206,10 @@ int ingress_handler(struct xdp_md* xdp) {
   }
   if (rst) {
     bpf_map_delete_elem(&mimic_conns, &conn_key);
-    if (pktbuf) free_pktbuf(pktbuf);
+    free_pktbuf(pktbuf);
   } else if (newly_estab) {
     log_conn(log_verbosity, LOG_LEVEL_INFO, true, LOG_TYPE_CONN_ESTABLISH, &conn_key);
-    if (pktbuf) consume_pktbuf(pktbuf);
+    consume_pktbuf(pktbuf);
   }
   if (will_drop) return XDP_DROP;
 

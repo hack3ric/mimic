@@ -18,6 +18,13 @@
 #define max(x, y) ((x) < (y) ? (y) : (x))
 #define cmp(x, y) ((x) > (y) - (x) < (y))
 
+#define swap(x, y)   \
+  ({                 \
+    typeof(x) t = x; \
+    x = y;           \
+    y = t;           \
+  })
+
 #ifdef _MIMIC_BPF
 
 // Some missing declaration of vmlinux.h
