@@ -205,7 +205,7 @@ int ingress_handler(struct xdp_md* xdp) {
   bpf_spin_unlock(&conn->lock);
 
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_TCP_PKT, 0, ntohl(tcp->seq), ntohl(tcp->ack_seq));
-  log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_STATE, state, seq, ack_seq);
+  log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_STATE, state, conn_seq, conn_ack_seq);
 
   if (will_send_ctrl_packet) {
     send_ctrl_packet(&conn_key, (syn ? SYN : 0) | (ack ? ACK : 0) | (rst ? RST : 0), seq, ack_seq);
