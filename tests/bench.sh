@@ -1,5 +1,6 @@
 #!/bin/bash
 # Simple script for benchmarking Mimic
+# Based on https://github.com/cyyself/wg-bench. Thanks!
 set -e
 
 _netns=mimic-bench
