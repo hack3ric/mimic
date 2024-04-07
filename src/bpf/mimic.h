@@ -97,8 +97,8 @@ static inline int log_conn(__u32 log_verbosity, enum log_level level, bool ingre
   return log_any(log_verbosity, level, ingress, type, &(union log_info){.conn = *conn});
 }
 
-static inline int log_tcp(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
-                          enum conn_state state, __u32 seq, __u32 ack_seq) {
+static __always_inline int log_tcp(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
+                                   enum conn_state state, __u32 seq, __u32 ack_seq) {
   return log_any(log_verbosity, level, ingress, type,
                  &(union log_info){.tcp = {.state = state, .seq = seq, .ack_seq = ack_seq}});
 }
