@@ -5,6 +5,7 @@
 
 #include <bpf/bpf_helpers.h>
 
+#include "../kmod/mimic.h"
 #include "../shared/misc.h"
 
 extern struct mimic_whitelist_map {
@@ -44,6 +45,8 @@ struct ph_part {
 
 struct sk_buff* mimic_inspect_skb(struct __sk_buff* skb) __ksym;
 int mimic_change_csum_offset(struct __sk_buff* skb, __u16 protocol) __ksym;
+struct mimic_skcipher_state* mimic_skcipher_alloc_state(const __u8* key, size_t key__sz) __ksym;
+void mimic_skcipher_free_state(struct mimic_skcipher_state* state) __ksym;
 
 // clang-format off
 #define QUARTET_DEF struct iphdr* ipv4, struct ipv6hdr* ipv6, struct udphdr* udp, struct tcphdr* tcp
