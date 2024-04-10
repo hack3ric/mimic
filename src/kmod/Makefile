@@ -5,6 +5,8 @@ KERNEL_UNAME ?= $(shell uname -r)
 SYSTEM_BUILD_DIR := /lib/modules/$(KERNEL_UNAME)/build
 PWD := $(CURDIR)
 
+ccflags-y := -D_MIMIC_KMOD
+
 # Notes on Debian hack:
 #
 # Debian does not ship vmlinux nor resolve_btfids in

@@ -45,8 +45,11 @@ struct ph_part {
 
 struct sk_buff* mimic_inspect_skb(struct __sk_buff* skb) __ksym;
 int mimic_change_csum_offset(struct __sk_buff* skb, __u16 protocol) __ksym;
-struct mimic_skcipher_state* mimic_skcipher_alloc_state(const __u8* key, size_t key__sz) __ksym;
-void mimic_skcipher_free_state(struct mimic_skcipher_state* state) __ksym;
+struct mimic_skcipher_state* mimic_skcipher_init_state(const __u8* key, size_t key_len) __ksym;
+void mimic_skcipher_release_state(struct mimic_skcipher_state* state) __ksym;
+int mimic_skcipher_crypt(struct mimic_skcipher_state* state, __u8* data, size_t data_len, union mimic_iv_repr* iv,
+                         bool encrypt) __ksym;
+void mimic_get_random_bytes(void* bytes, size_t bytes_len) __ksym;
 
 // clang-format off
 #define QUARTET_DEF struct iphdr* ipv4, struct ipv6hdr* ipv6, struct udphdr* udp, struct tcphdr* tcp
