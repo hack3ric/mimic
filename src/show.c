@@ -119,7 +119,7 @@ int subcmd_show(struct show_arguments* args) {
         try(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK), _("failed to get value from map '%s': %s"),
             "mimic_conns", strerror(-_ret));
 
-        printf(_("- %sstate:%s %s\n"), BOLD, RESET, conn_state_to_str(conn.state));
+        printf(_("- %sstate:%s %s\n"), BOLD, RESET, gettext(conn_state_to_str(conn.state)));
         printf(_("- %ssequence:%s\n"), BOLD, RESET);
         printf(_("  * seq: %08x\n"), conn.seq);
         printf(_("  * ack: %08x\n"), conn.ack_seq);

@@ -18,11 +18,6 @@ extern int log_verbosity;
 #define BOLD "\x1B[1m"
 #define RESET "\x1B[0m"
 
-static const char* _log_prefixes[][2] = {
-  {BOLD RED, N_("Error")},  {BOLD YELLOW, N_(" Warn")}, {BOLD GREEN, N_(" Info")},
-  {BOLD BLUE, N_("Debug")}, {BOLD GRAY, N_("Trace")},
-};
-
 void log_any(int level, const char* fmt, ...);
 
 #define log_error(fmt, ...) log_any(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)

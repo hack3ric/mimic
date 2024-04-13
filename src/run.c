@@ -181,8 +181,8 @@ static inline int send_ctrl_packet(struct send_options* s) {
   struct sockaddr_storage saddr = {}, daddr = {};
   if (s->conn.protocol == AF_INET) {
     __u32 local = s->conn.local.v4, remote = s->conn.remote.v4;
-    *(struct sockaddr_in*)&saddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = local, .sin_port = 0};
-    *(struct sockaddr_in*)&daddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = remote, .sin_port = 0};
+    *(struct sockaddr_in*)&saddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = {local}, .sin_port = 0};
+    *(struct sockaddr_in*)&daddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = {remote}, .sin_port = 0};
     csum += u32_fold(ntohl(local));
     csum += u32_fold(ntohl(remote));
   } else {

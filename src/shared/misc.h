@@ -97,13 +97,15 @@ struct connection {
 static inline const char* conn_state_to_str(enum conn_state s) {
   switch (s) {
     case STATE_IDLE:
-      return "idle";
+      return N_("idle");
     case STATE_SYN_SENT:
-      return "SYN sent";
+      return N_("SYN sent");
     case STATE_SYN_RECV:
-      return "SYN received";
+      return N_("SYN received");
     case STATE_ESTABLISHED:
-      return "established";
+      return N_("established");
+    default:
+      return N_("(unknown)");
   }
 }
 

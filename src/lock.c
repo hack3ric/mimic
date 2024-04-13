@@ -49,6 +49,8 @@ int lock_error_fmt(struct lock_error* error, char* buf, size_t len) {
     case ERR_VERSION_MISMATCH:
       return snprintf(buf, len, _("current Mimic version is %s, but lock file's is %s"), argp_program_version,
                       error->version_mismatch.got);
+    default:
+      return 0;
   }
 }
 
