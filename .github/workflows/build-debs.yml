@@ -22,7 +22,7 @@ jobs:
         with:
           name: bookworm
           path: debian/artifacts/*.deb
-  build-mantic:
+  build-noble:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -33,7 +33,7 @@ jobs:
           DEB_BUILD_OPTIONS: noautodbgsym
         with:
           buildpackage-opts: -b -us -uc
-          docker-image: ubuntu:mantic
+          docker-image: ubuntu:noble
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
