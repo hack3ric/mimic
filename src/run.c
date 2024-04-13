@@ -180,16 +180,13 @@ static inline int send_ctrl_packet(struct send_options* s) {
   __u32 csum = 0;
   struct sockaddr_storage saddr = {}, daddr = {};
   if (s->conn.protocol == AF_INET) {
-    __u32 local = s->conn.local.v4, remote = s->conn.remote.v4;
-    *(struct sockaddr_in*)&saddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = {local}, .sin_port = 0};
-    *(struct sockaddr_in*)&daddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = {remote}, .sin_port = 0};
-    csum += u32_fold(ntohl(local));
-    csum += u32_fold(ntohl(remote));
+    *(struct sockaddr_in*)&saddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = {s->conn.local.v4}};
+    *(struct sockaddr_in*)&daddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = {s->conn.remote.v4}};
+    csum += u32_fold(ntohl(s->conn.local.v4));
+    csum += u32_fold(ntohl(s->conn.remote.v4));
   } else {
-    *(struct sockaddr_in6*)&saddr =
-      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->conn.local.v6, .sin6_port = 0};
-    *(struct sockaddr_in6*)&daddr =
-      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->conn.remote.v6, .sin6_port = 0};
+    *(struct sockaddr_in6*)&saddr = (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->conn.local.v6};
+    *(struct sockaddr_in6*)&daddr = (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->conn.remote.v6};
     for (int i = 0; i < 8; i++) {
       csum += ntohs(s->conn.local.v6.s6_addr16[i]);
       csum += ntohs(s->conn.remote.v6.s6_addr16[i]);

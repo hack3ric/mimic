@@ -107,4 +107,10 @@ static inline __attribute__((__format_arg__(1))) const char* _(const char* text)
 // Used for reading packet data in bulk
 #define SEGMENT_SIZE 256
 
+#define INIT_CWND 200
+#define MIN_CWND 50
+#define MAX_CWND 350
+#define CWND_STEP 1
+#define STABLE_FACTOR 0.2
+
 #endif  // _MIMIC_SHARED_UTIL_H

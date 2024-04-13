@@ -92,6 +92,7 @@ struct connection {
   } state;
   __u32 seq, ack_seq;
   uintptr_t pktbuf;
+  __u16 cwnd;
 };
 
 static inline const char* conn_state_to_str(enum conn_state s) {

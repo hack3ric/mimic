@@ -79,7 +79,7 @@ static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress)
 static inline struct connection* get_conn(struct conn_tuple* key) {
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, key);
   if (!conn) {
-    struct connection conn_value = {};
+    struct connection conn_value = {.cwnd = INIT_CWND};
     if (bpf_map_update_elem(&mimic_conns, key, &conn_value, BPF_ANY)) return NULL;
     conn = bpf_map_lookup_elem(&mimic_conns, key);
     if (!conn) return NULL;
