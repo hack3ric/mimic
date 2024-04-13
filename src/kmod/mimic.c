@@ -64,6 +64,10 @@ __bpf_kfunc int mimic_change_csum_offset(struct __sk_buff* skb_bpf, u16 new_prot
   return 0;
 }
 
+__bpf_kfunc void mimic_get_random_bytes(void* bytes__uninit, size_t bytes__uninit__sz) {
+  get_random_bytes(bytes__uninit, bytes__uninit__sz);
+}
+
 __bpf_kfunc struct mimic_skcipher_state* mimic_skcipher_init_state(const __u8* key, size_t key__sz) {
   struct mimic_skcipher_state* state;
   int ret;
@@ -105,7 +109,7 @@ __bpf_kfunc void mimic_skcipher_release_state(struct mimic_skcipher_state* state
   kref_put(&state->refcount, mimic_skcipher_free_state_from_kref);
 }
 
-// Encrypt or decrypt `data` in place
+// Encrypt or decrypt `data` in place.
 __bpf_kfunc int mimic_skcipher_crypt(struct mimic_skcipher_state* state, __u8* data, size_t data__sz,
                                      union mimic_iv_repr* iv, bool encrypt) {
   SYNC_SKCIPHER_REQUEST_ON_STACK(req, state->tfm);
@@ -126,18 +130,14 @@ __bpf_kfunc int mimic_skcipher_crypt(struct mimic_skcipher_state* state, __u8* d
   return 0;
 }
 
-__bpf_kfunc void mimic_get_random_bytes(void* bytes__uninit, size_t bytes__uninit__sz) {
-  get_random_bytes(bytes__uninit, bytes__uninit__sz);
-}
-
 __bpf_kfunc_end_defs();
 
 #define BTF_ID_FLAGS__MIMIC_CRYPTO_APIS                                      \
+  BTF_ID_FLAGS(func, mimic_get_random_bytes)                                 \
   BTF_ID_FLAGS(func, mimic_skcipher_init_state, KF_ACQUIRE | KF_RET_NULL)    \
   BTF_ID_FLAGS(func, mimic_skcipher_acquire_state, KF_ACQUIRE | KF_RET_NULL) \
   BTF_ID_FLAGS(func, mimic_skcipher_release_state, KF_RELEASE)               \
-  BTF_ID_FLAGS(func, mimic_skcipher_crypt, KF_TRUSTED_ARGS)                  \
-  BTF_ID_FLAGS(func, mimic_get_random_bytes)
+  BTF_ID_FLAGS(func, mimic_skcipher_crypt, KF_TRUSTED_ARGS)
 
 BTF_SET8_START(mimic_tc_set)
 BTF_ID_FLAGS(func, mimic_inspect_skb)
