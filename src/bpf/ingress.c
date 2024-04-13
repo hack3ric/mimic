@@ -210,10 +210,7 @@ int ingress_handler(struct xdp_md* xdp) {
   }
   if (will_drop) return XDP_DROP;
 
-  __be32 ipv4_saddr = 0, ipv4_daddr = 0;
-  struct in6_addr ipv6_saddr = {}, ipv6_daddr = {};
   if (ipv4) {
-    ipv4_saddr = ipv4->saddr, ipv4_daddr = ipv4->daddr;
     __be16 old_len = ipv4->tot_len;
     __be16 new_len = htons(ntohs(old_len) - TCP_UDP_HEADER_DIFF);
     ipv4->tot_len = new_len;
@@ -224,7 +221,6 @@ int ingress_handler(struct xdp_md* xdp) {
     ipv4_csum += IPPROTO_UDP - IPPROTO_TCP;
     ipv4->check = htons(csum_fold(ipv4_csum));
   } else if (ipv6) {
-    ipv6_saddr = ipv6->saddr, ipv6_daddr = ipv6->daddr;
     ipv6->payload_len = htons(ntohs(ipv6->payload_len) - TCP_UDP_HEADER_DIFF);
     ipv6->nexthdr = IPPROTO_UDP;
   }

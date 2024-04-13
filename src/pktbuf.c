@@ -67,9 +67,9 @@ int pktbuf_consume(struct pktbuf* buf, bool* consumed) {
   struct sockaddr_storage saddr, daddr;
   if (buf->conn.protocol == AF_INET) {
     *(struct sockaddr_in*)&saddr =
-      (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = buf->conn.local.v4, .sin_port = 0};
+      (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = {buf->conn.local.v4}, .sin_port = 0};
     *(struct sockaddr_in*)&daddr =
-      (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = buf->conn.remote.v4, .sin_port = 0};
+      (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = {buf->conn.remote.v4}, .sin_port = 0};
   } else {
     *(struct sockaddr_in6*)&saddr =
       (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = buf->conn.local.v6, .sin6_port = 0};

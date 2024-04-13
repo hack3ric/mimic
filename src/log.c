@@ -6,6 +6,11 @@
 #include "log.h"
 #include "shared/misc.h"
 
+static const char* _log_prefixes[][2] = {
+  {BOLD RED, N_("Error")},  {BOLD YELLOW, N_(" Warn")}, {BOLD GREEN, N_(" Info")},
+  {BOLD BLUE, N_("Debug")}, {BOLD GRAY, N_("Trace")},
+};
+
 int log_verbosity = 2;
 
 void log_any(int level, const char* fmt, ...) {
@@ -67,6 +72,7 @@ const char* log_type_to_str(bool ingress, enum log_type type) {
     case LOG_TYPE_CONN_DESTROY:
       return _("connection destroyed");
     case LOG_TYPE_QUICK_MSG:
+    default:
       return "";
   }
 }

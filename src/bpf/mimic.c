@@ -117,7 +117,7 @@ cleanup:
 
 // Need to manually clear conn.pktbuf in eBPF
 int use_pktbuf(enum rb_item_type type, uintptr_t buf) {
-  if (type != RB_ITEM_CONSUME_PKTBUF || type != RB_ITEM_FREE_PKTBUF) return -1;
+  if (type != RB_ITEM_CONSUME_PKTBUF && type != RB_ITEM_FREE_PKTBUF) return -1;
   if (!buf) return 0;
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
   if (!item) return -1;

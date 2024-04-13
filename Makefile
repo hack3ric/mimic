@@ -13,6 +13,9 @@ else ifeq ($(MODE), release)
 CFLAGS ?= -O2
 endif
 
+BPF_CFLAGS += -Wall
+CFLAGS += -Wall
+
 ifeq ($(KERNEL_UNAME),)
 KERNEL_VMLINUX := /sys/kernel/btf/vmlinux
 else ifeq ($(KERNEL_UNAME),$(shell uname -r))
