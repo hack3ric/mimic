@@ -7,6 +7,7 @@
 #include <bpf/bpf_endian.h>
 #else
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #endif
 
@@ -79,9 +80,13 @@ static inline void cleanup_fd(int* fd) {
 static inline void cleanup_file(FILE** file) {
   if (*file) fclose(*file);
 }
+static inline void cleanup_malloc(void** ptr) {
+  if (*ptr) free(*ptr);
+}
 
 #define _cleanup_fd __attribute__((__cleanup__(cleanup_fd)))
 #define _cleanup_file __attribute__((__cleanup__(cleanup_file)))
+#define _cleanup_malloc __attribute__((__cleanup__(cleanup_malloc)))
 
 #endif  // _MIMIC_BPF
 

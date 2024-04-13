@@ -199,27 +199,37 @@ static inline int send_ctrl_packet(struct send_options* s) {
   csum += sizeof(struct tcphdr);
   try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strerror(-_ret));
 
-  struct tcphdr tcp = {
+  size_t buf_len = sizeof(struct tcphdr) + 4;
+  csum += buf_len;
+  _cleanup_malloc void* buf = malloc(buf_len);
+
+  struct tcphdr* tcp = (struct tcphdr*)buf;
+  *tcp = (struct tcphdr){
     .source = s->conn.local_port,
     .dest = s->conn.remote_port,
     .seq = htonl(s->seq),
     .ack_seq = htonl(s->ack_seq),
-    .doff = 5,
+    .doff = buf_len / 4,
     .syn = s->syn,
     .ack = s->ack,
     .rst = s->rst,
-    .window = htons(0xfff),
+    .window = htons(0xffff),
     .urg_ptr = 0,
   };
-  csum += ntohs(tcp.source);
-  csum += ntohs(tcp.dest);
+  csum += ntohs(tcp->source);
+  csum += ntohs(tcp->dest);
   csum += u32_fold(s->seq);
   csum += u32_fold(s->ack_seq);
   csum += u32_fold(ntohl(tcp_flag_word(&tcp)));
-  tcp.check = htons(csum_fold(csum));
+  tcp->check = htons(csum_fold(csum));
 
-  try_e(sendto(sk, &tcp, sizeof(tcp), 0, (struct sockaddr*)&daddr, sizeof(daddr)), _("failed to send: %s"),
-        strerror(-_ret));
+  __u8* window_scale_opt = (__u8*)(tcp + 1);
+  window_scale_opt[0] = TCP_MAXSEG;
+  window_scale_opt[1] = 3;
+  window_scale_opt[2] = 7;
+  window_scale_opt[3] = 1;
+
+  try_e(sendto(sk, buf, buf_len, 0, (struct sockaddr*)&daddr, sizeof(daddr)), _("failed to send: %s"), strerror(-_ret));
   return 0;
 }
 
