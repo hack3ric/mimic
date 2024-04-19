@@ -28,15 +28,15 @@ else
 $(error vmlinux file not found)
 endif
 
-MIMIC_SHARED_HEADERS := $(wildcard src/shared/*.h)
+MIMIC_COMMON_HEADERS := $(wildcard common/*.h)
 
-MIMIC_BPF_SRCS := $(wildcard src/bpf/*.c)
+MIMIC_BPF_SRCS := $(wildcard bpf/*.c)
 MIMIC_BPF_OBJS := $(MIMIC_BPF_SRCS:.c=.o)
-MIMIC_BPF_HEADERS := src/bpf/vmlinux.h $(wildcard src/bpf/*.h) $(MIMIC_SHARED_HEADERS)
+MIMIC_BPF_HEADERS := bpf/vmlinux.h $(wildcard bpf/*.h) $(MIMIC_COMMON_HEADERS)
 
 MIMIC_SRCS := $(wildcard src/*.c)
 MIMIC_OBJS := $(MIMIC_SRCS:.c=.o)
-MIMIC_HEADERS := src/bpf_skel.h $(wildcard src/*.h) $(MIMIC_SHARED_HEADERS)
+MIMIC_HEADERS := src/bpf_skel.h $(wildcard src/*.h) $(MIMIC_COMMON_HEADERS)
 MIMIC_LINK_LIBS := -lbpf -ljson-c -lffi
 ifneq ($(ARGP_STANDALONE),)
 MIMIC_LINK_LIBS += -largp
@@ -55,15 +55,15 @@ build-cli: out/mimic
 build-kmod: out/mimic.ko
 generate: generate-skel generate-vmlinux
 generate-skel: src/bpf_skel.h
-generate-vmlinux: src/bpf/vmlinux.h
+generate-vmlinux: bpf/vmlinux.h
 generate-pot: out/mimic.pot
 
 MKDIR_P = mkdir -p $(@D)
 
-src/bpf/vmlinux.h:
+bpf/vmlinux.h:
 	$(BPFTOOL) btf dump file $(KERNEL_VMLINUX) format c > $@
 
-$(filter src/bpf/%.o, $(MIMIC_BPF_OBJS)): src/bpf/%.o: src/bpf/%.c $(MIMIC_BPF_HEADERS)
+$(filter bpf/%.o, $(MIMIC_BPF_OBJS)): bpf/%.o: bpf/%.c $(MIMIC_BPF_HEADERS)
 	$(BPF_CC) $(BPF_CFLAGS) -D_MIMIC_BPF -c -o $@ $<
 
 out/mimic.bpf.o: $(MIMIC_BPF_OBJS)
@@ -81,16 +81,16 @@ out/mimic: $(MIMIC_OBJS)
 
 out/mimic.ko: .FORCE
 	$(MKDIR_P)
-	$(MAKE) -C src/kmod
-	cp src/kmod/mimic.ko $@
+	$(MAKE) -C kmod
+	cp kmod/mimic.ko $@
 
 out/mimic.pot:
 	$(MKDIR_P)
 	find src -type f -regex '.*\.[ch]' | xargs xgettext -k_ -kN_ -o $@ --
 
 clean:
-	$(MAKE) -C src/kmod $@
+	$(MAKE) -C kmod $@
 	rm -rf out/
 	find . -type f -name *.o -delete
 	rm -f src/bpf_skel.h
-	rm -f src/bpf/vmlinux.h
+	rm -f bpf/vmlinux.h

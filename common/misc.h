@@ -1,5 +1,5 @@
-#ifndef _MIMIC_SHARED_MISC_H
-#define _MIMIC_SHARED_MISC_H
+#ifndef _MIMIC_COMMON_MISC_H
+#define _MIMIC_COMMON_MISC_H
 
 #ifdef _MIMIC_BPF
 #include "../bpf/vmlinux.h"
@@ -184,4 +184,4 @@ struct rb_item {
   // additional buffer follows
 };
 
-#endif  // _MIMIC_SHARED_MISC_H
+#endif  // _MIMIC_COMMON_MISC_H

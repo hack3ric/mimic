@@ -4,9 +4,9 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#include "shared/misc.h"
-#include "shared/try.h"
-#include "shared/util.h"
+#include "../common/misc.h"
+#include "../common/try.h"
+#include "../common/util.h"
 
 int parse_filter(const char* filter_str, struct pkt_filter* filter) {
   char* delim_pos = strchr(filter_str, '=');

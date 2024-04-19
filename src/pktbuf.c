@@ -8,12 +8,12 @@
 #include <string.h>
 #include <sys/socket.h>
 
+#include "../common/checksum.h"
+#include "../common/misc.h"
+#include "../common/try.h"
+#include "../common/util.h"
 #include "log.h"
 #include "mimic.h"
-#include "shared/checksum.h"
-#include "shared/misc.h"
-#include "shared/try.h"
-#include "shared/util.h"
 
 static inline struct packet* packet_new(const char* data, size_t len, bool l4_csum_partial) {
   struct packet* result = malloc(sizeof(*result));

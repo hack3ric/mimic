@@ -1,5 +1,5 @@
-#ifndef _MIMIC_SHARED_UTIL_H
-#define _MIMIC_SHARED_UTIL_H
+#ifndef _MIMIC_COMMON_UTIL_H
+#define _MIMIC_COMMON_UTIL_H
 
 #ifdef _MIMIC_BPF
 #include "../bpf/vmlinux.h"
@@ -113,4 +113,4 @@ static inline __attribute__((__format_arg__(1))) const char* _(const char* text)
 #define CWND_STEP 1
 #define STABLE_FACTOR 0.2
 
-#endif  // _MIMIC_SHARED_UTIL_H
+#endif  // _MIMIC_COMMON_UTIL_H

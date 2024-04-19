@@ -3,10 +3,10 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
 
-#include "../shared/checksum.h"
-#include "../shared/misc.h"
-#include "../shared/try.h"
-#include "../shared/util.h"
+#include "../common/checksum.h"
+#include "../common/misc.h"
+#include "../common/try.h"
+#include "../common/util.h"
 #include "mimic.h"
 
 // Move back n bytes, shrink socket buffer and restore data.

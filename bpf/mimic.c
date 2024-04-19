@@ -2,7 +2,7 @@
 
 #include <bpf/bpf_helpers.h>
 
-#include "../shared/try.h"
+#include "../common/try.h"
 #include "mimic.h"
 
 struct mimic_whitelist_map mimic_whitelist SEC(".maps");

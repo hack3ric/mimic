@@ -22,13 +22,13 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "../common/checksum.h"
+#include "../common/misc.h"
+#include "../common/try.h"
+#include "../common/util.h"
 #include "bpf_skel.h"
 #include "log.h"
 #include "mimic.h"
-#include "shared/checksum.h"
-#include "shared/misc.h"
-#include "shared/try.h"
-#include "shared/util.h"
 
 static const struct argp_option options[] = {
   {"filter", 'f', N_("FILTER"), 0, N_("Specify what packets to process. This may be specified for multiple times."), 0},

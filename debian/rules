@@ -30,7 +30,7 @@ endif
 	make -C linux-source-*/tools/bpf/resolve_btfids
 
 override_dh_dkms:
-	dh_dkms -pmimic-dkms -- src/kmod/dkms.conf
+	dh_dkms -pmimic-dkms -- kmod/dkms.conf
 
 override_dh_auto_clean:
 	dh_auto_clean

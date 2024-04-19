@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../common/misc.h"
 #include "log.h"
-#include "shared/misc.h"
 
 static const char* _log_prefixes[][2] = {
   {BOLD RED, N_("Error")},  {BOLD YELLOW, N_(" Warn")}, {BOLD GREEN, N_(" Info")},

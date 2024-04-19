@@ -1,5 +1,5 @@
-#ifndef _MIMIC_SHARED_CHECKSUM_H
-#define _MIMIC_SHARED_CHECKSUM_H
+#ifndef _MIMIC_COMMON_CHECKSUM_H
+#define _MIMIC_COMMON_CHECKSUM_H
 
 #ifdef _MIMIC_BPF
 #include "../bpf/vmlinux.h"
@@ -47,4 +47,4 @@ static inline __u32 calc_csum(void* data, size_t data_len) {
 
 #endif  // _MIMIC_BPF
 
-#endif  // _MIMIC_SHARED_CHECKSUM_H
+#endif  // _MIMIC_COMMON_CHECKSUM_H

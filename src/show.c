@@ -7,11 +7,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../common/misc.h"
+#include "../common/try.h"
+#include "../common/util.h"
 #include "log.h"
 #include "mimic.h"
-#include "shared/misc.h"
-#include "shared/try.h"
-#include "shared/util.h"
 
 static const struct argp_option options[] = {
   {"process", 'p', NULL, 0, N_("Show process information")},

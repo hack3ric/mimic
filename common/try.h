@@ -1,11 +1,11 @@
-#ifndef _MIMIC_SHARED_TRY_H
-#define _MIMIC_SHARED_TRY_H
+#ifndef _MIMIC_COMMON_TRY_H
+#define _MIMIC_COMMON_TRY_H
 
 #ifdef _MIMIC_BPF
 #else
 #include <errno.h>
 
-#include "../log.h"
+#include "../src/log.h"
 #endif
 
 #include "util.h"
@@ -165,4 +165,4 @@
 #define try_p_pass(x) try_p_ret(x, XDP_PASS)
 #define try_p_drop(x) try_p_ret(x, XDP_DROP)
 
-#endif  // _MIMIC_SHARED_TRY_H
+#endif  // _MIMIC_COMMON_TRY_H
