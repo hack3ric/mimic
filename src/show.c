@@ -7,8 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../common/try.h"
 #include "../common/defs.h"
+#include "../common/try.h"
 #include "log.h"
 #include "mimic.h"
 

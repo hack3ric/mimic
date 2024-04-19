@@ -1,7 +1,7 @@
 #include <argp.h>
 
-#include "../common/try.h"
 #include "../common/defs.h"
+#include "../common/try.h"
 #include "mimic.h"
 
 int main(int argc, char** argv) {

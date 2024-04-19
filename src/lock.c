@@ -8,8 +8,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../common/try.h"
 #include "../common/defs.h"
+#include "../common/try.h"
 #include "mimic.h"
 
 struct lock_error {
