@@ -23,9 +23,8 @@
 #include <unistd.h>
 
 #include "../common/checksum.h"
-#include "../common/misc.h"
 #include "../common/try.h"
-#include "../common/util.h"
+#include "../common/defs.h"
 #include "bpf_skel.h"
 #include "log.h"
 #include "mimic.h"

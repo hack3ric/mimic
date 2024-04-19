@@ -7,11 +7,10 @@
 #include <bpf/bpf_helpers.h>
 #else
 #include <linux/types.h>
-#include <netinet/in.h>
 #include <stddef.h>
 #endif
 
-#include "util.h"
+#include "defs.h"
 
 static inline __u32 u32_fold(__u32 num) { return (num & 0xffff) + (num >> 16); }
 static inline __u16 csum_fold(__u32 csum) { return ~u32_fold(u32_fold(csum)); }

@@ -8,7 +8,7 @@
 #include "../src/log.h"
 #endif
 
-#include "util.h"
+#include "defs.h"
 
 #define redecl(_type, _name, _off, _ctx, _ret)                              \
   _name = ({                                                                \

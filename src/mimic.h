@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 
-#include "../common/misc.h"
+#include "../common/defs.h"
 
 #define CONFIG_MAX_VALUES 16
 

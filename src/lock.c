@@ -9,7 +9,7 @@
 #include <unistd.h>
 
 #include "../common/try.h"
-#include "../common/util.h"
+#include "../common/defs.h"
 #include "mimic.h"
 
 struct lock_error {

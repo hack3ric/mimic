@@ -4,9 +4,8 @@
 #include <bpf/bpf_helpers.h>
 
 #include "../common/checksum.h"
-#include "../common/misc.h"
 #include "../common/try.h"
-#include "../common/util.h"
+#include "../common/defs.h"
 #include "mimic.h"
 
 // Move back n bytes, shrink socket buffer and restore data.

@@ -3,9 +3,8 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
 
-#include "../common/misc.h"
 #include "../common/try.h"
-#include "../common/util.h"
+#include "../common/defs.h"
 #include "mimic.h"
 
 // Extend socket buffer and move n bytes from front to back.

@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../common/util.h"
+#include "../common/defs.h"
 #include "log.h"
 #include "mimic.h"
 

@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../common/misc.h"
+#include "../common/defs.h"
 #include "log.h"
 
 static const char* _log_prefixes[][2] = {

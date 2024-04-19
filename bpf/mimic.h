@@ -5,8 +5,8 @@
 
 #include <bpf/bpf_helpers.h>
 
+#include "../common/defs.h"
 #include "../kmod/mimic.h"
-#include "../common/misc.h"
 
 extern struct mimic_whitelist_map {
   __uint(type, BPF_MAP_TYPE_HASH);
