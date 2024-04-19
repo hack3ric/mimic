@@ -211,20 +211,17 @@ static inline int send_ctrl_packet(struct send_options* s) {
     .ack = s->ack,
     .rst = s->rst,
     .window = htons(0xffff),
+    .check = 0,
     .urg_ptr = 0,
   };
-  csum += ntohs(tcp->source);
-  csum += ntohs(tcp->dest);
-  csum += u32_fold(s->seq);
-  csum += u32_fold(s->ack_seq);
-  csum += u32_fold(ntohl(tcp_flag_word(&tcp)));
-  tcp->check = htons(csum_fold(csum));
 
   __u8* window_scale_opt = (__u8*)(tcp + 1);
   window_scale_opt[0] = TCP_MAXSEG;
-  window_scale_opt[1] = 3;
-  window_scale_opt[2] = 7;
-  window_scale_opt[3] = 1;
+  window_scale_opt[1] = 4;
+  *(__u16*)&window_scale_opt[2] = htons(7);
+
+  csum += calc_csum(buf, buf_len);
+  tcp->check = htons(csum_fold(csum));
 
   try_e(sendto(sk, buf, buf_len, 0, (struct sockaddr*)&daddr, sizeof(daddr)), _("failed to send: %s"), strerror(-_ret));
   return 0;
