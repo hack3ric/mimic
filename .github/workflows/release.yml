@@ -20,7 +20,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd debian/artifacts
-          for _f in mimic*.deb; do sudo mv "$_f"Debian-12_$_f"; done
+          for _f in mimic*.deb; do sudo mv "$_f" "Debian-12_$_f"; done
           gh release upload ${{ github.ref }} *.deb
   build-noble:
     runs-on: ubuntu-latest
