@@ -1,5 +1,9 @@
 # Changelog for Mimic
 
+## 0.4.0 (????-??-??)
+
+- Variable congestion window to better mimic real TCP
+
 ## 0.3.1 (2024-04-21)
 
 - Ubuntu: prebuilt distribution switched from 23.10 (mantic) to 24.04 LTS (noble)
