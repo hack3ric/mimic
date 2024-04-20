@@ -53,8 +53,10 @@ int pktbuf_push(struct pktbuf* buf, const char* data, size_t len, bool l4_csum_p
 }
 
 int pktbuf_consume(struct pktbuf* buf, bool* consumed) {
-  *consumed = false;
-  if (!buf->head) {
+  if (!buf) {
+    *consumed = true;
+    return 0;
+  } else if (!buf->head) {
     *consumed = true;
     free(buf);
     return 0;
@@ -89,6 +91,7 @@ int pktbuf_consume(struct pktbuf* buf, bool* consumed) {
 }
 
 void pktbuf_free(struct pktbuf* buf) {
+  if (!buf) return;
   for (struct packet *p = buf->head, *oldp; p;) {
     oldp = p;
     p = p->next;
