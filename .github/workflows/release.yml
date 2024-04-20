@@ -1,0 +1,42 @@
+name: Build .deb packages on release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-bookworm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build
+        uses: jtdor/build-deb-action@v1
+        with:
+          buildpackage-opts: -b -us -uc
+          docker-image: debian:bookworm-slim
+      - name: Upload
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd debian/artifacts
+          for _f in mimic*.deb; do sudo mv "$_f"Debian-12_$_f"; done
+          gh release upload ${{ github.ref }} *.deb
+  build-noble:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build
+        uses: jtdor/build-deb-action@v1
+        with:
+          buildpackage-opts: -b -us -uc
+          docker-image: ubuntu:noble
+      - name: Upload
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd debian/artifacts
+          for _f in mimic*.deb; do sudo mv "$_f" "Ubuntu-24.04_$_f"; done
+          gh release upload ${{ github.ref }} *.deb
+
