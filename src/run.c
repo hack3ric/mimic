@@ -192,10 +192,10 @@ static inline int send_ctrl_packet(struct send_options* s) {
     }
   }
   csum += IPPROTO_TCP;
-  csum += sizeof(struct tcphdr);
   try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strerror(-_ret));
 
-  size_t buf_len = sizeof(struct tcphdr) + 4;
+  // TCP header + (MSS + window scale + SACK PERM) if SYN
+  size_t buf_len = sizeof(struct tcphdr) + (s->syn ? 3 * 4 : 0);
   csum += buf_len;
   _cleanup_malloc void* buf = malloc(buf_len);
 
@@ -205,7 +205,7 @@ static inline int send_ctrl_packet(struct send_options* s) {
     .dest = s->conn.remote_port,
     .seq = htonl(s->seq),
     .ack_seq = htonl(s->ack_seq),
-    .doff = buf_len / 4,
+    .doff = buf_len >> 2,
     .syn = s->syn,
     .ack = s->ack,
     .rst = s->rst,
@@ -214,10 +214,16 @@ static inline int send_ctrl_packet(struct send_options* s) {
     .urg_ptr = 0,
   };
 
-  __u8* window_scale_opt = (__u8*)(tcp + 1);
-  window_scale_opt[0] = TCP_MAXSEG;
-  window_scale_opt[1] = 4;
-  *(__u16*)&window_scale_opt[2] = htons(7);
+  if (s->syn) {
+    struct _mss_opt {
+      __u8 t, l;
+      __be16 v;
+    };
+    __u8* opt = (__u8*)(tcp + 1);
+    memcpy(opt, &(struct _mss_opt){2, 4, htons(1340)}, 4);
+    memcpy(opt += 4, (__u8[]){1, 3, 3, 7}, 4);
+    memcpy(opt += 4, (__u8[]){1, 1, 4, 2}, 4);
+  }
 
   csum += calc_csum(buf, buf_len);
   tcp->check = htons(csum_fold(csum));
