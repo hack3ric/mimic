@@ -1,3 +1,4 @@
+#include <arpa/inet.h>
 #include <errno.h>
 #include <linux/types.h>
 #include <linux/udp.h>
@@ -72,6 +73,11 @@ int pktbuf_consume(struct pktbuf* buf, bool* consumed) {
     struct sockaddr_in6 *sa = (typeof(sa))&saddr, *da = (typeof(da))&daddr;
     *sa = (typeof(*sa)){.sin6_family = AF_INET6, .sin6_addr = buf->conn.local.v6, .sin6_port = 0};
     *da = (typeof(*da)){.sin6_family = AF_INET6, .sin6_addr = buf->conn.remote.v6, .sin6_port = 0};
+  }
+  if (log_verbosity >= LOG_LEVEL_TRACE) {
+    char ip_str[INET6_ADDRSTRLEN];
+    inet_ntop(buf->conn.protocol, &buf->conn.local, ip_str, sizeof(ip_str));
+    log_trace("pktbuf_consume: trying to bind %s", ip_str);
   }
   try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)));
 
