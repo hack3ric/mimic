@@ -76,7 +76,7 @@ int pktbuf_consume(struct pktbuf* buf, bool* consumed) {
     *(struct sockaddr_in6*)&daddr =
       (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = buf->conn.remote.v6, .sin6_port = 0};
   }
-  try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strerror(-_ret));
+  try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)));
 
   int ret = 0;
   for (struct packet *p = buf->head, *oldp; p;) {
@@ -87,7 +87,6 @@ int pktbuf_consume(struct pktbuf* buf, bool* consumed) {
     packet_free(oldp);
   }
 
-  if (ret < 0) log_error(_("failed to send: %s"), strerror(errno));
   *consumed = true;
   free(buf);
   return ret;

@@ -271,11 +271,15 @@ static int _handle_rb_event(struct bpf_map* conns, void* ctx, void* data, size_t
       name = N_("consuming packet buffer");
       ret = pktbuf_consume((struct pktbuf*)item->pktbuf, &consumed);
       if (!consumed) pktbuf_free((struct pktbuf*)item->pktbuf);
+      if (ret < 0) {
+        log_debug(_("error %s: %s"), gettext(name), strerror(-ret));
+        ret = 0;
+      }
       break;
     case RB_ITEM_FREE_PKTBUF:
       name = N_("freeing packet buffer");
       pktbuf_free((struct pktbuf*)item->pktbuf);
-      log_debug(_("freed packet buffer"));
+      log_trace(_("freed packet buffer"));
       break;
     default:
       name = N_("handling unknown ring buffer item");
