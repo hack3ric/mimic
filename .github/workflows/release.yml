@@ -21,7 +21,7 @@ jobs:
         run: |
           cd debian/artifacts
           for _f in mimic*.deb; do sudo mv "$_f" "Debian-12_$_f"; done
-          gh release upload ${{ github.ref }} *.deb
+          gh release upload $(sed 's|refs/tags/||' <(echo ${{ github.ref }})) *.deb
   build-noble:
     runs-on: ubuntu-latest
     steps:
@@ -38,5 +38,5 @@ jobs:
         run: |
           cd debian/artifacts
           for _f in mimic*.deb; do sudo mv "$_f" "Ubuntu-24.04_$_f"; done
-          gh release upload ${{ github.ref }} *.deb
+          gh release upload $(sed 's|refs/tags/||' <(echo ${{ github.ref }})) *.deb
 
