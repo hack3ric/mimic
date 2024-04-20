@@ -1,0 +1,305 @@
+# Generated according to https://wiki.wxwidgets.org/Valgrind_Suppression_File_Howto
+
+{
+   libbpf
+   Memcheck:Cond
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Cond
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Value8
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Cond
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Value8
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Cond
+   fun:strlen
+   fun:strdup
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Value8
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Cond
+   fun:btf__str_by_offset
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Value8
+   fun:strcmp
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Cond
+   fun:strcmp
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Value8
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Value8
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Cond
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Cond
+   fun:btf__type_by_id
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Value8
+   fun:btf__type_by_id
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Value8
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:*
+   obj:*
+   obj:/usr/libexec/valgrind/memcheck-amd64-linux
+   obj:*
+}
+{
+   libbpf
+   Memcheck:Cond
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Value8
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Cond
+   fun:btf__type_by_id
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Value8
+   fun:btf__type_by_id
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
+{
+   libbpf
+   Memcheck:Param
+   bpf(attr->expected_attach_type)
+   fun:syscall
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_map_create
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+}
+{
+   libbpf
+   Memcheck:Param
+   bpf(attr->prog_ifindex)
+   fun:syscall
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_map_create
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_object__load
+   fun:bpf_object__load_skeleton
+   fun:mimic_bpf__load
+   fun:run_bpf
+   fun:subcmd_run
+}
+{
+   libbpf
+   Memcheck:Cond
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   obj:/usr/lib/x86_64-linux-gnu/libbpf.so.1.1.0
+   fun:bpf_tc_hook_create
+   fun:tc_hook_create_bind
+   fun:run_bpf
+   fun:subcmd_run
+   fun:main
+}
