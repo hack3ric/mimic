@@ -42,7 +42,7 @@ static inline error_t argp_parse_cmd(struct argp_state* state, const char* cmdna
 }
 
 static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
-  struct arguments* args = (struct arguments*)state->input;
+  struct arguments* args = (typeof(args))state->input;
   if (args->cmd != CMD_NULL) return ARGP_ERR_UNKNOWN;
 
   switch (key) {

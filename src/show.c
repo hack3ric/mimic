@@ -19,7 +19,7 @@ static const struct argp_option options[] = {
 };
 
 static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
-  struct show_arguments* args = (struct show_arguments*)state->input;
+  struct show_arguments* args = (typeof(args))state->input;
   switch (key) {
     case 'p':
       args->show_process = true;

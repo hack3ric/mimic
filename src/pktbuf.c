@@ -63,15 +63,13 @@ int pktbuf_consume(struct pktbuf* buf, bool* consumed) {
   _cleanup_fd int sk = try(socket(buf->conn.protocol, SOCK_RAW | SOCK_NONBLOCK, IPPROTO_UDP));
   struct sockaddr_storage saddr, daddr;
   if (buf->conn.protocol == AF_INET) {
-    *(struct sockaddr_in*)&saddr =
-      (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = {buf->conn.local.v4}, .sin_port = 0};
-    *(struct sockaddr_in*)&daddr =
-      (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = {buf->conn.remote.v4}, .sin_port = 0};
+    struct sockaddr_in *sa = (typeof(sa))&saddr, *da = (typeof(da))&daddr;
+    *sa = (typeof(*sa)){.sin_family = AF_INET, .sin_addr = {buf->conn.local.v4}, .sin_port = 0};
+    *da = (typeof(*da)){.sin_family = AF_INET, .sin_addr = {buf->conn.remote.v4}, .sin_port = 0};
   } else {
-    *(struct sockaddr_in6*)&saddr =
-      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = buf->conn.local.v6, .sin6_port = 0};
-    *(struct sockaddr_in6*)&daddr =
-      (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = buf->conn.remote.v6, .sin6_port = 0};
+    struct sockaddr_in6 *sa = (typeof(sa))&saddr, *da = (typeof(da))&daddr;
+    *sa = (typeof(*sa)){.sin6_family = AF_INET6, .sin6_addr = buf->conn.local.v6, .sin6_port = 0};
+    *da = (typeof(*da)){.sin6_family = AF_INET6, .sin6_addr = buf->conn.remote.v6, .sin6_port = 0};
   }
   try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strerror(-_ret));
 
