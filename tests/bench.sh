@@ -1,78 +1,47 @@
 #!/bin/bash
-# Simple script for benchmarking Mimic
-# Based on https://github.com/cyyself/wg-bench. Thanks!
 set -e
 
-_netns=mimic-bench
-_veth1=veth-bench-1
-_veth2=veth-bench-2
-_veth_ip1=169.254.100.1
-_veth_ip2=169.254.100.2
-_wg_ip1=169.254.200.1
-_wg_ip2=169.254.200.2
-_mimic1=
-_mimic2=
-
 _curdir=$(dirname $(realpath "${BASH_SOURCE[0]}"))
+. "$_curdir/env.sh"
 
 setup() {
-  ip netns add $_netns
-
-  ip link add $_veth1 type veth peer name $_veth2
-  ip link set $_veth2 netns $_netns
-
-  ip addr add $_veth_ip1/30 dev $_veth1
-  ip netns exec $_netns ip addr add $_veth_ip2/30 dev $_veth2
-
-  ip link set $_veth1 up
-  ip netns exec $_netns ip link set $_veth2 up
-
-  local _host_priv_key=$(wg genkey)
-  local _ns_priv_key=$(wg genkey)
-
-  ip link add wg-$_veth1 type wireguard
-  wg set wg-$_veth1 listen-port 11001 private-key <(echo $_host_priv_key)
-  ip addr add $_wg_ip1/32 dev wg-$_veth1 peer $_wg_ip2
-  wg set wg-$_veth1 peer $(echo $_ns_priv_key | wg pubkey) allowed-ips $_wg_ip2 endpoint $_veth_ip2:11002
-  ip link set wg-$_veth1 up
-
-  ip netns exec $_netns ip link add wg-$_veth2 type wireguard
-  ip netns exec $_netns wg set wg-$_veth2 listen-port 11002 private-key <(echo $_ns_priv_key)
-  ip netns exec $_netns ip addr add $_wg_ip2/32 dev wg-$_veth2 peer $_wg_ip1
-  ip netns exec $_netns wg set wg-$_veth2 peer $(echo $_host_priv_key | wg pubkey) allowed-ips $_wg_ip1 endpoint $_veth_ip1:11001
-  ip netns exec $_netns ip link set wg-$_veth2 up
+  test_env_setup --wg --wg-v6 --wg-mtu=1420
 
   if [ "$1" = "mimic" ]; then
-    "$_curdir/../out/mimic" run $_veth1 -flocal=$_veth_ip1:11001 & _mimic1=$!
-    ip netns exec $_netns "$_curdir/../out/mimic" run $_veth2 -flocal=$_veth_ip2:11002 & _mimic2=$!
+    for _i in `seq 0 $_max`; do
+      ip netns exec ${_netns[$_i]} "$_curdir/../out/mimic" run ${_veth[$_i]} \
+        -flocal=\[`strip_ip_cidr ${_veth_ipv6[$_i]}`\]:${_wg_port[$_i]} & _mimic[$_i]=$!
+    done
     sleep 1
   fi
 }
 
 bench() {
-  local _tmp="$(mktemp)"
   local _type="$1"; shift
-  local _dest=
 
+  local _dest
   if [ "$_type" = "veth" ]; then
-    _dest=$_veth_ip2
+    _dest=`strip_ip_cidr ${_veth_ipv6[0]}`
   else
-    _dest=$_wg_ip2
+    _dest=`strip_ip_cidr ${_wg_ipv6[0]}`
   fi
 
-  ip netns exec $_netns iperf3 -s -D -I "$_tmp"
-  iperf3 -c $_dest $@
-  kill $(cat $_tmp)
+  _iperf3_pid_tmp=`mktemp`
+  ip netns exec ${_netns[0]} iperf3 -s -D -I "$_iperf3_pid_tmp"
+  ip netns exec ${_netns[1]} iperf3 -c $_dest $@
 }
 
-cleanup() {
-  [ -z $_mimic1 ] || kill $_mimic1
-  [ -z $_mimic2 ] || kill $_mimic2
+cleanup() (
+  set +e
+  for _i in `seq 0 $_max`; do
+    [ -z ${_mimic[$_i]} ] || kill ${_mimic[$_i]}
+  done
   wait
-  ip netns delete $_netns
-  ip link delete $_veth1
-  ip link delete wg-$_veth1
-}
+  if [ -n "$_iperf3_pid_tmp" ]; then
+    kill `cat $_iperf3_pid_tmp`
+  fi
+  test_env_cleanup
+)
 
 case "$1" in
   clean | cleanup)
@@ -88,6 +57,7 @@ case "$1" in
     ;;
 esac
 
+trap cleanup SIGINT
 setup $_type
 bench $_type $@
 cleanup

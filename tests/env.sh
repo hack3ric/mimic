@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -e
+#!/bin/bash
+[ "${BASH_SOURCE[0]}" = "$0" ] && set -e
 
 _br=br-mimic-bench
 _netns=(mimic-bench-{1..2})
@@ -16,11 +16,23 @@ _wg_ipv4=(169.254.200.{1..2}/24)
 _wg_ipv6_range=fc20::/64
 _wg_ipv6=(fc20::{1..2}/64)
 
-_ipv6=
-
 _max=$((${#_netns[@]} - 1))
 
+strip_ip_cidr() {
+  sed 's/\/[0-9]\+$//' <(echo "$1")
+}
+
 test_env_setup() {
+  for _i in "$@"; do
+    case "$_i" in
+      --wg) local _wg=1;;
+      --wg-v4) local _wg_ip_kind=v4;;
+      --wg-v6) local _wg_ip_kind=v6;;
+      --wg-mtu=*) local _wg_mtu="${_i#*=}";;
+      *) ;;
+    esac
+  done
+
   ip link add $_br type bridge
   ip link set $_br up
 
@@ -34,8 +46,7 @@ test_env_setup() {
     ip -n ${_netns[$_i]} link set ${_veth[$_i]} up
   done
 
-  if [ "$1" = wg ]; then
-    shift
+  if [ -n "$_wg" ]; then
     local _priv_key=(`wg genkey` `wg genkey`)
     for _i in `seq 0 $_max`; do
       ip -n ${_netns[$_i]} link add wg-${_veth[$_i]} type wireguard
@@ -49,16 +60,21 @@ test_env_setup() {
       for _j in `seq 0 $_max`; do
         if [ $_i -eq $_j ]; then continue; fi
         local _endpoint
-        if [ -n "$_ipv6" ]; then
-          _endpoint=\[`sed 's/\/[0-9]\+$//' <(echo ${_veth_ipv6[$_j]})`\]
+        if [ "$_wg_ip_kind" = v6 ]; then
+          _endpoint=\[`strip_ip_cidr ${_veth_ipv6[$_j]}`\]
         else
-          _endpoint=`sed 's/\/[0-9]\+$//' <(echo ${_veth_ipv4[$_j]})`
+          _endpoint=`strip_ip_cidr ${_veth_ipv4[$_j]}`
         fi
         ip netns exec ${_netns[$_i]} wg set wg-${_veth[$_i]} \
           peer `echo ${_priv_key[$_j]} | wg pubkey` \
           allowed-ips ${_wg_ipv4_range},${_wg_ipv6_range} \
           endpoint $_endpoint:${_wg_port[$_j]}
       done
+
+      if [ -n "$_wg_mtu" ]; then
+      echo set mtu to $_wg_mtu
+        ip -n ${_netns[$_i]} link set wg-${_veth[$_i]} mtu "$_wg_mtu"
+      fi
 
       ip -n ${_netns[$_i]} link set wg-${_veth[$_i]} up
     done
@@ -70,20 +86,23 @@ test_env_cleanup() (
   ip link del $_br
   for _i in `seq 0 $_max`; do
     ip netns del ${_netns[$_i]}
+    ip link del ${_veth[$_i]} 2>/dev/null
   done
 )
 
-case "$1" in
-  setup)
-    shift
-    test_env_setup $@
-    ;;
-  clean)
-    shift
-    test_env_cleanup $@
-    ;;
-  *)
-    >&2 echo "expected 'setup' or 'clean'"
-    exit 1
-    ;;
-esac
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  case "$1" in
+    setup)
+      shift
+      test_env_setup $@
+      ;;
+    clean)
+      shift
+      test_env_cleanup $@
+      ;;
+    *)
+      >&2 echo "expected 'setup' or 'clean'"
+      exit 1
+      ;;
+  esac
+fi
