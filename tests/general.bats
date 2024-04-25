@@ -10,6 +10,12 @@ mimic_pid=()
 
 BATS_TEST_RETRIES=2
 BATS_NO_PARALLELIZE_WITHIN_FILE=true
+: "${SLEEP_MULTIPLIER:=1}"
+
+if [ "$SLEEP_MULTIPLIER" -lt 1 ]; then
+  >&2 echo SLEEP_MULTIPLIER cannot be less than 1
+  exit 1
+fi
 
 load helpers/env
 
@@ -18,7 +24,7 @@ setup_file() {
   test_env_setup --no-offload
 
   # Wait for netns to take effect, otherwise tests will probably hang
-  sleep 2
+  sleep $(( 2 * SLEEP_MULTIPLIER ))
 
   # Tshark will terminate itself when bridge is removed
   tshark -i $br -w "$pcap_file" &
@@ -41,16 +47,16 @@ setup() {
 teardown() {
   kill -9 ${fifo_pid[@]} 2> /dev/null
   kill -INT ${socat_pid[@]} ${mimic_pid[@]} 2> /dev/null
+  wait ${mimic_pid[@]}
   rm -f ${fifo[@]} ${output[@]}
 }
 
-_test_packet_buffer() {
-  local port=(4500{1..2})
-  local random_data=()
+_generate_port() {
+  echo $(( SRANDOM % (65536 - 1) + 1 ))
+}
 
-  for _i in {0..5}; do
-    random_data[$_i]=`cat /dev/urandom | base64 -w0 | head -c $(( SRANDOM % 1400 + 1 ))`
-  done
+_setup_mimic_socat() {
+  local port=(`_generate_port` `_generate_port`)
 
   for _i in `seq 0 $max`; do
     local opposite=$(( 1 - $_i ))
@@ -67,7 +73,7 @@ _test_packet_buffer() {
       & mimic_pid[$_i]=$!
     echo "$! is mimic"
 
-    # FIXME: Sometimes the second socat will exit without any messages.
+    # FIXME: Sometimes the second socat will exit without any messages
     ip netns exec ${netns[$_i]} socat - \
       "udp:$opposite_ip_port,bind=$self_ip_port" \
       < ${fifo[$_i]} > ${output[$_i]} \
@@ -76,24 +82,56 @@ _test_packet_buffer() {
   done
 
   # Wait for socat and mimic to set up
-  sleep 2
+  sleep $(( 2 * SLEEP_MULTIPLIER ))
+}
+
+# Check Mimic is still running.
+#
+# Because Mimic layers UDP traffic transparently, when both ends fails to run
+# Mimic, the result will still be correct.
+_check_mimic_is_alive() {
+  for _i in `seq 0 $max`; do
+    ps -p ${mimic_pid[$_i]} > /dev/null
+  done
+}
+
+_test_random_traffic() {
+  _setup_mimic_socat "$1"
+
+  for _i in {0..99}; do
+    cat /dev/urandom | head -c $(( SRANDOM % 1400 + 1 )) >> ${fifo[$(( RANDOM % 2 ))]}
+    sleep $(echo "0.001 * $SLEEP_MULTIPLIER * ($RANDOM % 10)" | bc -l)
+  done
+
+  _check_mimic_is_alive
+}
+
+@test "test Mimic against some random UDP traffic (IPv4)" {
+  _test_random_traffic v4
+}
+
+@test "test Mimic against some random UDP traffic (IPv6)" {
+  _test_random_traffic v6
+}
+
+_test_packet_buffer() {
+  _setup_mimic_socat "$1"
 
   # Send multiple packets of random data in a short time (hopefully before
   # handshake)
+  local random_data=()
   for _i in {0..5}; do
+    random_data[$_i]=`cat /dev/urandom | base64 -w0 | head -c $(( SRANDOM % 1400 + 1 ))`
     echo "${random_data[$_i]}" >> ${fifo[0]}
   done
 
   # Wait for transmission
-  sleep 1
+  sleep $(( 1 * SLEEP_MULTIPLIER ))
 
   # Check if all sent data are present
   [ "$(cat ${output[1]})" = "$(printf '%s\n' "${random_data[@]}")" ]
 
-  # Check Mimic is still running
-  for _i in `seq 0 $max`; do
-    ps -p ${mimic_pid[$_i]} > /dev/null
-  done
+  _check_mimic_is_alive
 }
 
 @test "test if packets before handshake is stored and re-sent afterwards (IPv4)" {
