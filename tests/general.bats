@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
-tshark_pid=
-
+pcap_file="$BATS_RUN_TMPDIR/test.pcapng"
+pcap_file_dest="$BATS_TEST_DIRNAME/../out/test.pcapng"
 fifo=("$BATS_RUN_TMPDIR/"{1..2}.pipe)
 output=("$BATS_RUN_TMPDIR/"{1..2}.output)
 fifo_pid=()
@@ -20,14 +20,14 @@ setup_file() {
   # Wait for netns to take effect, otherwise tests will probably hang
   sleep 2
 
-  tshark -i $br -w "$BATS_RUN_TMPDIR/test.pcapng" & tshark_pid=$!
+  # Tshark will terminate itself when bridge is removed
+  tshark -i $br -w "$pcap_file" &
 }
 
 teardown_file() {
-  kill -INT $tshark_pid || true
   test_env_cleanup
-  mv "$BATS_RUN_TMPDIR/test.pcapng" "$BATS_TEST_DIRNAME/../out"
-  chmod +r "$BATS_TEST_DIRNAME/../out/test.pcapng"
+  cp "$pcap_file" "$pcap_file_dest"
+  chmod +r "$pcap_file_dest"
 }
 
 setup() {
@@ -39,9 +39,8 @@ setup() {
 }
 
 teardown() {
-  kill -9 ${fifo_pid[@]}
-  kill -INT ${socat_pid[@]} ${mimic_pid[@]}
-  wait ${mimic_pid[@]}
+  kill -9 ${fifo_pid[@]} 2> /dev/null
+  kill -INT ${socat_pid[@]} ${mimic_pid[@]} 2> /dev/null
   rm -f ${fifo[@]} ${output[@]}
 }
 
@@ -64,14 +63,13 @@ _test_packet_buffer() {
     fi
 
     ip netns exec ${netns[$_i]} "$BATS_TEST_DIRNAME/../out/mimic" \
-      run ${veth[$_i]} \
-      "-flocal=$self_ip_port" \
+      run ${veth[$_i]} -flocal="$self_ip_port" \
       & mimic_pid[$_i]=$!
     echo "$! is mimic"
 
     # FIXME: Sometimes the second socat will exit without any messages.
-    ip netns exec ${netns[$_i]} socat \
-      "udp:$opposite_ip_port,bind=$self_ip_port" - \
+    ip netns exec ${netns[$_i]} socat - \
+      "udp:$opposite_ip_port,bind=$self_ip_port" \
       < ${fifo[$_i]} > ${output[$_i]} \
       & socat_pid[$_i]=$!
     echo "$! is socat"
@@ -106,7 +104,10 @@ _test_packet_buffer() {
   _test_packet_buffer v6
 }
 
-
-# @test "test if all checksums are correct"
-
-# TODO: checksum check
+@test "test if there is no error detected in packet capture, especially checksum" {
+  run tshark -r "$pcap_file" -z expert,error -q -o tcp.check_checksum:TRUE
+  if [ -n "$(grep Errors <<< "$output")" ]; then
+    echo "$output"
+    false
+  fi
+}

@@ -62,7 +62,9 @@ if [ "$UID" -ne 0 ]; then
   exit 1
 fi
 
-trap cleanup SIGINT
-setup $_type
-bench $_type $@
+trap "cleanup; exit 1" SIGINT
+_exitcode=0
+[ $_exitcode -ne 0 ] || setup $_type || _exitcode=$?
+[ $_exitcode -ne 0 ] || bench $_type $@ || _exitcode=$?
 cleanup
+exit $_exitcode
