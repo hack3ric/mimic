@@ -2,7 +2,7 @@
 set -e
 
 _curdir=$(dirname $(realpath "${BASH_SOURCE[0]}"))
-. "$_curdir/env.sh"
+source "$_curdir/helpers/env.bash"
 
 setup() {
   test_env_setup --wg --wg-v6 --wg-mtu=1408
@@ -56,6 +56,11 @@ case "$1" in
     _type=mimic
     ;;
 esac
+
+if [ "$UID" -ne 0 ]; then
+  >&2 echo Benchmark needs to be run as root.
+  exit 1
+fi
 
 trap cleanup SIGINT
 setup $_type

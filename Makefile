@@ -46,7 +46,7 @@ MIMIC_LINK_LIBS += -lelf -lzstd -lz
 LDFLAGS += -static
 endif
 
-.PHONY: build build-cli build-kmod generate generate-skel generate-vmlinux generate-pot clean .FORCE
+.PHONY: build build-cli build-kmod generate generate-skel generate-vmlinux generate-pot test bench clean .FORCE
 .FORCE:
 
 all: build
@@ -87,6 +87,12 @@ out/mimic.ko: .FORCE
 out/mimic.pot:
 	$(MKDIR_P)
 	find src -type f -regex '.*\.[ch]' | xargs xgettext -k_ -kN_ -o $@ --
+
+test: build-cli
+	bats tests
+
+bench: build-cli
+	tests/bench.bash
 
 clean:
 	$(MAKE) -C kmod $@

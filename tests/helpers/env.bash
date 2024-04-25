@@ -29,6 +29,7 @@ test_env_setup() {
       --wg-v4) local wg_ip_kind=v4;;
       --wg-v6) local wg_ip_kind=v6;;
       --wg-mtu=*) local wg_mtu="${_i#*=}";;
+      --no-offload) local no_offload=true;;
       *) ;;
     esac
   done
@@ -43,6 +44,7 @@ test_env_setup() {
     ip -n ${netns[$_i]} addr add dev ${veth[$_i]} ${veth_ipv4[$_i]}
     ip -n ${netns[$_i]} addr add dev ${veth[$_i]} ${veth_ipv6[$_i]}
     ip link set ${veth[$_i]} up
+    [ "$no_offload" != true ] || ip netns exec ${netns[$_i]} ethtool -K ${veth[$_i]} tx off
     ip -n ${netns[$_i]} link set ${veth[$_i]} up
   done
 
