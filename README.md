@@ -166,6 +166,32 @@ $ sudo install -D linux-source-*/tools/bpf/resolve_btfids/resolve_btfids /lib/mo
 
 The Debian packages already worked around these issues; see debian/ directory for more details.
 
+## Tests & Benchmark
+
+Mimic uses [network namespaces](https://www.man7.org/linux/man-pages/man7/network_namespaces.7.html) for test environments, [bats](https://github.com/bats-core/bats-core) for integration tests, and [iperf3] for benchmark.
+
+To run tests or benchmark, first install test dependencies:
+
+```
+# apt install bats bc ethtool iperf3 socat tshark wireguard-tools
+```
+
+Then simply:
+
+```
+# make test
+# make bench
+```
+
+If you want to pass extra arguments to test frameworks, use:
+
+```
+# bats tests/ <extra args for bats>
+# tests/bench.bash [clean|veth|wg|mimic] <extra args for iperf3>
+```
+
+First argument of `tests/bench.bash` allows users to also benchmark against virtual ETH interface and raw WireGuard. `mimic` (default if not specified) benchmarks against WireGuard through Mimic.
+
 ## Details
 
 Mimic extends every UDP packet with 12 bytes. First 12 bytes of the data is moved to the back, and the UDP header is transformed into TCP header in place.
