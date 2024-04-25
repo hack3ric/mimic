@@ -1,23 +1,23 @@
 #!/usr/bin/env bats
 
-pcap_file="$BATS_RUN_TMPDIR/test.pcapng"
-pcap_file_dest="$BATS_TEST_DIRNAME/../out/test.pcapng"
-fifo=("$BATS_RUN_TMPDIR/"{1..2}.pipe)
-output=("$BATS_RUN_TMPDIR/"{1..2}.output)
-fifo_pid=()
-socat_pid=()
-mimic_pid=()
-
 BATS_TEST_RETRIES=2
 BATS_NO_PARALLELIZE_WITHIN_FILE=true
-: "${SLEEP_MULTIPLIER:=1}"
 
+: "${SLEEP_MULTIPLIER:=1}"
 if [ "$SLEEP_MULTIPLIER" -lt 1 ]; then
   >&2 echo SLEEP_MULTIPLIER cannot be less than 1
   exit 1
 fi
 
 load helpers/env
+
+pcap_file="$BATS_RUN_TMPDIR/general.pcapng"
+pcap_file_dest="$BATS_TEST_DIRNAME/../out/general.pcapng"
+fifo=("$BATS_RUN_TMPDIR/"{1..2}.pipe)
+output=("$BATS_RUN_TMPDIR/"{1..2}.output)
+fifo_pid=()
+socat_pid=()
+mimic_pid=()
 
 setup_file() {
   [ "$UID" -eq 0 ] || skip
@@ -98,7 +98,7 @@ _check_mimic_is_alive() {
 _test_random_traffic() {
   _setup_mimic_socat "$1"
   for _i in {0..499}; do
-    cat /dev/urandom | head -c $(( SRANDOM % 1400 )) >> ${fifo[$(( RANDOM % 2 ))]}
+    head -c $(( SRANDOM % 1400 )) /dev/urandom >> ${fifo[$(( RANDOM % 2 ))]}
     sleep $(echo "0.001 * $SLEEP_MULTIPLIER * ($RANDOM % 10)" | bc -l)
   done
   _check_mimic_is_alive
@@ -119,7 +119,7 @@ _test_packet_buffer() {
   # handshake)
   local random_data=()
   for _i in {0..5}; do
-    random_data[$_i]="`cat /dev/urandom | head -c $(( SRANDOM % 1400 ))`"
+    random_data[$_i]="`head -c $(( SRANDOM % 1400 )) /dev/urandom`"
     echo "${random_data[$_i]}" >> ${fifo[0]}
   done
 

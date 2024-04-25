@@ -34,7 +34,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pcap
-          path: out/test.pcapng
+          path: out/general.pcapng
   build-bookworm:
     runs-on: ubuntu-latest
     steps:
