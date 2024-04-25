@@ -36,10 +36,8 @@ static __always_inline void change_cwnd(__u16* cwnd, __u32 r1, __u32 r2, __u32 r
     // Assuming r1, r2, r3 ~ U(0, U32_MAX), this performs Bernoulli trial 96 times, p = 1/2
     __s16 x = __builtin_popcount(r1) + __builtin_popcount(r2) + __builtin_popcount(r3) - 3 * (sizeof(__u32) * 8) / 2;
     __u16 new = *cwnd + (x * CWND_STEP);
-    if (((x > 0 && new > *cwnd) || (x < 0 && new < *cwnd)) && ((new >= MIN_CWND) && (new <= MAX_CWND))) {
+    if ((new >= MIN_CWND) && (new <= MAX_CWND)) {
       *cwnd = new;
-    } else {
-      *cwnd -= x * CWND_STEP;
     }
   }
 }
