@@ -63,4 +63,5 @@ jobs:
       - name: Test
         run: |
           sudo insmod out/mimic.ko
+          sudo nft delete table filter
           sudo make test
