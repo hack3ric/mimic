@@ -5,12 +5,12 @@ _curdir=$(dirname $(realpath "${BASH_SOURCE[0]}"))
 . "$_curdir/env.sh"
 
 setup() {
-  test_env_setup --wg --wg-v6 --wg-mtu=1420
+  test_env_setup --wg --wg-v6 --wg-mtu=1408
 
   if [ "$1" = "mimic" ]; then
-    for _i in `seq 0 $_max`; do
-      ip netns exec ${_netns[$_i]} "$_curdir/../out/mimic" run ${_veth[$_i]} \
-        -flocal=\[`strip_ip_cidr ${_veth_ipv6[$_i]}`\]:${_wg_port[$_i]} & _mimic[$_i]=$!
+    for _i in `seq 0 $max`; do
+      ip netns exec ${netns[$_i]} "$_curdir/../out/mimic" run ${veth[$_i]} \
+        "-flocal=[`strip_ip_cidr ${veth_ipv6[$_i]}`]:${wg_port[$_i]}" & _mimic[$_i]=$!
     done
     sleep 1
   fi
@@ -21,19 +21,19 @@ bench() {
 
   local _dest
   if [ "$_type" = "veth" ]; then
-    _dest=`strip_ip_cidr ${_veth_ipv6[0]}`
+    _dest=`strip_ip_cidr ${veth_ipv6[0]}`
   else
-    _dest=`strip_ip_cidr ${_wg_ipv6[0]}`
+    _dest=`strip_ip_cidr ${wg_ipv6[0]}`
   fi
 
   _iperf3_pid_tmp=`mktemp`
-  ip netns exec ${_netns[0]} iperf3 -s -D -I "$_iperf3_pid_tmp"
-  ip netns exec ${_netns[1]} iperf3 -c $_dest $@
+  ip netns exec ${netns[0]} iperf3 -s -D -I "$_iperf3_pid_tmp"
+  ip netns exec ${netns[1]} iperf3 -c $_dest $@
 }
 
 cleanup() (
   set +e
-  for _i in `seq 0 $_max`; do
+  for _i in `seq 0 $max`; do
     [ -z ${_mimic[$_i]} ] || kill ${_mimic[$_i]}
   done
   wait
