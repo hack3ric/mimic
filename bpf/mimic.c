@@ -3,6 +3,7 @@
 #include <bpf/bpf_helpers.h>
 
 #include "../common/try.h"
+#include "../kmod/mimic.h"
 #include "mimic.h"
 
 struct mimic_whitelist_map mimic_whitelist SEC(".maps");

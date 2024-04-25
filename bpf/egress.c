@@ -5,6 +5,7 @@
 
 #include "../common/defs.h"
 #include "../common/try.h"
+#include "../kmod/mimic.h"
 #include "mimic.h"
 
 // Extend socket buffer and move n bytes from front to back.
