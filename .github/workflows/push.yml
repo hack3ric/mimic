@@ -43,3 +43,12 @@ jobs:
         with:
           name: noble
           path: debian/artifacts/*.deb
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build
+        run: make -j
+      - name: Test
+        run: sudo make test
