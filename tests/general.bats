@@ -119,7 +119,7 @@ _test_packet_buffer() {
   # handshake)
   local random_data=()
   for _i in {0..5}; do
-    random_data[$_i]=`cat /dev/urandom | base64 -w0 | head -c $(( SRANDOM % 1400 ))`
+    random_data[$_i]="`cat /dev/urandom | head -c $(( SRANDOM % 1400 ))`"
     echo "${random_data[$_i]}" >> ${fifo[0]}
   done
 
