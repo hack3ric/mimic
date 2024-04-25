@@ -55,8 +55,12 @@ jobs:
           git clone --depth 1 --branch v1.4.0 https://github.com/libbpf/libbpf.git
           cd libbpf/src
           make
-          sudo make install
+          sudo make DESTDIR=/ install
       - name: Build
-        run: make -j
+        run: |
+          cp /sys/kernel/btf/vmlinux /lib/modules/`uname -r`/build
+          make -j
       - name: Test
-        run: sudo make test
+        run: |
+          sudo insmod out/mimic.ko
+          sudo make test
