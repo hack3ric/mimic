@@ -114,17 +114,19 @@ int egress_handler(struct __sk_buff* skb) {
   } else {
     switch (conn->state) {
       case STATE_IDLE:
-      case STATE_SYN_SENT:
         seq = conn->seq = random;
         ack_seq = conn->ack_seq = 0;
         conn->seq += 1;
         conn->state = STATE_SYN_SENT;
+        bpf_spin_unlock(&conn->lock);
+        send_ctrl_packet(&conn_key, SYN, seq, ack_seq);
         break;
+      case STATE_SYN_SENT:
+        // TODO: timeout
       default:
+        bpf_spin_unlock(&conn->lock);
         break;
     }
-    bpf_spin_unlock(&conn->lock);
-    send_ctrl_packet(&conn_key, SYN, seq, ack_seq);
     return store_packet(skb, ip_end, &conn_key);
   }
   change_cwnd(&conn->cwnd, r1, r2, r3, random);
