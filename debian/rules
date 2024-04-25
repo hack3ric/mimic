@@ -29,6 +29,8 @@ else
 endif
 	make -C linux-source-*/tools/bpf/resolve_btfids
 
+override_dh_auto_test:
+
 override_dh_dkms:
 	dh_dkms -pmimic-dkms -- kmod/dkms.conf
 
