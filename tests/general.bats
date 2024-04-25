@@ -82,7 +82,7 @@ _setup_mimic_socat() {
   done
 
   # Wait for socat and mimic to set up
-  sleep $(( 2 * SLEEP_MULTIPLIER ))
+  sleep $(( 5 * SLEEP_MULTIPLIER ))
 }
 
 # Check Mimic is still running.
@@ -97,12 +97,10 @@ _check_mimic_is_alive() {
 
 _test_random_traffic() {
   _setup_mimic_socat "$1"
-
-  for _i in {0..99}; do
-    cat /dev/urandom | head -c $(( SRANDOM % 1400 + 1 )) >> ${fifo[$(( RANDOM % 2 ))]}
+  for _i in {0..499}; do
+    cat /dev/urandom | head -c $(( SRANDOM % 1400 )) >> ${fifo[$(( RANDOM % 2 ))]}
     sleep $(echo "0.001 * $SLEEP_MULTIPLIER * ($RANDOM % 10)" | bc -l)
   done
-
   _check_mimic_is_alive
 }
 
@@ -121,7 +119,7 @@ _test_packet_buffer() {
   # handshake)
   local random_data=()
   for _i in {0..5}; do
-    random_data[$_i]=`cat /dev/urandom | base64 -w0 | head -c $(( SRANDOM % 1400 + 1 ))`
+    random_data[$_i]=`cat /dev/urandom | base64 -w0 | head -c $(( SRANDOM % 1400 ))`
     echo "${random_data[$_i]}" >> ${fifo[0]}
   done
 
@@ -130,7 +128,6 @@ _test_packet_buffer() {
 
   # Check if all sent data are present
   [ "$(cat ${output[1]})" = "$(printf '%s\n' "${random_data[@]}")" ]
-
   _check_mimic_is_alive
 }
 
