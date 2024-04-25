@@ -54,7 +54,7 @@ jobs:
         run: |
           git clone --depth 1 --branch v1.4.0 https://github.com/libbpf/libbpf.git
           cd libbpf/src
-          make
+          make V=1 -j
           sudo make DESTDIR=/ install
       - name: Build
         run: |
