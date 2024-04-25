@@ -1,0 +1,41 @@
+{
+  name
+  Memcheck:Cond
+  ...
+  obj:*/libbpf.so*
+  ...
+}
+
+{
+  name
+  Memcheck:Free
+  ...
+  obj:*/libbpf.so*
+  ...
+}
+
+{
+  name
+  Memcheck:Value8
+  ...
+  obj:*/libbpf.so*
+  ...
+}
+
+{
+  name
+  Memcheck:Param
+  bpf(attr->expected_attach_type)
+  ...
+  obj:*/libbpf.so*
+  ...
+}
+
+{
+  name
+  Memcheck:Param
+  bpf(attr->prog_ifindex)
+  ...
+  obj:*/libbpf.so*
+  ...
+}
