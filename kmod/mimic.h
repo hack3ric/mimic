@@ -6,7 +6,7 @@
 #include <crypto/skcipher.h>
 #include <linux/bpf.h>
 #include <linux/kref.h>
-#elifdef _MIMIC_BPF
+#elif defined _MIMIC_BPF
 #include "../bpf/vmlinux.h"
 #define CHACHA_IV_SIZE 16
 #endif
