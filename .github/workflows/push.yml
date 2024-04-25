@@ -1,10 +1,40 @@
-name: Build .deb packages on push
+name: Test and build on push
 
 on:
   push:
   workflow_dispatch:
 
 jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt install python3 clang llvm pahole \
+            bats bc ethtool iperf3 socat tshark wireguard-tools \
+            libjson-c-dev libffi-dev libelf-dev
+      - name: Prepare libbpf
+        run: |
+          git clone --depth 1 --branch v1.4.0 https://github.com/libbpf/libbpf.git
+          cd libbpf/src
+          make -j
+          sudo make LIBSUBDIR=lib install
+      - name: Build
+        run: |
+          sudo cp /sys/kernel/btf/vmlinux /lib/modules/`uname -r`/build
+          make -j
+      - name: Test
+        run: |
+          sudo nft delete table filter  # Docker's nftables rule drops IPv4 packets in tests
+          sudo insmod out/mimic.ko
+          sudo make test
+      - name: Upload captured packets
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcap
+          path: out/test.pcapng
   build-bookworm:
     runs-on: ubuntu-latest
     steps:
@@ -15,10 +45,6 @@ jobs:
         with:
           buildpackage-opts: -b -us -uc
           docker-image: debian:bookworm-slim
-      - name: Rename
-        run: |
-          cd debian/artifacts
-          for _f in mimic*.deb; do sudo mv "$_f" "Debian-12_$_f"; done
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
@@ -34,34 +60,8 @@ jobs:
         with:
           buildpackage-opts: -b -us -uc
           docker-image: ubuntu:noble
-      - name: Rename
-        run: |
-          cd debian/artifacts
-          for _f in mimic*.deb; do sudo mv "$_f" "Ubuntu-24.04_$_f"; done
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: noble
           path: debian/artifacts/*.deb
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install dependencies
-        run: sudo apt install python3 clang llvm pahole bats bc ethtool iperf3 socat tshark wireguard-tools libjson-c-dev libffi-dev libelf-dev
-      - name: Prepare libbpf
-        run: |
-          git clone --depth 1 --branch v1.4.0 https://github.com/libbpf/libbpf.git
-          cd libbpf/src
-          make -j
-          sudo make LIBSUBDIR=lib install
-      - name: Build
-        run: |
-          sudo cp /sys/kernel/btf/vmlinux /lib/modules/`uname -r`/build
-          make -j
-      - name: Test
-        run: |
-          sudo insmod out/mimic.ko
-          sudo nft delete table filter
-          sudo make test
