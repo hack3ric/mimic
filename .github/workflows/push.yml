@@ -48,6 +48,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Prepare libbpf
+        run: |
+          git clone --depth 1 --branch v1.4.0 https://github.com/libbpf/libbpf.git
+          cd libbpf
+          make
+          sudo make install
       - name: Build
         run: make -j
       - name: Test
