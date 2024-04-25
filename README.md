@@ -168,7 +168,7 @@ The Debian packages already worked around these issues; see debian/ directory fo
 
 ## Tests & Benchmark
 
-Mimic uses [network namespaces](https://www.man7.org/linux/man-pages/man7/network_namespaces.7.html) for test environments, [bats](https://github.com/bats-core/bats-core) for integration tests, and [iperf3] for benchmark.
+Mimic uses [network namespaces](https://www.man7.org/linux/man-pages/man7/network_namespaces.7.html) for test environments, [bats](https://github.com/bats-core/bats-core) for integration tests, and [iperf3](https://github.com/esnet/iperf) for benchmark.
 
 To run tests or benchmark, first install test dependencies:
 
