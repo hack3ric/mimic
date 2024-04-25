@@ -54,8 +54,8 @@ jobs:
         run: |
           git clone --depth 1 --branch v1.4.0 https://github.com/libbpf/libbpf.git
           cd libbpf/src
-          make V=1 -j
-          sudo make DESTDIR=/ install
+          make -j
+          sudo make LIBSUBDIR=lib install
       - name: Build
         run: |
           sudo cp /sys/kernel/btf/vmlinux /lib/modules/`uname -r`/build
