@@ -13,7 +13,8 @@ Build-Depends:
  libffi-dev,
  linux-source,
  linux-headers-generic,
- bpftool
+ bpftool,
+ bats
 Standards-Version: 4.5.1
 Homepage: https://github.com/hack3ric/mimic
 Rules-Requires-Root: no
