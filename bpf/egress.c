@@ -92,6 +92,7 @@ int egress_handler(struct __sk_buff* skb) {
   __u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq, conn_cwnd;
   __u32 random = bpf_get_prandom_u32();
   __u32 r1 = bpf_get_prandom_u32(), r2 = bpf_get_prandom_u32(), r3 = bpf_get_prandom_u32();
+  __u64 tstamp = bpf_ktime_get_boot_ns();
   enum conn_state conn_state;
 
   bpf_spin_lock(&conn->lock);
@@ -106,11 +107,29 @@ int egress_handler(struct __sk_buff* skb) {
         ack_seq = conn->ack_seq = 0;
         conn->seq += 1;
         conn->state = STATE_SYN_SENT;
+        conn->retry_tstamp = conn->reset_tstamp = tstamp;
         bpf_spin_unlock(&conn->lock);
         send_ctrl_packet(&conn_key, SYN, seq, ack_seq, 0xffff);
         break;
       case STATE_SYN_SENT:
-        // TODO: timeout
+        if (tstamp - conn->reset_tstamp > 10 * SECOND) {
+          uintptr_t pktbuf = 0;
+          swap(pktbuf, conn->pktbuf);
+          bpf_spin_unlock(&conn->lock);
+          bpf_map_delete_elem(&mimic_conns, &conn_key);
+          use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
+        } else if (tstamp - conn->retry_tstamp > 1 * SECOND) {
+          seq = conn->seq - 1;
+          ack_seq = 0;
+          conn->retry_tstamp = tstamp;
+          bpf_spin_unlock(&conn->lock);
+          send_ctrl_packet(&conn_key, SYN, seq, ack_seq, 0xffff);
+        } else {
+          bpf_spin_unlock(&conn->lock);
+        }
+        break;
+      case STATE_SYN_RECV:
+        // TODO: timeout send ACK/SYN+ACK again
       default:
         bpf_spin_unlock(&conn->lock);
         break;

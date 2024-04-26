@@ -95,6 +95,8 @@
 #define CWND_STEP 1
 #define STABLE_FACTOR 0.2
 
+#define SECOND (__u64)1000000000
+
 // Reserved for gettext use in the future.
 //
 // On eBPF, these markers are just for convenience, so that I can get a comprehensive list of texts. In the future,
@@ -133,6 +135,7 @@ struct connection {
   __u32 seq, ack_seq;
   uintptr_t pktbuf;
   __u16 cwnd;
+  __u64 retry_tstamp, reset_tstamp;
 };
 
 enum rst_result {

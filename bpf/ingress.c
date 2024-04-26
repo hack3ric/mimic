@@ -140,11 +140,13 @@ int ingress_handler(struct xdp_md* xdp) {
   __u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq;
   __u16 cwnd = 0xffff;
   __u32 random = bpf_get_prandom_u32();
+  __u64 tstamp = bpf_ktime_get_boot_ns();
   enum conn_state state;
   syn = ack = rst = will_send_ctrl_packet = newly_estab = false;
   will_drop = true;
 
   bpf_spin_lock(&conn->lock);
+  conn->reset_tstamp = conn->retry_tstamp = tstamp;
   switch (conn->state) {
     case STATE_IDLE:
     case STATE_SYN_RECV:
