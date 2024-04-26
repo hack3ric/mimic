@@ -139,10 +139,16 @@ _test_packet_buffer() {
   _test_packet_buffer v6
 }
 
-@test "test if there is no error detected in packet capture, especially checksum" {
-  run tshark -r "$pcap_file" -z expert,error -q -o tcp.check_checksum:TRUE
-  if [ -n "$(grep Errors <<< "$output")" ]; then
-    echo "$output"
-    false
-  fi
+@test "test if there is no checksum error in packet capture" {
+  local filter='
+def csum_errors:
+  .[]._source.layers
+    | ..
+    | select(type == "object")
+    | ."_ws.expert"
+    | select(. != null)
+    | select(."_ws.expert.severity" == "8388608" and ."_ws.expert.group" == "16777216");
+[csum_errors] | length'
+
+  [ "$(tshark -r "$pcap_file" -T json -o tcp.check_checksum:TRUE | jq "$filter")" -eq 0 ]
 }

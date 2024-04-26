@@ -173,7 +173,7 @@ Mimic uses [network namespaces](https://www.man7.org/linux/man-pages/man7/networ
 To run tests or benchmark, first install test dependencies:
 
 ```
-# apt install bats bc ethtool iperf3 socat tshark wireguard-tools
+# apt install bats bc ethtool iperf3 jq socat tshark wireguard-tools
 ```
 
 Then simply:
