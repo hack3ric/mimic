@@ -2,7 +2,10 @@
 #define _MIMIC_COMMON_DEFS_H
 
 #ifdef _MIMIC_BPF
+// clang-format off
 #include "../bpf/vmlinux.h"
+#include <bpf/bpf_endian.h>
+// clang-format on
 #else
 #include <arpa/inet.h>
 #include <linux/bpf.h>
