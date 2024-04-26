@@ -138,6 +138,7 @@ int ingress_handler(struct xdp_md* xdp) {
 
   bool syn, ack, rst, will_send_ctrl_packet, will_drop, newly_estab;
   __u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq;
+  __u16 cwnd = 0xffff;
   __u32 random = bpf_get_prandom_u32();
   enum conn_state state;
   syn = ack = rst = will_send_ctrl_packet = newly_estab = false;
@@ -163,13 +164,17 @@ int ingress_handler(struct xdp_md* xdp) {
       break;
 
     case STATE_SYN_SENT:
+      if (tcp->syn) {
+        ack = will_send_ctrl_packet = true;
+        conn->cwnd += random % 31 - 15;
+        cwnd = conn->cwnd;
+      }
       if (tcp->syn && tcp->ack) {
-        ack = will_send_ctrl_packet = newly_estab = true;
+        newly_estab = true;
         swap(pktbuf, conn->pktbuf);
         pre_ack(STATE_ESTABLISHED, &seq, &ack_seq, conn, tcp, payload_len);
       } else if (tcp->syn && !tcp->ack) {
         // Simultaneous open
-        ack = will_send_ctrl_packet = true;
         pre_ack(STATE_SYN_RECV, &seq, &ack_seq, conn, tcp, payload_len);
       } else {
         rst = ack = will_send_ctrl_packet = true;
@@ -198,7 +203,7 @@ int ingress_handler(struct xdp_md* xdp) {
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_STATE, state, conn_seq, conn_ack_seq);
 
   if (will_send_ctrl_packet) {
-    send_ctrl_packet(&conn_key, (syn ? SYN : 0) | (ack ? ACK : 0) | (rst ? RST : 0), seq, ack_seq);
+    send_ctrl_packet(&conn_key, syn + (ack << 1) + (rst << 2), seq, ack_seq, cwnd);
   }
   if (rst) {
     bpf_map_delete_elem(&mimic_conns, &conn_key);

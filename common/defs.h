@@ -142,6 +142,7 @@ struct send_options {
   struct conn_tuple conn;
   bool syn, ack, rst;
   __u32 seq, ack_seq;
+  __u16 cwnd;
 };
 
 // need to define `log_verbosity` besides including this file.

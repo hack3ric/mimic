@@ -209,7 +209,7 @@ static inline int send_ctrl_packet(struct send_options* s) {
     .syn = s->syn,
     .ack = s->ack,
     .rst = s->rst,
-    .window = htons(0xffff),
+    .window = htons(s->cwnd),
     .check = 0,
     .urg_ptr = 0,
   };

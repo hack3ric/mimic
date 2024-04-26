@@ -52,7 +52,7 @@ int log_any(__u32 log_verbosity, enum log_level level, bool ingress, enum log_ty
   return 0;
 }
 
-int send_ctrl_packet(struct conn_tuple* conn, __u32 flags, __u32 seq, __u32 ack_seq) {
+int send_ctrl_packet(struct conn_tuple* conn, __u32 flags, __u32 seq, __u32 ack_seq, __u16 cwnd) {
   if (!conn) return -1;
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
   if (!item) return -1;
@@ -64,6 +64,7 @@ int send_ctrl_packet(struct conn_tuple* conn, __u32 flags, __u32 seq, __u32 ack_
     .rst = flags & RST,
     .seq = seq,
     .ack_seq = ack_seq,
+    .cwnd = cwnd,
   };
   bpf_ringbuf_submit(item, 0);
   return 0;
