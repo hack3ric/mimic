@@ -29,7 +29,9 @@ int parse_filter(const char* filter_str, struct pkt_filter* filter) {
   port_str++;
   char* endptr;
   long port = strtol(port_str, &endptr, 10);
-  if (port <= 0 || port > 65535 || *endptr != '\0') ret(-1, _("invalid port number: `%s`"), port_str);
+  if (port <= 0 || port > 65535 || *endptr != '\0') {
+    ret(-1, _("invalid port number: `%s`"), port_str);
+  }
   filter->port = htons((__u16)port);
 
   int af;

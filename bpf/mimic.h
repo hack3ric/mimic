@@ -86,16 +86,18 @@ static inline struct connection* get_conn(struct conn_tuple* key) {
   return conn;
 }
 
-int log_any(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type, union log_info* info);
+int log_any(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
+            union log_info* info);
 
-static inline int log_conn(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
-                           struct conn_tuple* conn) {
+static inline int log_conn(__u32 log_verbosity, enum log_level level, bool ingress,
+                           enum log_type type, struct conn_tuple* conn) {
   if (!conn) return -1;
   return log_any(log_verbosity, level, ingress, type, &(union log_info){.conn = *conn});
 }
 
-static __always_inline int log_tcp(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
-                                   enum conn_state state, __u32 seq, __u32 ack_seq) {
+static __always_inline int log_tcp(__u32 log_verbosity, enum log_level level, bool ingress,
+                                   enum log_type type, enum conn_state state, __u32 seq,
+                                   __u32 ack_seq) {
   return log_any(log_verbosity, level, ingress, type,
                  &(union log_info){.tcp = {.state = state, .seq = seq, .ack_seq = ack_seq}});
 }
@@ -103,7 +105,8 @@ static __always_inline int log_tcp(__u32 log_verbosity, enum log_level level, bo
 static __always_inline void change_cwnd(__u16* cwnd, __u32 r1, __u32 r2, __u32 r3, __u32 r4) {
   if (r4 > (__u32)(-1) * STABLE_FACTOR) {
     // Assuming r1, r2, r3 ~ U(0, U32_MAX), this performs Bernoulli trial 96 times, p = 1/2
-    __s16 x = __builtin_popcount(r1) + __builtin_popcount(r2) + __builtin_popcount(r3) - 3 * (sizeof(__u32) * 8) / 2;
+    __s16 x = __builtin_popcount(r1) + __builtin_popcount(r2) + __builtin_popcount(r3) -
+              3 * (sizeof(__u32) * 8) / 2;
     __u16 new = *cwnd + (x * CWND_STEP);
     if ((new >= MIN_CWND) && (new <= MAX_CWND)) {
       *cwnd = new;
@@ -127,8 +130,9 @@ int use_pktbuf(enum rb_item_type type, uintptr_t buf);
 #define _log_c(...) _log_a(__VA_ARGS__, 3, 2, 1, 0)
 #define _log_d(_x, _y) _x##_y
 #define _log_e(_x, _y) _log_d(_x, _y)
-#define _log_f(_str, _size, _fmt, ...) \
-  bpf_snprintf((_str), (_size), (_fmt), _log_e(_log_b, _log_c(_0 __VA_OPT__(, ) __VA_ARGS__))(__VA_ARGS__))
+#define _log_f(_str, _size, _fmt, ...)  \
+  bpf_snprintf((_str), (_size), (_fmt), \
+               _log_e(_log_b, _log_c(_0 __VA_OPT__(, ) __VA_ARGS__))(__VA_ARGS__))
 
 #define _log_rbprintf(_l, _fmt, ...)                                                         \
   ({                                                                                         \

@@ -30,7 +30,8 @@
 #include "mimic.h"
 
 static const struct argp_option options[] = {
-  {"filter", 'f', N_("FILTER"), 0, N_("Specify what packets to process. This may be specified for multiple times."), 0},
+  {"filter", 'f', N_("FILTER"), 0,
+   N_("Specify what packets to process. This may be specified for multiple times."), 0},
   {"verbose", 'v', NULL, 0, N_("Output more information"), 0},
   {"quiet", 'q', NULL, 0, N_("Output less information"), 0},
   {"file", 'F', N_("PATH"), 0, N_("Load configuration from file"), 1},
@@ -106,8 +107,9 @@ static inline int parse_config_file(FILE* file, struct run_arguments* args) {
 
     } else if (strcmp(key, "filter") == 0) {
       try(parse_filter(value, &args->filters[args->filter_count]));
-      if (args->filter_count++ > 8) cleanup(-1, _("currently only maximum of 8 filters is supported"));
-
+      if (args->filter_count++ > 8) {
+        cleanup(-1, _("currently only maximum of 8 filters is supported"));
+      }
     } else {
       cleanup(-1, _("unknown key '%s'"), key);
     }
@@ -146,12 +148,13 @@ static int handle_log_event(struct log_event* e) {
   const char* dir_str = e->ingress ? _("ingress") : _("egress");
   switch (e->type) {
     case LOG_TYPE_TCP_PKT:
-      log_any(e->level, "%s: %s: seq %08x, ack %08x", dir_str, log_type_to_str(e->ingress, e->type), e->info.tcp.seq,
-              e->info.tcp.ack_seq);
+      log_any(e->level, "%s: %s: seq %08x, ack %08x", dir_str, log_type_to_str(e->ingress, e->type),
+              e->info.tcp.seq, e->info.tcp.ack_seq);
       break;
     case LOG_TYPE_STATE:
-      log_any(e->level, "%s: %s: %s, seq %08x, ack %08x", dir_str, log_type_to_str(e->ingress, e->type),
-              conn_state_to_str(e->info.tcp.state), e->info.tcp.seq, e->info.tcp.ack_seq);
+      log_any(e->level, "%s: %s: %s, seq %08x, ack %08x", dir_str,
+              log_type_to_str(e->ingress, e->type), conn_state_to_str(e->info.tcp.state),
+              e->info.tcp.seq, e->info.tcp.ack_seq);
       break;
     case LOG_TYPE_QUICK_MSG:
       log_any(e->level, "%s", e->info.msg);
@@ -167,7 +170,8 @@ static int handle_log_event(struct log_event* e) {
         ip_port_fmt(pkt->protocol, pkt->local, pkt->local_port, from);
         ip_port_fmt(pkt->protocol, pkt->remote, pkt->remote_port, to);
       }
-      log_any(e->level, "%s: %s: %s => %s", dir_str, log_type_to_str(e->ingress, e->type), from, to);
+      log_any(e->level, "%s: %s: %s => %s", dir_str, log_type_to_str(e->ingress, e->type), from,
+              to);
       break;
     }
   }
@@ -179,20 +183,23 @@ static inline int send_ctrl_packet(struct send_options* s) {
   __u32 csum = 0;
   struct sockaddr_storage saddr = {}, daddr = {};
   if (s->conn.protocol == AF_INET) {
-    *(struct sockaddr_in*)&saddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = {s->conn.local.v4}};
-    *(struct sockaddr_in*)&daddr = (struct sockaddr_in){.sin_family = AF_INET, .sin_addr = {s->conn.remote.v4}};
+    struct sockaddr_in *sa = (typeof(sa))&saddr, *da = (typeof(da))&daddr;
+    *sa = (typeof(*sa)){.sin_family = AF_INET, .sin_addr = {s->conn.local.v4}};
+    *da = (typeof(*da)){.sin_family = AF_INET, .sin_addr = {s->conn.remote.v4}};
     csum += u32_fold(ntohl(s->conn.local.v4));
     csum += u32_fold(ntohl(s->conn.remote.v4));
   } else {
-    *(struct sockaddr_in6*)&saddr = (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->conn.local.v6};
-    *(struct sockaddr_in6*)&daddr = (struct sockaddr_in6){.sin6_family = AF_INET6, .sin6_addr = s->conn.remote.v6};
+    struct sockaddr_in6 *sa = (typeof(sa))&saddr, *da = (typeof(da))&daddr;
+    *sa = (typeof(*da)){.sin6_family = AF_INET6, .sin6_addr = s->conn.local.v6};
+    *da = (typeof(*da)){.sin6_family = AF_INET6, .sin6_addr = s->conn.remote.v6};
     for (int i = 0; i < 8; i++) {
       csum += ntohs(s->conn.local.v6.s6_addr16[i]);
       csum += ntohs(s->conn.remote.v6.s6_addr16[i]);
     }
   }
   csum += IPPROTO_TCP;
-  try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strerror(-_ret));
+  try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"),
+        strerror(-_ret));
 
   // TCP header + (MSS + window scale + SACK PERM) if SYN
   size_t buf_len = sizeof(struct tcphdr) + (s->syn ? 3 * 4 : 0);
@@ -228,12 +235,13 @@ static inline int send_ctrl_packet(struct send_options* s) {
   csum += calc_csum(buf, buf_len);
   tcp->check = htons(csum_fold(csum));
 
-  try_e(sendto(sk, buf, buf_len, 0, (struct sockaddr*)&daddr, sizeof(daddr)), _("failed to send: %s"), strerror(-_ret));
+  try_e(sendto(sk, buf, buf_len, 0, (struct sockaddr*)&daddr, sizeof(daddr)),
+        _("failed to send: %s"), strerror(-_ret));
   return 0;
 }
 
-static inline int store_packet(struct bpf_map* conns, struct conn_tuple* conn_key, const char* data, __u16 len,
-                               bool l4_csum_partial) {
+static inline int store_packet(struct bpf_map* conns, struct conn_tuple* conn_key, const char* data,
+                               __u16 len, bool l4_csum_partial) {
   int retcode;
   struct connection conn = {};
   try2(bpf_map__lookup_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn), BPF_F_LOCK));
@@ -243,7 +251,8 @@ static inline int store_packet(struct bpf_map* conns, struct conn_tuple* conn_ke
   }
   if (!conn.pktbuf) conn.pktbuf = (uintptr_t)try2_p(pktbuf_new(conn_key));
   try2_e(pktbuf_push((struct pktbuf*)conn.pktbuf, data, len, l4_csum_partial));
-  try2(bpf_map__update_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn), BPF_EXIST | BPF_F_LOCK));
+  try2(bpf_map__update_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn),
+                            BPF_EXIST | BPF_F_LOCK));
   return 0;
 cleanup:
   if (retcode == -ENOENT) {
@@ -270,11 +279,11 @@ static int _handle_rb_event(struct bpf_map* conns, void* ctx, void* data, size_t
       break;
     case RB_ITEM_STORE_PACKET:
       name = N_("storing packet");
-      log_debug(_("userspace received packet with UDP length %d, checksum partial %d"), item->store_packet.len,
-                item->store_packet.l4_csum_partial);
+      log_debug(_("userspace received packet with UDP length %d, checksum partial %d"),
+                item->store_packet.len, item->store_packet.l4_csum_partial);
       if (item->store_packet.len > data_sz - sizeof(*item)) break;
-      ret = store_packet(conns, &item->store_packet.conn_key, (char*)(item + 1), item->store_packet.len,
-                         item->store_packet.l4_csum_partial);
+      ret = store_packet(conns, &item->store_packet.conn_key, (char*)(item + 1),
+                         item->store_packet.len, item->store_packet.l4_csum_partial);
       break;
     case RB_ITEM_CONSUME_PKTBUF:
       name = N_("consuming packet buffer");
@@ -306,15 +315,19 @@ static ffi_type* _handle_rb_event_args[] = {
 };
 
 static void _handle_rb_event_binding(ffi_cif* cif, void* ret, void** args, void* conns) {
-  *(int*)ret = _handle_rb_event((struct bpf_map*)conns, *(void**)args[0], *(void**)args[1], *(size_t*)args[2]);
+  *(int*)ret =
+    _handle_rb_event((struct bpf_map*)conns, *(void**)args[0], *(void**)args[1], *(size_t*)args[2]);
 }
 
-static ring_buffer_sample_fn handle_rb_event(struct bpf_map* conns, ffi_cif* cif, ffi_closure** closure) {
+static ring_buffer_sample_fn handle_rb_event(struct bpf_map* conns, ffi_cif* cif,
+                                             ffi_closure** closure) {
   ring_buffer_sample_fn fn;
   *closure = ffi_closure_alloc(sizeof(ffi_closure), (void**)&fn);
   if (!closure) return NULL;
-  if (ffi_prep_cif(cif, FFI_DEFAULT_ABI, 3, &ffi_type_sint, _handle_rb_event_args) != FFI_OK) return NULL;
-  if (ffi_prep_closure_loc(*closure, cif, _handle_rb_event_binding, conns, fn) != FFI_OK) return NULL;
+  if (ffi_prep_cif(cif, FFI_DEFAULT_ABI, 3, &ffi_type_sint, _handle_rb_event_args) != FFI_OK ||
+      ffi_prep_closure_loc(*closure, cif, _handle_rb_event_binding, conns, fn) != FFI_OK) {
+    return NULL;
+  }
   return fn;
 }
 
@@ -363,18 +376,21 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   struct bpf_map_info map_info = {};
   __u32 prog_len = sizeof(prog_info), map_len = sizeof(map_info);
 
-#define _get_id(_Type, _TypeFull, _Name, _E1, _E2)                                                       \
-  ({                                                                                                     \
-    _Name##_fd = try2(bpf_##_TypeFull##__fd(skel->_Type##s._Name), _E1, #_Name, strerror(-_ret));        \
-    memset(&_Type##_info, 0, _Type##_len);                                                               \
-    try2(bpf_obj_get_info_by_fd(_Name##_fd, &_Type##_info, &_Type##_len), _E2, #_Name, strerror(-_ret)); \
-    _Type##_info.id;                                                                                     \
+#define _get_id(_Type, _TypeFull, _Name, _E1, _E2)                                                \
+  ({                                                                                              \
+    _Name##_fd = try2(bpf_##_TypeFull##__fd(skel->_Type##s._Name), _E1, #_Name, strerror(-_ret)); \
+    memset(&_Type##_info, 0, _Type##_len);                                                        \
+    try2(bpf_obj_get_info_by_fd(_Name##_fd, &_Type##_info, &_Type##_len), _E2, #_Name,            \
+         strerror(-_ret));                                                                        \
+    _Type##_info.id;                                                                              \
   })
 
-#define _get_prog_id(_name) \
-  _get_id(prog, program, _name, _("failed to get fd of program '%s': %s"), _("failed to get info of program '%s': %s"))
-#define _get_map_id(_name) \
-  _get_id(map, map, _name, _("failed to get fd of map '%s': %s"), _("failed to get info of map '%s': %s"))
+#define _get_prog_id(_name)                                                \
+  _get_id(prog, program, _name, _("failed to get fd of program '%s': %s"), \
+          _("failed to get info of program '%s': %s"))
+#define _get_map_id(_name)                                        \
+  _get_id(map, map, _name, _("failed to get fd of map '%s': %s"), \
+          _("failed to get info of map '%s': %s"))
 
   struct lock_content lock_content = {.pid = getpid()};
 
@@ -389,13 +405,14 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   try2(lock_write(lock_fd, &lock_content));
 
   __u32 vkey = SETTINGS_LOG_VERBOSITY, vvalue = log_verbosity;
-  try2(bpf_map__update_elem(skel->maps.mimic_settings, &vkey, sizeof(__u32), &vvalue, sizeof(__u32), BPF_ANY),
+  try2(bpf_map__update_elem(skel->maps.mimic_settings, &vkey, sizeof(__u32), &vvalue, sizeof(__u32),
+                            BPF_ANY),
        _("failed to set BPF log verbosity: %s"), strerror(-_ret));
 
   bool value = true;
   for (int i = 0; i < args->filter_count; i++) {
-    retcode = bpf_map__update_elem(skel->maps.mimic_whitelist, &args->filters[i], sizeof(struct pkt_filter), &value,
-                                   sizeof(bool), BPF_ANY);
+    retcode = bpf_map__update_elem(skel->maps.mimic_whitelist, &args->filters[i],
+                                   sizeof(struct pkt_filter), &value, sizeof(bool), BPF_ANY);
     if (retcode || LOG_ALLOW_DEBUG) {
       char fmt[FILTER_FMT_MAX_LEN];
       pkt_filter_fmt(&args->filters[i], fmt);
@@ -408,13 +425,15 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   }
 
   // Get ring buffers in advance so we can return earlier if error
-  rb = try2_p(ring_buffer__new(mimic_rb_fd, handle_rb_event(skel->maps.mimic_conns, &cif, &closure), NULL, NULL),
+  rb = try2_p(ring_buffer__new(mimic_rb_fd, handle_rb_event(skel->maps.mimic_conns, &cif, &closure),
+                               NULL, NULL),
               _("failed to attach BPF ring buffer '%s': %s"), "mimic_rb", strerror(-_ret));
 
   // TC and XDP
-  tc_hook_egress =
-    (struct bpf_tc_hook){.sz = sizeof(struct bpf_tc_hook), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
-  tc_opts_egress = (struct bpf_tc_opts){.sz = sizeof(struct bpf_tc_opts), .handle = 1, .priority = 1};
+  tc_hook_egress = (struct bpf_tc_hook){
+    .sz = sizeof(struct bpf_tc_hook), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
+  tc_opts_egress =
+    (struct bpf_tc_opts){.sz = sizeof(struct bpf_tc_opts), .handle = 1, .priority = 1};
   tc_hook_created = true;
   try2(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler, "egress"));
   xdp_ingress = try2_p(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
@@ -444,24 +463,29 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   sigset_t mask = {};
   sigaddset(&mask, SIGINT);
   sigaddset(&mask, SIGTERM);
-  sfd = try2_e(signalfd(-1, &mask, SFD_NONBLOCK), _("error creating signalfd: %s"), strerror(-_ret));
+  sfd =
+    try2_e(signalfd(-1, &mask, SFD_NONBLOCK), _("error creating signalfd: %s"), strerror(-_ret));
   ev = (struct epoll_event){.events = EPOLLIN | EPOLLET, .data.fd = sfd};
   try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
 
   // Block default handler for signals of interest
-  try2_e(sigprocmask(SIG_SETMASK, &mask, NULL), _("error setting signal mask: %s"), strerror(-_ret));
+  try2_e(sigprocmask(SIG_SETMASK, &mask, NULL), _("error setting signal mask: %s"),
+         strerror(-_ret));
 
   struct signalfd_siginfo siginfo;
   int len;
   while (true) {
-    nfds = try2_e(epoll_wait(epfd, events, MAX_EVENTS, -1), _("error waiting for epoll: %s"), strerror(-_ret));
+    nfds = try2_e(epoll_wait(epfd, events, MAX_EVENTS, -1), _("error waiting for epoll: %s"),
+                  strerror(-_ret));
 
     for (i = 0; i < nfds; i++) {
       if (events[i].data.fd == rb_epfd) {
-        try2(ring_buffer__poll(rb, 0), _("failed to poll ring buffer '%s': %s"), "mimic_rb", strerror(-_ret));
+        try2(ring_buffer__poll(rb, 0), _("failed to poll ring buffer '%s': %s"), "mimic_rb",
+             strerror(-_ret));
 
       } else if (events[i].data.fd == sfd) {
-        len = try2_e(read(sfd, &siginfo, sizeof(siginfo)), _("failed to read signalfd: %s"), strerror(-_ret));
+        len = try2_e(read(sfd, &siginfo, sizeof(siginfo)), _("failed to read signalfd: %s"),
+                     strerror(-_ret));
         if (len != sizeof(siginfo)) cleanup(-1, "len != sizeof(siginfo)");
         if (siginfo.ssi_signo == SIGINT || siginfo.ssi_signo == SIGTERM) {
           const char* sigstr = siginfo.ssi_signo == SIGINT ? "SIGINT" : "SIGTERM";
@@ -500,14 +524,16 @@ int subcmd_run(struct run_arguments* args) {
 
   if (args->file) {
     _cleanup_file FILE* config_file =
-      try_p(fopen(args->file, "r"), _("failed to open configuration file at %s: %s"), args->file, strerror(-_ret));
+      try_p(fopen(args->file, "r"), _("failed to open configuration file at %s: %s"), args->file,
+            strerror(-_ret));
     try(parse_config_file(config_file, args), _("failed to read configuration file"));
   }
 
   struct stat st = {};
   if (stat(MIMIC_RUNTIME_DIR, &st) < 0) {
     if (errno == ENOENT) {
-      try_e(mkdir(MIMIC_RUNTIME_DIR, 0755), _("failed to create directory %s: %s"), MIMIC_RUNTIME_DIR, strerror(-_ret));
+      try_e(mkdir(MIMIC_RUNTIME_DIR, 0755), _("failed to create directory %s: %s"),
+            MIMIC_RUNTIME_DIR, strerror(-_ret));
     } else {
       ret(-errno, _("failed to stat %s: %s"), MIMIC_RUNTIME_DIR, strerror(errno));
     }
@@ -530,7 +556,8 @@ int subcmd_run(struct run_arguments* args) {
       if (lock_file) {
         struct lock_content lock_content;
         if (lock_read(lock_file, &lock_content) == 0) {
-          log_error(_("hint: is another Mimic process (PID %d) running on this interface?"), lock_content.pid);
+          log_error(_("hint: is another Mimic process (PID %d) running on this interface?"),
+                    lock_content.pid);
         } else {
           log_error(_("hint: check %s"), lock);
         }

@@ -1,5 +1,4 @@
 #include <arpa/inet.h>
-#include <errno.h>
 #include <linux/types.h>
 #include <linux/udp.h>
 #include <netinet/in.h>

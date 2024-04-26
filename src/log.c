@@ -37,7 +37,8 @@ int libbpf_print_fn(enum libbpf_print_level bpf_level, const char* format, va_li
     if (ret < 0) return ret;
     if (strstr(buf, "Exclusivity flag on, cannot modify")) return 0;
   }
-  if ((bpf_level == LIBBPF_WARN && LOG_ALLOW_WARN) || (bpf_level == LIBBPF_INFO && LOG_ALLOW_INFO) ||
+  if ((bpf_level == LIBBPF_WARN && LOG_ALLOW_WARN) ||
+      (bpf_level == LIBBPF_INFO && LOG_ALLOW_INFO) ||
       (bpf_level == LIBBPF_DEBUG && LOG_ALLOW_DEBUG)) {
     int level;
     switch (bpf_level) {

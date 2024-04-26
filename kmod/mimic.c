@@ -28,9 +28,10 @@
 #endif
 
 #ifndef __bpf_kfunc_start_defs
-#define __bpf_kfunc_start_defs()                                                                    \
-  __diag_push();                                                                                    \
-  __diag_ignore_all("-Wmissing-declarations", "Global kfuncs as their definitions will be in BTF"); \
+#define __bpf_kfunc_start_defs()                                          \
+  __diag_push();                                                          \
+  __diag_ignore_all("-Wmissing-declarations",                             \
+                    "Global kfuncs as their definitions will be in BTF"); \
   __diag_ignore_all("-Wmissing-prototypes", "Global kfuncs as their definitions will be in BTF")
 #endif
 
@@ -44,7 +45,9 @@ __bpf_kfunc_start_defs();
 //
 // Newer versions of Linux has `bpf_cast_to_kern_ctx` kfunc. This function is meant to provide such
 // functionality for lower versions of kernel.
-__bpf_kfunc struct sk_buff* mimic_inspect_skb(struct __sk_buff* skb_bpf) { return (struct sk_buff*)skb_bpf; }
+__bpf_kfunc struct sk_buff* mimic_inspect_skb(struct __sk_buff* skb_bpf) {
+  return (struct sk_buff*)skb_bpf;
+}
 
 // Change checksum position in `sk_buff` to instruct hardware/driver/kernel to offset checksum
 // correctly.
@@ -68,7 +71,8 @@ __bpf_kfunc void mimic_get_random_bytes(void* bytes__uninit, size_t bytes__unini
   get_random_bytes(bytes__uninit, bytes__uninit__sz);
 }
 
-__bpf_kfunc struct mimic_skcipher_state* mimic_skcipher_init_state(const __u8* key, size_t key__sz) {
+__bpf_kfunc struct mimic_skcipher_state* mimic_skcipher_init_state(const __u8* key,
+                                                                   size_t key__sz) {
   struct mimic_skcipher_state* state;
   int ret;
 
@@ -89,7 +93,8 @@ cleanup:
   return NULL;
 }
 
-__bpf_kfunc struct mimic_skcipher_state* mimic_skcipher_acquire_state(struct mimic_skcipher_state* state) {
+__bpf_kfunc struct mimic_skcipher_state* mimic_skcipher_acquire_state(
+  struct mimic_skcipher_state* state) {
   return kref_get_unless_zero(&state->refcount) ? state : NULL;
 }
 
@@ -110,8 +115,8 @@ __bpf_kfunc void mimic_skcipher_release_state(struct mimic_skcipher_state* state
 }
 
 // Encrypt or decrypt `data` in place.
-__bpf_kfunc int mimic_skcipher_crypt(struct mimic_skcipher_state* state, __u8* data, size_t data__sz,
-                                     union mimic_iv_repr* iv, bool encrypt) {
+__bpf_kfunc int mimic_skcipher_crypt(struct mimic_skcipher_state* state, __u8* data,
+                                     size_t data__sz, union mimic_iv_repr* iv, bool encrypt) {
   SYNC_SKCIPHER_REQUEST_ON_STACK(req, state->tfm);
   struct scatterlist sg;
   int ret;

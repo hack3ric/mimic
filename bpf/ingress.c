@@ -10,10 +10,11 @@
 
 // Move back n bytes, shrink socket buffer and restore data.
 //
-// TODO: handle TCP options appended by middleboxes. This requires `bpf_xdp_adjust_head` and `memmove`ing bytes from the
-// start of the buffer to destination port, which is expensive when applied to every data packet. For the same reason,
-// middleboxes probably only append options like MSS on handshake packets since there is no data at the end to move, so
-// not finishing this TODO is probably going to be fine.
+// TODO: handle TCP options appended by middleboxes. This requires `bpf_xdp_adjust_head` and
+// `memmove`ing bytes from the start of the buffer to destination port, which is expensive when
+// applied to every data packet. For the same reason, middleboxes probably only append options like
+// MSS on handshake packets since there is no data at the end to move, so not finishing this TODO is
+// probably going to be fine.
 static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, __be32* csum_diff) {
   __u8 buf[TCP_UDP_HEADER_DIFF + 4] = {};
   __u16 data_len = buf_len - offset;
@@ -39,22 +40,24 @@ static __always_inline __u32 new_ack_seq(struct tcphdr* tcp, __u16 payload_len) 
   return ntohl(tcp->seq) + payload_len + tcp->syn;
 }
 
-static __always_inline void pre_syn_ack(__u32* seq, __u32* ack_seq, struct connection* conn, struct tcphdr* tcp,
-                                        __u16 payload_len, __u32 random) {
+static __always_inline void pre_syn_ack(__u32* seq, __u32* ack_seq, struct connection* conn,
+                                        struct tcphdr* tcp, __u16 payload_len, __u32 random) {
   conn->state = STATE_SYN_RECV;
   *seq = conn->seq = random;
   *ack_seq = conn->ack_seq = new_ack_seq(tcp, payload_len);
   conn->seq += 1;
 }
 
-static __always_inline void pre_ack(enum conn_state new_state, __u32* seq, __u32* ack_seq, struct connection* conn,
-                                    struct tcphdr* tcp, __u16 payload_len) {
+static __always_inline void pre_ack(enum conn_state new_state, __u32* seq, __u32* ack_seq,
+                                    struct connection* conn, struct tcphdr* tcp,
+                                    __u16 payload_len) {
   conn->state = new_state;
   *seq = conn->seq;
   *ack_seq = conn->ack_seq = new_ack_seq(tcp, payload_len);
 }
 
-static __always_inline void pre_rst_ack(__u32* seq, __u32* ack_seq, struct tcphdr* tcp, __u16 payload_len) {
+static __always_inline void pre_rst_ack(__u32* seq, __u32* ack_seq, struct tcphdr* tcp,
+                                        __u16 payload_len) {
   *seq = 0;
   *ack_seq = new_ack_seq(tcp, payload_len);
 }
@@ -201,7 +204,8 @@ int ingress_handler(struct xdp_md* xdp) {
   conn_ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
 
-  log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_TCP_PKT, 0, ntohl(tcp->seq), ntohl(tcp->ack_seq));
+  log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_TCP_PKT, 0, ntohl(tcp->seq),
+          ntohl(tcp->ack_seq));
   log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_STATE, state, conn_seq, conn_ack_seq);
 
   if (will_send_ctrl_packet) {
