@@ -52,7 +52,7 @@ teardown() {
 }
 
 _generate_port() {
-  echo $(( SRANDOM % (65536 - 1) + 1 ))
+  echo $(( SRANDOM % (65536 - 10000) + 10000 ))
 }
 
 _setup_mimic_socat() {
