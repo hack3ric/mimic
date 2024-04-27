@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "purge" ]; then
+  systemd-sysusers
+  rmdir --ignore-fail-on-non-empty /run/mimic
+fi
+
+#DEBHELPER#
+
+exit 0
