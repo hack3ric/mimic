@@ -472,8 +472,8 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   try2_e(sigprocmask(SIG_SETMASK, &mask, NULL), _("error setting signal mask: %s"),
          strerror(-_ret));
 
+  // TODO: free stale connections
   struct signalfd_siginfo siginfo;
-  int len;
   while (true) {
     nfds = try2_e(epoll_wait(epfd, events, MAX_EVENTS, -1), _("error waiting for epoll: %s"),
                   strerror(-_ret));
@@ -484,8 +484,8 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
              strerror(-_ret));
 
       } else if (events[i].data.fd == sfd) {
-        len = try2_e(read(sfd, &siginfo, sizeof(siginfo)), _("failed to read signalfd: %s"),
-                     strerror(-_ret));
+        int len = try2_e(read(sfd, &siginfo, sizeof(siginfo)), _("failed to read signalfd: %s"),
+                         strerror(-_ret));
         if (len != sizeof(siginfo)) cleanup(-1, "len != sizeof(siginfo)");
         if (siginfo.ssi_signo == SIGINT || siginfo.ssi_signo == SIGTERM) {
           const char* sigstr = siginfo.ssi_signo == SIGINT ? "SIGINT" : "SIGTERM";
