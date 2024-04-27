@@ -532,16 +532,9 @@ int subcmd_run(struct run_arguments* args) {
       ret(-errno, _("failed to stat %s: %s"), MIMIC_RUNTIME_DIR, strerror(errno));
     }
   }
-  __ino_t netns;
-  if ((retcode = stat("/proc/self/ns/net", &st)) < 0) {
-    log_debug("fail to get current netns: %s", strerror(-retcode));
-    netns = 0;
-  } else {
-    netns = st.st_ino;
-  }
 
   char lock[64];
-  snprintf(lock, sizeof(lock), "%s/%lx:%d.lock", MIMIC_RUNTIME_DIR, netns, ifindex);
+  get_lock_file_name(lock, sizeof(lock), ifindex);
   int lock_fd = open(lock, O_CREAT | O_EXCL | O_WRONLY, 0644);
   if (lock_fd < 0) {
     log_error(_("failed to lock on %s at %s: %s"), args->ifname, lock, strerror(errno));

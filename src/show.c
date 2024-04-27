@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "../common/defs.h"
 #include "../common/try.h"
@@ -51,9 +52,9 @@ int subcmd_show(struct show_arguments* args) {
   int ifindex = if_nametoindex(args->ifname);
   if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
 
-  char lock[32];
-  snprintf(lock, sizeof(lock), "%s/%d.lock", MIMIC_RUNTIME_DIR, ifindex);
+  char lock[64];
   struct lock_content lock_content;
+  get_lock_file_name(lock, sizeof(lock), ifindex);
   {
     _cleanup_file FILE* lock_file =
       try_p(fopen(lock, "r"), _("failed to open lock file at %s: %s"), lock, strerror(-_ret));

@@ -63,4 +63,6 @@ int pktbuf_push(struct pktbuf* buf, const char* data, size_t len, bool l4_csum_p
 int pktbuf_consume(struct pktbuf* buf, bool* consumed);
 void pktbuf_free(struct pktbuf* buf);
 
+void get_lock_file_name(char* dest, size_t dest_len, int ifindex);
+
 #endif  // _MIMIC_MIMIC_H
