@@ -245,7 +245,7 @@ static inline int store_packet(struct bpf_map* conns, struct conn_tuple* conn_ke
   int retcode;
   struct connection conn = {};
   try2(bpf_map__lookup_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn), BPF_F_LOCK));
-  if (conn.state == STATE_ESTABLISHED) {
+  if (conn.state == CONN_ESTABLISHED) {
     log_warn(_("store packet event processed after connection was established"));
     return 0;
   }

@@ -42,7 +42,7 @@ static __always_inline __u32 new_ack_seq(struct tcphdr* tcp, __u16 payload_len) 
 
 static __always_inline void pre_syn_ack(__u32* seq, __u32* ack_seq, struct connection* conn,
                                         struct tcphdr* tcp, __u16 payload_len, __u32 random) {
-  conn->state = STATE_SYN_RECV;
+  conn->state = CONN_SYN_RECV;
   *seq = conn->seq = random;
   *ack_seq = conn->ack_seq = new_ack_seq(tcp, payload_len);
   conn->seq += 1;
@@ -107,9 +107,9 @@ int ingress_handler(struct xdp_md* xdp) {
   if (tcp->rst) {
     if (conn) {
       bpf_spin_lock(&conn->lock);
-      if (conn->state == STATE_ESTABLISHED) {
+      if (conn->state == CONN_ESTABLISHED) {
         rst_result = RST_DESTROYED;
-      } else if (conn->state == STATE_IDLE) {
+      } else if (conn->state == CONN_IDLE) {
         rst_result = RST_NONE;
       } else {
         rst_result = RST_ABORTED;
@@ -149,13 +149,13 @@ int ingress_handler(struct xdp_md* xdp) {
   bpf_spin_lock(&conn->lock);
   conn->reset_tstamp = conn->retry_tstamp = tstamp;
   switch (conn->state) {
-    case STATE_IDLE:
-    case STATE_SYN_RECV:
+    case CONN_IDLE:
+    case CONN_SYN_RECV:
       if (tcp->syn && !tcp->ack) {
         syn = ack = will_send_ctrl_packet = true;
         pre_syn_ack(&seq, &ack_seq, conn, tcp, payload_len, random);
-      } else if (conn->state == STATE_SYN_RECV && !tcp->syn && tcp->ack) {
-        conn->state = STATE_ESTABLISHED;
+      } else if (conn->state == CONN_SYN_RECV && !tcp->syn && tcp->ack) {
+        conn->state = CONN_ESTABLISHED;
         conn->ack_seq = new_ack_seq(tcp, payload_len);
         newly_estab = true;
         swap(pktbuf, conn->pktbuf);
@@ -166,20 +166,20 @@ int ingress_handler(struct xdp_md* xdp) {
       }
       break;
 
-    case STATE_SYN_SENT:
+    case CONN_SYN_SENT:
       if (tcp->syn) {
         ack = will_send_ctrl_packet = true;
         conn->cwnd += random % 31 - 15;
         cwnd = conn->cwnd;
       }
       if (tcp->syn && tcp->ack) {
-        conn->state = STATE_ESTABLISHED;
+        conn->state = CONN_ESTABLISHED;
         newly_estab = true;
         swap(pktbuf, conn->pktbuf);
         pre_ack(&seq, &ack_seq, conn, tcp, payload_len);
       } else if (tcp->syn && !tcp->ack) {
         // Simultaneous open
-        conn->state = STATE_SYN_RECV;
+        conn->state = CONN_SYN_RECV;
         pre_ack(&seq, &ack_seq, conn, tcp, payload_len);
       } else {
         rst = ack = will_send_ctrl_packet = true;
@@ -188,7 +188,7 @@ int ingress_handler(struct xdp_md* xdp) {
       }
       break;
 
-    case STATE_ESTABLISHED:
+    case CONN_ESTABLISHED:
       if (!tcp->syn && tcp->ack) {
         will_drop = false;
         conn->ack_seq += payload_len;

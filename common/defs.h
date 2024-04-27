@@ -128,10 +128,10 @@ struct conn_tuple {
 struct connection {
   struct bpf_spin_lock lock;
   enum conn_state {
-    STATE_IDLE,
-    STATE_SYN_SENT,
-    STATE_SYN_RECV,
-    STATE_ESTABLISHED,
+    CONN_IDLE,
+    CONN_SYN_SENT,
+    CONN_SYN_RECV,
+    CONN_ESTABLISHED,
   } state;
   __u32 seq, ack_seq;
   uintptr_t pktbuf;
@@ -266,13 +266,13 @@ static inline void pkt_filter_fmt(const struct pkt_filter* restrict filter, char
 
 static inline const char* conn_state_to_str(enum conn_state s) {
   switch (s) {
-    case STATE_IDLE:
+    case CONN_IDLE:
       return N_("idle");
-    case STATE_SYN_SENT:
+    case CONN_SYN_SENT:
       return N_("SYN sent");
-    case STATE_SYN_RECV:
+    case CONN_SYN_RECV:
       return N_("SYN received");
-    case STATE_ESTABLISHED:
+    case CONN_ESTABLISHED:
       return N_("established");
     default:
       return N_("(unknown)");

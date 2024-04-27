@@ -107,7 +107,7 @@ int egress_handler(struct __sk_buff* skb) {
   enum conn_state conn_state;
 
   bpf_spin_lock(&conn->lock);
-  if (conn->state == STATE_ESTABLISHED) {
+  if (conn->state == CONN_ESTABLISHED) {
     if (tstamp - conn->reset_tstamp > 600 * SECOND) {
       // Reset state after not receiving packet for 10 minutes
       return conn_reset_state(conn, &conn_key);
@@ -117,8 +117,8 @@ int egress_handler(struct __sk_buff* skb) {
     conn->seq += payload_len;
   } else {
     switch (conn->state) {
-      case STATE_IDLE:
-        conn->state = STATE_SYN_SENT;
+      case CONN_IDLE:
+        conn->state = CONN_SYN_SENT;
         seq = conn->seq = random;
         conn->seq += 1;
         ack_seq = conn->ack_seq = 0;
@@ -126,7 +126,7 @@ int egress_handler(struct __sk_buff* skb) {
         bpf_spin_unlock(&conn->lock);
         send_ctrl_packet(&conn_key, SYN, seq, ack_seq, 0xffff);
         break;
-      case STATE_SYN_SENT:
+      case CONN_SYN_SENT:
         if (tstamp - conn->reset_tstamp > 10 * SECOND) {
           // Give up after >10 seconds of no response
           return conn_reset_state(conn, &conn_key);
@@ -141,7 +141,7 @@ int egress_handler(struct __sk_buff* skb) {
           bpf_spin_unlock(&conn->lock);
         }
         break;
-      case STATE_SYN_RECV:
+      case CONN_SYN_RECV:
         // TODO: timeout send ACK/SYN+ACK again
         if (tstamp - conn->reset_tstamp > 10 * SECOND) {
           return conn_reset_state(conn, &conn_key);
