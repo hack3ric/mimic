@@ -78,7 +78,7 @@
 #else
 
 #ifndef MIMIC_RUNTIME_DIR
-#define MIMIC_RUNTIME_DIR "/var/mimic"
+#define MIMIC_RUNTIME_DIR "/run/mimic"
 #endif
 
 #endif  // _MIMIC_BPF
