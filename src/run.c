@@ -513,12 +513,6 @@ cleanup:
 int subcmd_run(struct run_arguments* args) {
   int retcode;
 
-  // TODO: capabilities
-  //
-  // needs cap_sys_admin=+pe and cap_net_admin=+pe
-  // see https://github.com/torvalds/linux/blob/v6.1/include/uapi/linux/capability.h#L405
-  if (geteuid() != 0) ret(-1, _("you cannot run Mimic unless you are root"));
-
   int ifindex = if_nametoindex(args->ifname);
   if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
 

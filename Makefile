@@ -46,6 +46,11 @@ MIMIC_LINK_LIBS += -lelf -lzstd -lz
 LDFLAGS += -static
 endif
 
+RUNTIME_DIR ?=
+ifneq ($(RUNTIME_DIR),)
+CFLAGS += -DMIMIC_RUNTIME_DIR="\"$(RUNTIME_DIR)\""
+endif
+
 .PHONY: build build-cli build-kmod generate generate-skel generate-vmlinux generate-pot test bench clean .FORCE
 .FORCE:
 
