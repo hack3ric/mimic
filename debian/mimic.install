@@ -1,2 +1,5 @@
+#!/usr/bin/dh-exec
+
 out/mimic usr/bin
 install/eth0.conf.example etc/mimic
+install/mimic.sysusers => usr/lib/sysusers.d/mimic.conf

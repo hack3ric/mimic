@@ -5,6 +5,7 @@ Maintainer: Eric Long <i@hack3r.moe>
 Build-Depends:
  debhelper-compat (= 13),
  dh-sequence-dkms,
+ dh-exec,
  clang,
  llvm,
  python3,

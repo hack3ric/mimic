@@ -12,7 +12,6 @@ IS_UBUNTU := $(shell dpkg-vendor --derives-from ubuntu > /dev/null 2>&1; echo $$
 	dh $@
 
 override_dh_auto_configure:
-	mv install/mimic.sysusers debian
 	sed install/mimic@.service.in \
 		-e 's|@@MIMIC_EXEC@@|/usr/bin/mimic|' \
 		-e 's|@@MIMIC_CONFIG_PATH@@|/etc/mimic|' \
