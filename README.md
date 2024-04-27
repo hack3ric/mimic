@@ -257,7 +257,7 @@ This is a known quirk. Since eBPF can only *process* packets, not sending them a
 
 - More obfuscation options: XOR, padding, etc.
 - Make fake TCP optional
-- State reset mechanism (after timeout)
+- Remove stale connections periodically
 
 ## License
 
