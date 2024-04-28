@@ -8,6 +8,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "../common/defs.h"
+
 static int notify_systemd(const char* msg) {
   size_t message_length = strlen(msg);
   if (message_length == 0) return -EINVAL;
@@ -22,7 +24,7 @@ static int notify_systemd(const char* msg) {
   memcpy(addr.sun_path, socket_path, sizeof(addr.sun_path));
   if (socket_path[0] == '@') addr.sun_path[0] = 0;
 
-  int sk = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+  _cleanup_fd int sk = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
   if (sk < 0) return -errno;
 
   socklen_t sock_len = offsetof(struct sockaddr_un, sun_path) + path_len;
