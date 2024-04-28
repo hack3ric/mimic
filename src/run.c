@@ -207,8 +207,8 @@ static inline int send_ctrl_packet(struct send_options* s) {
   csum += buf_len;
   _cleanup_malloc void* buf = malloc(buf_len);
 
-  struct tcphdr* tcp = (struct tcphdr*)buf;
-  *tcp = (struct tcphdr){
+  struct tcphdr* tcp = (typeof(tcp))buf;
+  *tcp = (typeof(*tcp)){
     .source = s->conn.local_port,
     .dest = s->conn.remote_port,
     .seq = htonl(s->seq),
@@ -330,6 +330,44 @@ static ring_buffer_sample_fn handle_rb_event(struct bpf_map* conns, ffi_cif* cif
     return NULL;
   }
   return fn;
+}
+
+static int free_stale_connections(struct mimic_bpf* skel) {
+  int ret;
+  struct conn_tuple key, prev_key;
+  struct connection conn;
+  struct timespec ts;
+  bool del_prev = false;
+
+  ret = bpf_map__get_next_key(skel->maps.mimic_conns, NULL, &key, sizeof(key));
+  if (ret == -ENOENT) return 0;
+  if (ret < 0) {
+    ret(ret, _("failed to get next key of map '%s': %s"), "mimic_conns", strerror(-ret));
+  }
+
+  while (true) {
+    try(bpf_map__lookup_elem(skel->maps.mimic_conns, &key, sizeof(key), &conn, sizeof(conn),
+                             BPF_F_LOCK),
+        _("failed to get value from map '%s': %s"), "mimic_conns", strerror(-ret));
+    clock_gettime(CLOCK_BOOTTIME, &ts);
+    __u64 tstamp = ts.tv_sec * SECOND + ts.tv_nsec;
+    if (tstamp - conn.reset_tstamp > 60 * 60 * SECOND) {
+      prev_key = key;
+      del_prev = true;
+      pktbuf_free((struct pktbuf*)conn.pktbuf);
+    }
+    ret = bpf_map__get_next_key(skel->maps.mimic_conns, &key, &key, sizeof(key));
+    if (ret < 0) {
+      if (ret != -ENOENT) {
+        ret(ret, _("failed to get next key of map '%s': %s"), "mimic_conns", strerror(-ret));
+      }
+      if (del_prev) {
+        bpf_map__delete_elem(skel->maps.mimic_conns, &prev_key, sizeof(prev_key), BPF_F_LOCK);
+      }
+      break;
+    }
+  }
+  return 0;
 }
 
 #define EPOLL_MAX_EVENTS 10
@@ -508,7 +546,8 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
       } else if (events[i].data.fd == timer) {
         __u64 expirations;
         read(timer, &expirations, sizeof(expirations));
-        // TODO: free stale connections
+        free_stale_connections(skel);
+
       } else {
         cleanup(-1, _("unknown fd: %d"), events[i].data.fd);
       }

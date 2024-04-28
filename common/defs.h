@@ -95,7 +95,7 @@
 #define CWND_STEP 1
 #define STABLE_FACTOR 0.2
 
-#define SECOND (__u64)1000000000
+#define SECOND 1000000000ul
 
 // Reserved for gettext use in the future.
 //
