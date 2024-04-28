@@ -6,7 +6,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
 
 #include "../common/defs.h"
 #include "../common/try.h"

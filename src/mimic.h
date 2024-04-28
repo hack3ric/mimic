@@ -66,5 +66,7 @@ void pktbuf_free(struct pktbuf* buf);
 int notify_ready();
 
 void get_lock_file_name(char* dest, size_t dest_len, int ifindex);
+void conn_tuple_to_addrs(const struct conn_tuple* conn, struct sockaddr_storage* saddr,
+                         struct sockaddr_storage* daddr);
 
 #endif  // _MIMIC_MIMIC_H

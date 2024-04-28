@@ -1,4 +1,5 @@
 #include <argp.h>
+#include <arpa/inet.h>
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <errno.h>
@@ -21,6 +22,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/timerfd.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "../common/checksum.h"
@@ -181,24 +183,22 @@ static int handle_log_event(struct log_event* e) {
 
 static inline int send_ctrl_packet(struct send_options* s) {
   _cleanup_fd int sk = try(socket(s->conn.protocol, SOCK_RAW | SOCK_NONBLOCK, IPPROTO_TCP));
+
+  struct sockaddr_storage saddr, daddr;
+  conn_tuple_to_addrs(&s->conn, &saddr, &daddr);
+
   __u32 csum = 0;
-  struct sockaddr_storage saddr = {}, daddr = {};
   if (s->conn.protocol == AF_INET) {
-    struct sockaddr_in *sa = (typeof(sa))&saddr, *da = (typeof(da))&daddr;
-    *sa = (typeof(*sa)){.sin_family = AF_INET, .sin_addr = {s->conn.local.v4}};
-    *da = (typeof(*da)){.sin_family = AF_INET, .sin_addr = {s->conn.remote.v4}};
     csum += u32_fold(ntohl(s->conn.local.v4));
     csum += u32_fold(ntohl(s->conn.remote.v4));
   } else {
-    struct sockaddr_in6 *sa = (typeof(sa))&saddr, *da = (typeof(da))&daddr;
-    *sa = (typeof(*da)){.sin6_family = AF_INET6, .sin6_addr = s->conn.local.v6};
-    *da = (typeof(*da)){.sin6_family = AF_INET6, .sin6_addr = s->conn.remote.v6};
     for (int i = 0; i < 8; i++) {
       csum += ntohs(s->conn.local.v6.s6_addr16[i]);
       csum += ntohs(s->conn.remote.v6.s6_addr16[i]);
     }
   }
   csum += IPPROTO_TCP;
+
   try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"),
         strerror(-_ret));
 
@@ -332,7 +332,7 @@ static ring_buffer_sample_fn handle_rb_event(struct bpf_map* conns, ffi_cif* cif
   return fn;
 }
 
-#define MAX_EVENTS 10
+#define EPOLL_MAX_EVENTS 10
 
 #define _get_id(_Type, _TypeFull, _Name, _E1, _E2)                                                \
   ({                                                                                              \
@@ -352,9 +352,8 @@ static ring_buffer_sample_fn handle_rb_event(struct bpf_map* conns, ffi_cif* cif
 
 static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) {
   int retcode;
-  _cleanup_fd int epfd = -1, sfd = -1;
-
   struct mimic_bpf* skel = NULL;
+  _cleanup_fd int epfd = -1, sfd = -1, timer = -1;
 
   // These fds are actually reference of skel, so no need to use _cleanup_fd
   int egress_handler_fd = -1, ingress_handler_fd = -1;
@@ -458,7 +457,7 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   }
 
   struct epoll_event ev;
-  struct epoll_event events[MAX_EVENTS];
+  struct epoll_event events[EPOLL_MAX_EVENTS];
   epfd = try_e(epoll_create1(0), _("failed to create epoll: %s"), strerror(-_ret));
 
   // BPF log handler / packet sending handler
@@ -480,8 +479,8 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
          strerror(-_ret));
 
   // Cleanup timer
-  int timer = try2_e(timerfd_create(CLOCK_BOOTTIME, TFD_NONBLOCK), _("error creating timer: %s"),
-                     strerror(-_ret));
+  timer = try2_e(timerfd_create(CLOCK_BOOTTIME, TFD_NONBLOCK), _("error creating timer: %s"),
+                 strerror(-_ret));
   struct itimerspec utmr = {.it_value.tv_sec = 600, .it_interval.tv_sec = 600};
   try2_e(timerfd_settime(timer, 0, &utmr, NULL), _("error setting timer: %s"), strerror(-_ret));
   ev = (typeof(ev)){.events = EPOLLIN | EPOLLET, .data.fd = timer};
@@ -489,7 +488,7 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
 
   struct signalfd_siginfo siginfo;
   while (true) {
-    nfds = try2_e(epoll_wait(epfd, events, MAX_EVENTS, -1), _("error waiting for epoll: %s"),
+    nfds = try2_e(epoll_wait(epfd, events, EPOLL_MAX_EVENTS, -1), _("error waiting for epoll: %s"),
                   strerror(-_ret));
 
     for (i = 0; i < nfds; i++) {
@@ -507,8 +506,9 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
           cleanup(0);
         }
       } else if (events[i].data.fd == timer) {
+        __u64 expirations;
+        read(timer, &expirations, sizeof(expirations));
         // TODO: free stale connections
-
       } else {
         cleanup(-1, _("unknown fd: %d"), events[i].data.fd);
       }
