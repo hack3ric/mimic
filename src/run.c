@@ -523,10 +523,14 @@ int subcmd_run(struct run_arguments* args) {
   if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
 
   if (args->file) {
-    _cleanup_file FILE* config_file =
-      try_p(fopen(args->file, "r"), _("failed to open configuration file at %s: %s"), args->file,
-            strerror(-_ret));
-    try(parse_config_file(config_file, args), _("failed to read configuration file"));
+    _cleanup_file FILE* conf = fopen(args->file, "r");
+    if (conf) {
+      try(parse_config_file(conf, args), _("failed to read configuration file"));
+    } else if (errno == ENOENT) {
+      log_warn(_("configuration file %s does not exist"), args->file);
+    } else {
+      ret(-errno, _("failed to open configuration file at %s: %s"), args->file, strerror(errno));
+    }
   }
 
   struct stat st = {};
