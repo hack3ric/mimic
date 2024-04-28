@@ -20,6 +20,7 @@
 #include <sys/signalfd.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/timerfd.h>
 #include <unistd.h>
 
 #include "../common/checksum.h"
@@ -333,6 +334,22 @@ static ring_buffer_sample_fn handle_rb_event(struct bpf_map* conns, ffi_cif* cif
 
 #define MAX_EVENTS 10
 
+#define _get_id(_Type, _TypeFull, _Name, _E1, _E2)                                                \
+  ({                                                                                              \
+    _Name##_fd = try2(bpf_##_TypeFull##__fd(skel->_Type##s._Name), _E1, #_Name, strerror(-_ret)); \
+    memset(&_Type##_info, 0, _Type##_len);                                                        \
+    try2(bpf_obj_get_info_by_fd(_Name##_fd, &_Type##_info, &_Type##_len), _E2, #_Name,            \
+         strerror(-_ret));                                                                        \
+    _Type##_info.id;                                                                              \
+  })
+
+#define _get_prog_id(_name)                                                \
+  _get_id(prog, program, _name, _("failed to get fd of program '%s': %s"), \
+          _("failed to get info of program '%s': %s"))
+#define _get_map_id(_name)                                        \
+  _get_id(map, map, _name, _("failed to get fd of map '%s': %s"), \
+          _("failed to get info of map '%s': %s"))
+
 static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) {
   int retcode;
   _cleanup_fd int epfd = -1, sfd = -1;
@@ -376,43 +393,26 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   struct bpf_map_info map_info = {};
   __u32 prog_len = sizeof(prog_info), map_len = sizeof(map_info);
 
-#define _get_id(_Type, _TypeFull, _Name, _E1, _E2)                                                \
-  ({                                                                                              \
-    _Name##_fd = try2(bpf_##_TypeFull##__fd(skel->_Type##s._Name), _E1, #_Name, strerror(-_ret)); \
-    memset(&_Type##_info, 0, _Type##_len);                                                        \
-    try2(bpf_obj_get_info_by_fd(_Name##_fd, &_Type##_info, &_Type##_len), _E2, #_Name,            \
-         strerror(-_ret));                                                                        \
-    _Type##_info.id;                                                                              \
-  })
-
-#define _get_prog_id(_name)                                                \
-  _get_id(prog, program, _name, _("failed to get fd of program '%s': %s"), \
-          _("failed to get info of program '%s': %s"))
-#define _get_map_id(_name)                                        \
-  _get_id(map, map, _name, _("failed to get fd of map '%s': %s"), \
-          _("failed to get info of map '%s': %s"))
-
-  struct lock_content lock_content = {.pid = getpid()};
-
-  lock_content.egress_id = _get_prog_id(egress_handler);
-  lock_content.ingress_id = _get_prog_id(ingress_handler);
-
-  lock_content.whitelist_id = _get_map_id(mimic_whitelist);
-  lock_content.conns_id = _get_map_id(mimic_conns);
-  lock_content.settings_id = _get_map_id(mimic_settings);
+  struct lock_content lock_content = {
+    .pid = getpid(),
+    .egress_id = _get_prog_id(egress_handler),
+    .ingress_id = _get_prog_id(ingress_handler),
+    .whitelist_id = _get_map_id(mimic_whitelist),
+    .conns_id = _get_map_id(mimic_conns),
+    .settings_id = _get_map_id(mimic_settings),
+  };
   _get_map_id(mimic_rb);
-
   try2(lock_write(lock_fd, &lock_content));
 
   __u32 vkey = SETTINGS_LOG_VERBOSITY, vvalue = log_verbosity;
-  try2(bpf_map__update_elem(skel->maps.mimic_settings, &vkey, sizeof(__u32), &vvalue, sizeof(__u32),
+  try2(bpf_map__update_elem(skel->maps.mimic_settings, &vkey, sizeof(vkey), &vvalue, sizeof(vvalue),
                             BPF_ANY),
        _("failed to set BPF log verbosity: %s"), strerror(-_ret));
 
   bool value = true;
   for (int i = 0; i < args->filter_count; i++) {
     retcode = bpf_map__update_elem(skel->maps.mimic_whitelist, &args->filters[i],
-                                   sizeof(struct pkt_filter), &value, sizeof(bool), BPF_ANY);
+                                   sizeof(struct pkt_filter), &value, sizeof(value), BPF_ANY);
     if (retcode || LOG_ALLOW_DEBUG) {
       char fmt[FILTER_FMT_MAX_LEN];
       pkt_filter_fmt(&args->filters[i], fmt);
@@ -430,10 +430,10 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
               _("failed to attach BPF ring buffer '%s': %s"), "mimic_rb", strerror(-_ret));
 
   // TC and XDP
-  tc_hook_egress = (struct bpf_tc_hook){
-    .sz = sizeof(struct bpf_tc_hook), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
+  tc_hook_egress = (typeof(tc_hook_egress)){
+    .sz = sizeof(tc_hook_egress), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
   tc_opts_egress =
-    (struct bpf_tc_opts){.sz = sizeof(struct bpf_tc_opts), .handle = 1, .priority = 1};
+    (typeof(tc_opts_egress)){.sz = sizeof(tc_opts_egress), .handle = 1, .priority = 1};
   tc_hook_created = true;
   try2(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler, "egress"));
   xdp_ingress = try2_p(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
@@ -457,12 +457,13 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
     }
   }
 
+  struct epoll_event ev;
+  struct epoll_event events[MAX_EVENTS];
   epfd = try_e(epoll_create1(0), _("failed to create epoll: %s"), strerror(-_ret));
 
   // BPF log handler / packet sending handler
   int rb_epfd = ring_buffer__epoll_fd(rb), nfds, i;
-  struct epoll_event ev = {.events = EPOLLIN, .data.fd = rb_epfd};
-  struct epoll_event events[MAX_EVENTS];
+  ev = (typeof(ev)){.events = EPOLLIN, .data.fd = rb_epfd};
   try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, rb_epfd, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
 
   // Signal handler
@@ -471,14 +472,21 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   sigaddset(&mask, SIGTERM);
   sfd =
     try2_e(signalfd(-1, &mask, SFD_NONBLOCK), _("error creating signalfd: %s"), strerror(-_ret));
-  ev = (struct epoll_event){.events = EPOLLIN | EPOLLET, .data.fd = sfd};
+  ev = (typeof(ev)){.events = EPOLLIN | EPOLLET, .data.fd = sfd};
   try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
 
   // Block default handler for signals of interest
   try2_e(sigprocmask(SIG_SETMASK, &mask, NULL), _("error setting signal mask: %s"),
          strerror(-_ret));
 
-  // TODO: free stale connections
+  // Cleanup timer
+  int timer = try2_e(timerfd_create(CLOCK_BOOTTIME, TFD_NONBLOCK), _("error creating timer: %s"),
+                     strerror(-_ret));
+  struct itimerspec utmr = {.it_value.tv_sec = 600, .it_interval.tv_sec = 600};
+  try2_e(timerfd_settime(timer, 0, &utmr, NULL), _("error setting timer: %s"), strerror(-_ret));
+  ev = (typeof(ev)){.events = EPOLLIN | EPOLLET, .data.fd = timer};
+  try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, timer, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
+
   struct signalfd_siginfo siginfo;
   while (true) {
     nfds = try2_e(epoll_wait(epfd, events, MAX_EVENTS, -1), _("error waiting for epoll: %s"),
@@ -498,6 +506,8 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
           log_warn(_("%s received, exiting"), sigstr);
           cleanup(0);
         }
+      } else if (events[i].data.fd == timer) {
+        // TODO: free stale connections
 
       } else {
         cleanup(-1, _("unknown fd: %d"), events[i].data.fd);
