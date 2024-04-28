@@ -4,7 +4,7 @@ After = network.target
 Requires = modprobe@mimic.service
 
 [Service]
-Type = exec
+Type = notify
 ExecStart = @@MIMIC_EXEC@@ run %i -F @@MIMIC_CONFIG_PATH@@/%i.conf
 Restart = on-abnormal
 

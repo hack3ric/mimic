@@ -439,6 +439,12 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   xdp_ingress = try2_p(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
                        _("failed to attach XDP program: %s"), strerror(-_ret));
 
+  retcode = notify_ready();
+  if (retcode < 0) {
+    log_warn(_("failed to notify supervisor: %s"), strerror(-retcode));
+  } else if (retcode) {
+    log_debug(_("notified supervisor we are ready"));
+  }
   if (args->filter_count <= 0) {
     log_info(_("Mimic successfully deployed at %s"), args->ifname);
     log_warn(_("no filter specified"));
