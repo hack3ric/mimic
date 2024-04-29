@@ -95,7 +95,8 @@
 #define CWND_STEP 1
 #define STABLE_FACTOR 0.2
 
-#define SECOND 1000000000ul
+#define S_TO_MS 1000ul
+#define MS_TO_NS 1000000ul
 
 // Reserved for gettext use in the future.
 //
