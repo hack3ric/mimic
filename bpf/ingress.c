@@ -141,7 +141,7 @@ int ingress_handler(struct xdp_md* xdp) {
   __u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq;
   __u16 cwnd = 0xffff;
   __u32 random = bpf_get_prandom_u32();
-  __u64 tstamp = bpf_ktime_get_coarse_ns() / MS_TO_NS;
+  __u64 tstamp = bpf_ktime_get_boot_ns();
   enum conn_state state;
   syn = ack = rst = will_send_ctrl_packet = newly_estab = false;
   will_drop = true;

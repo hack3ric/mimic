@@ -349,20 +349,20 @@ static int free_stale_connections(struct mimic_bpf* skel) {
     try(bpf_map__lookup_elem(skel->maps.mimic_conns, &key, sizeof(key), &conn, sizeof(conn),
                              BPF_F_LOCK),
         _("failed to get value from map '%s': %s"), "mimic_conns", strerror(-ret));
-    clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
-    __u64 tstamp = ts.tv_sec * S_TO_MS + ts.tv_nsec / MS_TO_NS;
-    if (tstamp > conn.reset_tstamp && tstamp - conn.reset_tstamp > 60 * 60 * S_TO_MS) {
+    clock_gettime(CLOCK_BOOTTIME, &ts);
+    __u64 tstamp = ts.tv_sec * SECOND + ts.tv_nsec;
+    if (tstamp > conn.reset_tstamp + 60 * 60 * SECOND) {
       prev_key = key;
       del_prev = true;
       pktbuf_free((struct pktbuf*)conn.pktbuf);
     }
     ret = bpf_map__get_next_key(skel->maps.mimic_conns, &key, &key, sizeof(key));
+    if (del_prev) {
+      bpf_map__delete_elem(skel->maps.mimic_conns, &prev_key, sizeof(prev_key), 0);
+    }
     if (ret < 0) {
       if (ret != -ENOENT) {
         ret(ret, _("failed to get next key of map '%s': %s"), "mimic_conns", strerror(-ret));
-      }
-      if (del_prev) {
-        bpf_map__delete_elem(skel->maps.mimic_conns, &prev_key, sizeof(prev_key), BPF_F_LOCK);
       }
       break;
     }
