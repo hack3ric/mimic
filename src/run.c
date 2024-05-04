@@ -349,9 +349,9 @@ static int free_stale_connections(struct mimic_bpf* skel) {
     try(bpf_map__lookup_elem(skel->maps.mimic_conns, &key, sizeof(key), &conn, sizeof(conn),
                              BPF_F_LOCK),
         _("failed to get value from map '%s': %s"), "mimic_conns", strerror(-ret));
-    clock_gettime(CLOCK_BOOTTIME, &ts);
+    clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
     __u64 tstamp = ts.tv_sec * S_TO_MS + ts.tv_nsec / MS_TO_NS;
-    if (tstamp - conn.reset_tstamp > 60 * 60 * S_TO_MS) {
+    if (tstamp > conn.reset_tstamp && tstamp - conn.reset_tstamp > 60 * 60 * S_TO_MS) {
       prev_key = key;
       del_prev = true;
       pktbuf_free((struct pktbuf*)conn.pktbuf);

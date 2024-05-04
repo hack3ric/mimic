@@ -103,12 +103,12 @@ int egress_handler(struct __sk_buff* skb) {
   __u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq, conn_cwnd;
   __u32 random = bpf_get_prandom_u32();
   __u32 r1 = bpf_get_prandom_u32(), r2 = bpf_get_prandom_u32(), r3 = bpf_get_prandom_u32();
-  __u64 tstamp = bpf_ktime_get_boot_ns() / MS_TO_NS;
+  __u64 tstamp = bpf_ktime_get_coarse_ns() / MS_TO_NS;
   enum conn_state conn_state;
 
   bpf_spin_lock(&conn->lock);
   if (conn->state == CONN_ESTABLISHED) {
-    if (tstamp - conn->reset_tstamp > 600 * S_TO_MS) {
+    if (tstamp > conn->reset_tstamp && tstamp - conn->reset_tstamp > 600 * S_TO_MS) {
       // Reset state after not receiving packet for 10 minutes
       return conn_reset_state(conn, &conn_key);
     }
@@ -127,10 +127,10 @@ int egress_handler(struct __sk_buff* skb) {
         send_ctrl_packet(&conn_key, SYN, seq, ack_seq, 0xffff);
         break;
       case CONN_SYN_SENT:
-        if (tstamp - conn->reset_tstamp > 10 * S_TO_MS) {
+        if (tstamp > conn->reset_tstamp && tstamp - conn->reset_tstamp > 10 * S_TO_MS) {
           // Give up after >10 seconds of no response
           return conn_reset_state(conn, &conn_key);
-        } else if (tstamp - conn->retry_tstamp > 1 * S_TO_MS) {
+        } else if (tstamp > conn->retry_tstamp && tstamp - conn->retry_tstamp > 1 * S_TO_MS) {
           // Retry sending SYN not sooner than 1s after previous attempt
           seq = conn->seq - 1;
           ack_seq = 0;
@@ -143,7 +143,7 @@ int egress_handler(struct __sk_buff* skb) {
         break;
       case CONN_SYN_RECV:
         // TODO: timeout send ACK/SYN+ACK again
-        if (tstamp - conn->reset_tstamp > 10 * S_TO_MS) {
+        if (tstamp > conn->reset_tstamp && tstamp - conn->reset_tstamp > 10 * S_TO_MS) {
           return conn_reset_state(conn, &conn_key);
         } else {
           bpf_spin_unlock(&conn->lock);
