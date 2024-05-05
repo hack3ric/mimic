@@ -50,7 +50,7 @@ static __always_inline int conn_reset_state(struct connection* conn, struct conn
   bpf_map_delete_elem(&mimic_conns, conn_key);
   use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
   // TODO: probably send RST?
-  return TC_ACT_OK;
+  return TC_ACT_SHOT;
 }
 
 SEC("tc")
@@ -127,7 +127,7 @@ int egress_handler(struct __sk_buff* skb) {
         if (tstamp > conn->reset_tstamp + 10 * SECOND) {
           // Give up after >10 seconds of no response
           return conn_reset_state(conn, &conn_key);
-        } else if (tstamp > conn->reset_tstamp + 1 * SECOND) {
+        } else if (tstamp > conn->retry_tstamp + 1 * SECOND) {
           // Retry sending SYN not sooner than 1s after previous attempt
           seq = conn->seq - 1;
           ack_seq = 0;
