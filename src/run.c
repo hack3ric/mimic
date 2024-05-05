@@ -228,6 +228,7 @@ static inline int send_ctrl_packet(struct send_options* s) {
       __be16 v;
     };
     __u8* opt = (__u8*)(tcp + 1);
+    // TODO: change MSS according to interface
     memcpy(opt, &(struct _mss_opt){2, 4, htons(1340)}, 4);
     memcpy(opt += 4, (__u8[]){1, 3, 3, 7}, 4);
     memcpy(opt += 4, (__u8[]){1, 1, 4, 2}, 4);
