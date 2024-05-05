@@ -7,6 +7,8 @@
 
 #include "../common/defs.h"
 
+extern int log_verbosity;
+
 extern struct mimic_whitelist_map {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 8);
@@ -20,13 +22,6 @@ extern struct mimic_conns_map {
   __type(key, struct conn_tuple);
   __type(value, struct connection);
 } mimic_conns;
-
-extern struct mimic_settings_map {
-  __uint(type, BPF_MAP_TYPE_HASH);
-  __uint(max_entries, 2);
-  __type(key, __u32);
-  __type(value, __u32);
-} mimic_settings;
 
 extern struct mimic_rb_map {
   __uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -86,19 +81,17 @@ static inline struct connection* get_conn(struct conn_tuple* key) {
   return conn;
 }
 
-int log_any(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
-            union log_info* info);
+int log_any(enum log_level level, bool ingress, enum log_type type, union log_info* info);
 
-static inline int log_conn(__u32 log_verbosity, enum log_level level, bool ingress,
-                           enum log_type type, struct conn_tuple* conn) {
+static inline int log_conn(enum log_level level, bool ingress, enum log_type type,
+                           struct conn_tuple* conn) {
   if (!conn) return -1;
-  return log_any(log_verbosity, level, ingress, type, &(union log_info){.conn = *conn});
+  return log_any(level, ingress, type, &(union log_info){.conn = *conn});
 }
 
-static __always_inline int log_tcp(__u32 log_verbosity, enum log_level level, bool ingress,
-                                   enum log_type type, enum conn_state state, __u32 seq,
-                                   __u32 ack_seq) {
-  return log_any(log_verbosity, level, ingress, type,
+static __always_inline int log_tcp(enum log_level level, bool ingress, enum log_type type,
+                                   enum conn_state state, __u32 seq, __u32 ack_seq) {
+  return log_any(level, ingress, type,
                  &(union log_info){.tcp = {.state = state, .seq = seq, .ack_seq = ack_seq}});
 }
 

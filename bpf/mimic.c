@@ -6,9 +6,10 @@
 #include "../kmod/mimic.h"
 #include "mimic.h"
 
+int log_verbosity = 0;
+
 struct mimic_whitelist_map mimic_whitelist SEC(".maps");
 struct mimic_conns_map mimic_conns SEC(".maps");
-struct mimic_settings_map mimic_settings SEC(".maps");
 struct mimic_rb_map mimic_rb SEC(".maps");
 
 bool matches_whitelist(QUARTET_DEF, bool ingress) {
@@ -38,8 +39,7 @@ bool matches_whitelist(QUARTET_DEF, bool ingress) {
          bpf_map_lookup_elem(&mimic_whitelist, &remote);
 }
 
-int log_any(__u32 log_verbosity, enum log_level level, bool ingress, enum log_type type,
-            union log_info* info) {
+int log_any(enum log_level level, bool ingress, enum log_type type, union log_info* info) {
   if (log_verbosity < level || !info) return -1;
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
   if (!item) return -1;

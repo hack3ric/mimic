@@ -395,8 +395,7 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
 
   // These fds are actually reference of skel, so no need to use _cleanup_fd
   int egress_handler_fd = -1, ingress_handler_fd = -1;
-  int mimic_whitelist_fd = -1, mimic_conns_fd = -1, mimic_settings_fd = -1;
-  int mimic_rb_fd = -1;
+  int mimic_whitelist_fd = -1, mimic_conns_fd = -1, mimic_rb_fd = -1;
 
   bool tc_hook_created = false;
   struct bpf_tc_hook tc_hook_egress;
@@ -436,15 +435,11 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
     .ingress_id = _get_prog_id(ingress_handler),
     .whitelist_id = _get_map_id(mimic_whitelist),
     .conns_id = _get_map_id(mimic_conns),
-    .settings_id = _get_map_id(mimic_settings),
   };
   _get_map_id(mimic_rb);
   try2(lock_write(lock_fd, &lock_content));
 
-  __u32 vkey = SETTINGS_LOG_VERBOSITY, vvalue = log_verbosity;
-  try2(bpf_map__update_elem(skel->maps.mimic_settings, &vkey, sizeof(vkey), &vvalue, sizeof(vvalue),
-                            BPF_ANY),
-       _("failed to set BPF log verbosity: %s"), strerror(-_ret));
+  skel->bss->log_verbosity = log_verbosity;
 
   bool value = true;
   for (int i = 0; i < args->filter_count; i++) {

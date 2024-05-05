@@ -93,11 +93,8 @@ int ingress_handler(struct xdp_md* xdp) {
 
   if (!matches_whitelist(QUARTET_TCP, true)) return XDP_PASS;
 
-  __u32 vkey = SETTINGS_LOG_VERBOSITY;
-  __u32 log_verbosity = *(__u32*)try_p_drop(bpf_map_lookup_elem(&mimic_settings, &vkey));
-
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP, true);
-  log_conn(log_verbosity, LOG_LEVEL_DEBUG, true, LOG_TYPE_MATCHED, &conn_key);
+  log_conn(LOG_LEVEL_DEBUG, true, LOG_TYPE_MATCHED, &conn_key);
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
 
   // TODO: verify checksum (probably not needed?)
@@ -121,9 +118,9 @@ int ingress_handler(struct xdp_md* xdp) {
     }
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
     // no good ways to tell them apart.
-    log_conn(log_verbosity, LOG_LEVEL_WARN, true, LOG_TYPE_RST, &conn_key);
+    log_conn(LOG_LEVEL_WARN, true, LOG_TYPE_RST, &conn_key);
     if (rst_result == RST_DESTROYED) {
-      log_conn(log_verbosity, LOG_LEVEL_WARN, true, LOG_TYPE_CONN_DESTROY, &conn_key);
+      log_conn(LOG_LEVEL_WARN, true, LOG_TYPE_CONN_DESTROY, &conn_key);
     }
     return XDP_DROP;
   }
@@ -204,9 +201,8 @@ int ingress_handler(struct xdp_md* xdp) {
   conn_ack_seq = conn->ack_seq;
   bpf_spin_unlock(&conn->lock);
 
-  log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_TCP_PKT, 0, ntohl(tcp->seq),
-          ntohl(tcp->ack_seq));
-  log_tcp(log_verbosity, LOG_LEVEL_TRACE, true, LOG_TYPE_STATE, state, conn_seq, conn_ack_seq);
+  log_tcp(LOG_LEVEL_TRACE, true, LOG_TYPE_TCP_PKT, 0, ntohl(tcp->seq), ntohl(tcp->ack_seq));
+  log_tcp(LOG_LEVEL_TRACE, true, LOG_TYPE_STATE, state, conn_seq, conn_ack_seq);
 
   if (will_send_ctrl_packet) {
     send_ctrl_packet(&conn_key, syn + (ack << 1) + (rst << 2), seq, ack_seq, cwnd);
@@ -215,7 +211,7 @@ int ingress_handler(struct xdp_md* xdp) {
     bpf_map_delete_elem(&mimic_conns, &conn_key);
     use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
   } else if (newly_estab) {
-    log_conn(log_verbosity, LOG_LEVEL_INFO, true, LOG_TYPE_CONN_ESTABLISH, &conn_key);
+    log_conn(LOG_LEVEL_INFO, true, LOG_TYPE_CONN_ESTABLISH, &conn_key);
     use_pktbuf(RB_ITEM_CONSUME_PKTBUF, pktbuf);
   }
   if (will_drop) return XDP_DROP;

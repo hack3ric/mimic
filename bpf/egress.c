@@ -86,11 +86,8 @@ int egress_handler(struct __sk_buff* skb) {
 
   if (!matches_whitelist(QUARTET_UDP, false)) return TC_ACT_OK;
 
-  __u32 vkey = SETTINGS_LOG_VERBOSITY;
-  __u32 log_verbosity = *(__u32*)try_p_shot(bpf_map_lookup_elem(&mimic_settings, &vkey));
-
   struct conn_tuple conn_key = gen_conn_key(QUARTET_UDP, false);
-  log_conn(log_verbosity, LOG_LEVEL_DEBUG, false, LOG_TYPE_MATCHED, &conn_key);
+  log_conn(LOG_LEVEL_DEBUG, false, LOG_TYPE_MATCHED, &conn_key);
   struct connection* conn = try_p_shot(get_conn(&conn_key));
 
   struct udphdr old_udp = *udp;
@@ -162,9 +159,8 @@ int egress_handler(struct __sk_buff* skb) {
   conn_cwnd = conn->cwnd;
   bpf_spin_unlock(&conn->lock);
 
-  log_tcp(log_verbosity, LOG_LEVEL_TRACE, false, LOG_TYPE_TCP_PKT, 0, seq, ack_seq);
-  log_tcp(log_verbosity, LOG_LEVEL_TRACE, false, LOG_TYPE_STATE, conn_state, conn_seq,
-          conn_ack_seq);
+  log_tcp(LOG_LEVEL_TRACE, false, LOG_TYPE_TCP_PKT, 0, seq, ack_seq);
+  log_tcp(LOG_LEVEL_TRACE, false, LOG_TYPE_STATE, conn_state, conn_seq, conn_ack_seq);
 
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;

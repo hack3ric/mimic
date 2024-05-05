@@ -187,12 +187,6 @@ struct log_event {
   } info;
 };
 
-// mimic_settings keys
-enum settings_key {
-  SETTINGS_LOG_VERBOSITY,
-  SETTINGS_WHITELIST,  // not stored in mimic_settings map
-};
-
 struct rb_item {
   enum rb_item_type {
     RB_ITEM_LOG_EVENT,
