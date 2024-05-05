@@ -13,11 +13,11 @@
 #include <netinet/in.h>
 #include <signal.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <sys/ioctl.h>
 #include <sys/signalfd.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -181,7 +181,7 @@ static int handle_log_event(struct log_event* e) {
   return 0;
 }
 
-static inline int send_ctrl_packet(struct send_options* s) {
+static inline int send_ctrl_packet(struct send_options* s, const char* ifname) {
   _cleanup_fd int sk = try(socket(s->conn.protocol, SOCK_RAW | SOCK_NONBLOCK, IPPROTO_TCP));
 
   struct sockaddr_storage saddr, daddr;
@@ -227,9 +227,15 @@ static inline int send_ctrl_packet(struct send_options* s) {
       __u8 t, l;
       __be16 v;
     };
+
+    struct ifreq ifr;
+    strncpy(ifr.ifr_name, ifname, sizeof(ifr.ifr_name));
+    ioctl(sk, SIOCGIFMTU, &ifr);
+    __u16 mss =
+      s->conn.protocol == AF_INET ? max(ifr.ifr_mtu, 576) - 40 : max(ifr.ifr_mtu, 1280) - 60;
+
     __u8* opt = (__u8*)(tcp + 1);
-    // TODO: change MSS according to interface
-    memcpy(opt, &(struct _mss_opt){2, 4, htons(1340)}, 4);
+    memcpy(opt, &(struct _mss_opt){2, 4, htons(mss)}, 4);
     memcpy(opt += 4, (__u8[]){1, 3, 3, 7}, 4);
     memcpy(opt += 4, (__u8[]){1, 1, 4, 2}, 4);
   }
@@ -265,7 +271,8 @@ cleanup:
   return retcode;
 }
 
-static int _handle_rb_event(struct bpf_map* conns, void* ctx, void* data, size_t data_sz) {
+static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx, void* data,
+                            size_t data_sz) {
   struct rb_item* item = data;
   const char* name;
   int ret = 0;
@@ -277,7 +284,7 @@ static int _handle_rb_event(struct bpf_map* conns, void* ctx, void* data, size_t
       break;
     case RB_ITEM_SEND_OPTIONS:
       name = N_("sending control packets");
-      ret = send_ctrl_packet(&item->send_options);
+      ret = send_ctrl_packet(&item->send_options, ifname);
       break;
     case RB_ITEM_STORE_PACKET:
       name = N_("storing packet");
@@ -316,18 +323,24 @@ static ffi_type* _handle_rb_event_args[] = {
   sizeof(void*) == 8 ? &ffi_type_sint64 : &ffi_type_sint32,
 };
 
-static void _handle_rb_event_binding(ffi_cif* cif, void* ret, void** args, void* conns) {
-  *(int*)ret =
-    _handle_rb_event((struct bpf_map*)conns, *(void**)args[0], *(void**)args[1], *(size_t*)args[2]);
+struct handle_rb_event_ctx {
+  struct bpf_map* conns;
+  const char* ifname;
+};
+
+static void _handle_rb_event_binding(ffi_cif* cif, void* ret, void** args, void* _ctx) {
+  struct handle_rb_event_ctx* ctx = (typeof(ctx))_ctx;
+  *(int*)ret = _handle_rb_event(ctx->conns, ctx->ifname, *(void**)args[0], *(void**)args[1],
+                                *(size_t*)args[2]);
 }
 
-static ring_buffer_sample_fn handle_rb_event(struct bpf_map* conns, ffi_cif* cif,
+static ring_buffer_sample_fn handle_rb_event(struct handle_rb_event_ctx* ctx, ffi_cif* cif,
                                              ffi_closure** closure) {
   ring_buffer_sample_fn fn;
   *closure = ffi_closure_alloc(sizeof(ffi_closure), (void**)&fn);
   if (!closure) return NULL;
   if (ffi_prep_cif(cif, FFI_DEFAULT_ABI, 3, &ffi_type_sint, _handle_rb_event_args) != FFI_OK ||
-      ffi_prep_closure_loc(*closure, cif, _handle_rb_event_binding, conns, fn) != FFI_OK) {
+      ffi_prep_closure_loc(*closure, cif, _handle_rb_event_binding, ctx, fn) != FFI_OK) {
     return NULL;
   }
   return fn;
@@ -389,7 +402,8 @@ static int free_stale_connections(struct mimic_bpf* skel) {
   _get_id(map, map, _name, _("failed to get fd of map '%s': %s"), \
           _("failed to get info of map '%s': %s"))
 
-static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) {
+static inline int run_bpf(struct run_arguments* args, int lock_fd, const char* ifname,
+                          int ifindex) {
   int retcode;
   struct mimic_bpf* skel = NULL;
   _cleanup_fd int epfd = -1, sfd = -1, timer = -1;
@@ -458,8 +472,8 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, int ifindex) 
   }
 
   // Get ring buffers in advance so we can return earlier if error
-  rb = try2_p(ring_buffer__new(mimic_rb_fd, handle_rb_event(skel->maps.mimic_conns, &cif, &closure),
-                               NULL, NULL),
+  struct handle_rb_event_ctx ctx = {.conns = skel->maps.mimic_conns, .ifname = ifname};
+  rb = try2_p(ring_buffer__new(mimic_rb_fd, handle_rb_event(&ctx, &cif, &closure), NULL, NULL),
               _("failed to attach BPF ring buffer '%s': %s"), "mimic_rb", strerror(-_ret));
 
   // TC and XDP
@@ -611,7 +625,7 @@ int subcmd_run(struct run_arguments* args) {
   }
 
   libbpf_set_print(libbpf_print_fn);
-  retcode = run_bpf(args, lock_fd, ifindex);
+  retcode = run_bpf(args, lock_fd, args->ifname, ifindex);
   close(lock_fd);
   remove(lock);
   return retcode;
