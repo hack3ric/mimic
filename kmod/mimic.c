@@ -51,7 +51,7 @@ __bpf_kfunc struct sk_buff* mimic_inspect_skb(struct __sk_buff* skb_bpf) {
 
 // Change checksum position in `sk_buff` to instruct hardware/driver/kernel to offset checksum
 // correctly.
-__bpf_kfunc int mimic_change_csum_offset(struct __sk_buff* skb_bpf, u16 new_proto) {
+__bpf_kfunc int mimic_change_csum_offset(struct __sk_buff* skb_bpf, __u16 new_proto) {
   struct sk_buff* skb = (struct sk_buff*)skb_bpf;
   if (skb->ip_summed != CHECKSUM_PARTIAL) return -1;
   switch (new_proto) {
