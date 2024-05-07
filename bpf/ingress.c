@@ -54,12 +54,6 @@ static __always_inline void pre_ack(__u32* seq, __u32* ack_seq, struct connectio
   *ack_seq = conn->ack_seq = new_ack_seq(tcp, payload_len);
 }
 
-static __always_inline void pre_rst_ack(__u32* seq, __u32* ack_seq, struct tcphdr* tcp,
-                                        __u16 payload_len) {
-  *seq = 0;
-  *ack_seq = new_ack_seq(tcp, payload_len);
-}
-
 SEC("xdp")
 int ingress_handler(struct xdp_md* xdp) {
   decl_pass(struct ethhdr, eth, 0, xdp);
@@ -157,9 +151,8 @@ int ingress_handler(struct xdp_md* xdp) {
         newly_estab = true;
         swap(pktbuf, conn->pktbuf);
       } else {
-        rst = ack = will_send_ctrl_packet = true;
+        rst = will_send_ctrl_packet = true;
         swap(pktbuf, conn->pktbuf);
-        pre_rst_ack(&seq, &ack_seq, tcp, payload_len);
       }
       break;
 
@@ -179,9 +172,8 @@ int ingress_handler(struct xdp_md* xdp) {
         conn->state = CONN_SYN_RECV;
         pre_ack(&seq, &ack_seq, conn, tcp, payload_len);
       } else {
-        rst = ack = will_send_ctrl_packet = true;
+        rst = will_send_ctrl_packet = true;
         swap(pktbuf, conn->pktbuf);
-        pre_rst_ack(&seq, &ack_seq, tcp, payload_len);
       }
       break;
 
@@ -190,9 +182,8 @@ int ingress_handler(struct xdp_md* xdp) {
         will_drop = false;
         conn->ack_seq += payload_len;
       } else {
-        rst = ack = will_send_ctrl_packet = true;
+        rst = will_send_ctrl_packet = true;
         swap(pktbuf, conn->pktbuf);
-        pre_rst_ack(&seq, &ack_seq, tcp, payload_len);
       }
       break;
   }
