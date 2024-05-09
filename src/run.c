@@ -6,13 +6,13 @@
 #include <fcntl.h>
 #include <ffi.h>
 #include <linux/bpf.h>
-#include <linux/in6.h>
 #include <linux/tcp.h>
 #include <linux/types.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -526,7 +526,7 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, const char* i
   try2_e(sigprocmask(SIG_SETMASK, &mask, NULL), _("error setting signal mask: %s"),
          strerror(-_ret));
 
-  // Cleanup timer
+  // Timer
   timer = try2_e(timerfd_create(CLOCK_BOOTTIME, TFD_NONBLOCK), _("error creating timer: %s"),
                  strerror(-_ret));
   struct itimerspec utmr = {.it_value.tv_sec = 600, .it_interval.tv_sec = 600};
@@ -534,7 +534,6 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, const char* i
   ev = (typeof(ev)){.events = EPOLLIN | EPOLLET, .data.fd = timer};
   try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, timer, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
 
-  struct signalfd_siginfo siginfo;
   while (true) {
     nfds = try2_e(epoll_wait(epfd, events, EPOLL_MAX_EVENTS, -1), _("error waiting for epoll: %s"),
                   strerror(-_ret));
@@ -545,6 +544,7 @@ static inline int run_bpf(struct run_arguments* args, int lock_fd, const char* i
              strerror(-_ret));
 
       } else if (events[i].data.fd == sfd) {
+        struct signalfd_siginfo siginfo;
         int len = try2_e(read(sfd, &siginfo, sizeof(siginfo)), _("failed to read signalfd: %s"),
                          strerror(-_ret));
         if (len != sizeof(siginfo)) cleanup(-1, "len != sizeof(siginfo)");

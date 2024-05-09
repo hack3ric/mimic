@@ -9,7 +9,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "../common/defs.h"
+#include "mimic.h"
 
 static int notify_systemd(const char* msg) {
   size_t message_length = strlen(msg);

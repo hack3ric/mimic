@@ -7,8 +7,6 @@
 #include "../src/log.h"
 #endif
 
-#include "defs.h"
-
 #define redecl(_type, _name, _off, _ctx, _ret)                              \
   _name = ({                                                                \
     _type* _ptr = (void*)(__u64)(_ctx)->data + (_off);                      \

@@ -178,12 +178,12 @@ int ingress_handler(struct xdp_md* xdp) {
       break;
 
     case CONN_ESTABLISHED:
-      if (!tcp->syn && tcp->ack) {
-        will_drop = false;
-        conn->ack_seq += payload_len;
-      } else {
+      if (tcp->syn) {
         rst = will_send_ctrl_packet = true;
         swap(pktbuf, conn->pktbuf);
+      } else {
+        will_drop = false;
+        conn->ack_seq += payload_len;
       }
       break;
   }

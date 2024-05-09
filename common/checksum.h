@@ -8,8 +8,8 @@
 #include "defs.h"
 // clang-format on
 #else
+#include <arpa/inet.h>
 #include <linux/types.h>
-#include <netinet/in.h>
 #include <stddef.h>
 #endif
 

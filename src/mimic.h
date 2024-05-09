@@ -2,9 +2,13 @@
 #define _MIMIC_MIMIC_H
 
 #include <argp.h>
+#include <linux/types.h>
+#include <netinet/in.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <sys/types.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include "../common/defs.h"
 
@@ -68,5 +72,36 @@ int notify_ready();
 void get_lock_file_name(char* dest, size_t dest_len, int ifindex);
 void conn_tuple_to_addrs(const struct conn_tuple* conn, struct sockaddr_storage* saddr,
                          struct sockaddr_storage* daddr);
+
+#ifndef MIMIC_RUNTIME_DIR
+#define MIMIC_RUNTIME_DIR "/run/mimic"
+#endif
+
+// max: "[%pI6]:%d\0"
+#define IP_PORT_MAX_LEN (INET6_ADDRSTRLEN + 2 + 5 + 1)
+// max: "remote=[%pI6]:%d\0"
+#define FILTER_FMT_MAX_LEN (8 + INET6_ADDRSTRLEN + 2 + 5 + 1)
+
+void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __be16 port, char* restrict dest);
+struct sockaddr_storage ip_port_to_sockaddr(enum ip_proto protocol, union ip_value ip, __u16 port);
+void pkt_filter_ip_port_fmt(const struct pkt_filter* restrict filter, char* restrict dest);
+void pkt_filter_fmt(const struct pkt_filter* restrict filter, char* restrict dest);
+const char* conn_state_to_str(enum conn_state s);
+
+// Cleanup utilities
+
+static inline void cleanup_fd(int* fd) {
+  if (*fd >= 0) close(*fd);
+}
+static inline void cleanup_file(FILE** file) {
+  if (*file) fclose(*file);
+}
+static inline void cleanup_malloc(void** ptr) {
+  if (*ptr) free(*ptr);
+}
+
+#define _cleanup_fd __attribute__((__cleanup__(cleanup_fd)))
+#define _cleanup_file __attribute__((__cleanup__(cleanup_file)))
+#define _cleanup_malloc __attribute__((__cleanup__(cleanup_malloc)))
 
 #endif  // _MIMIC_MIMIC_H
