@@ -2,8 +2,6 @@
 
 Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP QoS and port blocking. Based on eBPF, it directly mangles data inside Traffic Control (TC) subsystem in the kernel space and restores data using XDP, achieving remarkably high performance compared to other projects, such as [udp2raw](https://github.com/wangyu-/udp2raw) or [Phantun](https://github.com/dndx/phantun).
 
-**Note:** The project is still in early development stage. Functions might be broken, and I may know, or may not know about it. See [Caveats](#caveats) for more detail. Use with care and try at your own risk.
-
 ## Preparation
 
 Mimic currently ships prebuilt packages for Debian 12 and Ubuntu 24.04 for x86_64 in [GitHub releases](https://github.com/hack3ric/mimic/releases). Download both `mimic` and `mimic-dkms` packages suffixed with the correct distribution and install with:
@@ -76,6 +74,12 @@ Then simply start the per-interface service:
 ``` console
 # systemctl start mimic@<interface>
 ```
+
+### Notes on Firewall
+
+Due to its transparent nature (i.e. UDP applications can work seamlessly with or without Mimic running), Mimic plays nice with existing firewall rules too.
+
+However, do note that since both TC happens after netfilter's output hook, and XDP before input hook, one should treat traffic through Mimic as UDP. TCP rules have no effect on Mimic's fake TCP traffic.
 
 ## Examples
 
@@ -244,20 +248,6 @@ The following shows how Mimic works visually:
 | **WireGuard + udp2raw**<br>w/ fake TCP + `--fix-gro` | 1342 | 500 Mbps   | 1x50%, 3x25%   | 1x55%, 3x10%   |
 | **WireGuard + Phantun**                              | 1428 | 500 Mbps   | 4x15%          | 4x20%          |
 | **WireGuard + Mimic**                                | 1428 | 500 Mbps   | 1x38%, 4x<5%   | 4x<5%          |
-
-## Caveats
-
-#### (0.2.0 or earlier) TCP SYN packets contains data
-
-*Fixed in 0.3.0-alpha. TCP handshake is now emulated by using raw(7) to send TCP control packets.*
-
-This is a known quirk. Since eBPF can only *process* packets, not sending them actively, there's no way of initiating TCP handshake actively (in eBPF) but to rely on underlying protocols' communication to exchange sequence numbers. Wireshark does recognize such as valid TCP handshake, but some firewalls might block this "unconventional" practice. I plan to implement proper, regular handshake in userspace using raw sockets, though.
-
-## Future work
-
-- More obfuscation options: XOR, padding, etc.
-- Make fake TCP optional
-- Remove stale connections periodically
 
 ## License
 
