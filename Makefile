@@ -51,7 +51,7 @@ ifneq ($(RUNTIME_DIR),)
 CFLAGS += -DMIMIC_RUNTIME_DIR="\"$(RUNTIME_DIR)\""
 endif
 
-.PHONY: build build-cli build-kmod generate generate-skel generate-vmlinux generate-pot test bench clean .FORCE
+.PHONY: build build-cli build-kmod generate generate-skel generate-vmlinux generate-manpage generate-pot test bench clean .FORCE
 .FORCE:
 
 all: build
@@ -61,6 +61,7 @@ build-kmod: out/mimic.ko
 generate: generate-skel generate-vmlinux
 generate-skel: src/bpf_skel.h
 generate-vmlinux: bpf/vmlinux.h
+generate-manpage: out/mimic.1.gz
 generate-pot: out/mimic.pot
 
 MKDIR_P = mkdir -p $(@D)
@@ -88,6 +89,10 @@ out/mimic.ko: .FORCE
 	$(MKDIR_P)
 	$(MAKE) -C kmod
 	cp kmod/mimic.ko $@
+
+out/mimic.1.gz: docs/mimic.1.md
+	$(MKDIR_P)
+	pandoc -s -t man $< | gzip -c > $@
 
 out/mimic.pot:
 	$(MKDIR_P)
