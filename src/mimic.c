@@ -11,7 +11,7 @@
 #include "mimic.h"
 
 int main(int argc, char** argv) {
-  struct arguments args = {};
+  struct args args = {};
   try(argp_parse(&argp, argc, argv, ARGP_IN_ORDER, NULL, &args), _("error parsing arguments"));
 
   switch (args.cmd) {
@@ -51,7 +51,7 @@ void conn_tuple_to_addrs(const struct conn_tuple* conn, struct sockaddr_storage*
   }
 }
 
-void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __be16 port, char* restrict dest) {
+void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __be16 port, char* dest) {
   *dest = '\0';
   if (protocol == PROTO_IPV6) strcat(dest, "[");
   inet_ntop(protocol, &ip, dest + strlen(dest), INET6_ADDRSTRLEN);
@@ -59,27 +59,8 @@ void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __be16 port, char* r
   snprintf(dest + strlen(dest), 7, ":%d", ntohs(port));
 }
 
-struct sockaddr_storage ip_port_to_sockaddr(enum ip_proto protocol, union ip_value ip, __u16 port) {
-  struct sockaddr_storage result = {};
-  result.ss_family = protocol;
-  if (protocol == PROTO_IPV4) {
-    struct sockaddr_in* ipv4 = (struct sockaddr_in*)&result;
-    ipv4->sin_addr.s_addr = ntohl(ip.v4);
-    ipv4->sin_port = port;
-  } else {
-    struct sockaddr_in6* ipv6 = (struct sockaddr_in6*)&result;
-    ipv6->sin6_addr = ip.v6;
-    ipv6->sin6_port = port;
-  }
-  return result;
-}
-
-void pkt_filter_ip_port_fmt(const struct pkt_filter* restrict filter, char* restrict dest) {
-  ip_port_fmt(filter->protocol, filter->ip, filter->port, dest);
-}
-
 // `dest` must be at least `FILTER_FMT_MAX_LEN` bytes long.
-void pkt_filter_fmt(const struct pkt_filter* restrict filter, char* restrict dest) {
+void pkt_filter_fmt(const struct pkt_filter* filter, char* dest) {
   *dest = '\0';
   if (filter->origin == ORIGIN_LOCAL) {
     strcat(dest, "local=");
@@ -88,7 +69,7 @@ void pkt_filter_fmt(const struct pkt_filter* restrict filter, char* restrict des
     strcat(dest, "remote=");
     dest += 7;
   }
-  pkt_filter_ip_port_fmt(filter, dest);
+  ip_port_fmt(filter->protocol, filter->ip, filter->port, dest);
 }
 
 const char* conn_state_to_str(enum conn_state s) {

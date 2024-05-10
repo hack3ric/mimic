@@ -42,7 +42,7 @@ static const struct argp_option options[] = {
 };
 
 static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
-  struct run_arguments* args = (struct run_arguments*)state->input;
+  struct run_args* args = (struct run_args*)state->input;
   switch (key) {
     case 'f':
       try(parse_filter(arg, &args->filters[args->filter_count]));
@@ -78,7 +78,7 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
 
 const struct argp run_argp = {options, args_parse_opt, N_("<interface>"), NULL};
 
-static inline int parse_config_file(FILE* file, struct run_arguments* args) {
+static inline int parse_config_file(FILE* file, struct run_args* args) {
   int retcode;
   char *line = NULL, *key, *value, *endptr;
   size_t len = 0;
@@ -346,39 +346,26 @@ static ring_buffer_sample_fn handle_rb_event(struct handle_rb_event_ctx* ctx, ff
   return fn;
 }
 
-static int free_stale_connections(struct mimic_bpf* skel) {
-  int ret;
+static inline __u64 ktime_get_boot_ns() {
+  struct timespec ts;
+  clock_gettime(CLOCK_BOOTTIME, &ts);
+  return ts.tv_sec * SECOND + ts.tv_nsec;
+}
+
+static int free_stale_connections(int conns_fd, __u64 tstamp) {
+  bool del_prev = false;
   struct conn_tuple key, prev_key;
   struct connection conn;
-  struct timespec ts;
-  bool del_prev = false;
+  struct bpf_map_iter iter = {.map_fd = conns_fd, .map_name = "mimic_conns"};
 
-  ret = bpf_map__get_next_key(skel->maps.mimic_conns, NULL, &key, sizeof(key));
-  if (ret == -ENOENT) return 0;
-  if (ret < 0) {
-    ret(ret, _("failed to get next key of map '%s': %s"), "mimic_conns", strerror(-ret));
-  }
-
-  while (true) {
-    try(bpf_map__lookup_elem(skel->maps.mimic_conns, &key, sizeof(key), &conn, sizeof(conn),
-                             BPF_F_LOCK),
-        _("failed to get value from map '%s': %s"), "mimic_conns", strerror(-ret));
-    clock_gettime(CLOCK_BOOTTIME, &ts);
-    __u64 tstamp = ts.tv_sec * SECOND + ts.tv_nsec;
+  while (try(bpf_map_iter_next(&iter, &key))) {
+    if (del_prev) bpf_map_delete_elem(conns_fd, &prev_key);
+    try(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK),
+        _("failed to get value from map '%s': %s"), "mimic_conns", strerror(-_ret));
     if (tstamp > conn.reset_tstamp + 60 * 60 * SECOND) {
       prev_key = key;
       del_prev = true;
       pktbuf_free((struct pktbuf*)conn.pktbuf);
-    }
-    ret = bpf_map__get_next_key(skel->maps.mimic_conns, &key, &key, sizeof(key));
-    if (del_prev) {
-      bpf_map__delete_elem(skel->maps.mimic_conns, &prev_key, sizeof(prev_key), 0);
-    }
-    if (ret < 0) {
-      if (ret != -ENOENT) {
-        ret(ret, _("failed to get next key of map '%s': %s"), "mimic_conns", strerror(-ret));
-      }
-      break;
     }
   }
   return 0;
@@ -402,8 +389,7 @@ static int free_stale_connections(struct mimic_bpf* skel) {
   _get_id(map, map, _name, _("failed to get fd of map '%s': %s"), \
           _("failed to get info of map '%s': %s"))
 
-static inline int run_bpf(struct run_arguments* args, int lock_fd, const char* ifname,
-                          int ifindex) {
+static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname, int ifindex) {
   int retcode;
   struct mimic_bpf* skel = NULL;
   _cleanup_fd int epfd = -1, sfd = -1, timer = -1;
@@ -575,7 +561,7 @@ cleanup:
   return retcode;
 }
 
-int subcmd_run(struct run_arguments* args) {
+int subcmd_run(struct run_args* args) {
   int retcode;
 
   int ifindex = if_nametoindex(args->ifname);
