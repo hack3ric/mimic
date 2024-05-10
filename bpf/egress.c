@@ -43,16 +43,6 @@ static inline void update_tcp_header(struct tcphdr* tcp, __u16 udp_len, __u32 se
   tcp->urg_ptr = 0;
 }
 
-static __always_inline int conn_reset_state(struct connection* conn, struct conn_tuple* conn_key) {
-  uintptr_t pktbuf = 0;
-  swap(pktbuf, conn->pktbuf);
-  bpf_spin_unlock(&conn->lock);
-  bpf_map_delete_elem(&mimic_conns, conn_key);
-  use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
-  // TODO: probably send RST?
-  return TC_ACT_SHOT;
-}
-
 SEC("tc")
 int egress_handler(struct __sk_buff* skb) {
   decl_ok(struct ethhdr, eth, 0, skb);
@@ -105,10 +95,6 @@ int egress_handler(struct __sk_buff* skb) {
 
   bpf_spin_lock(&conn->lock);
   if (conn->state == CONN_ESTABLISHED) {
-    if (tstamp > conn->reset_tstamp + 600 * SECOND) {
-      // Reset state after not receiving packet for 10 minutes
-      return conn_reset_state(conn, &conn_key);
-    }
     seq = conn->seq;
     ack_seq = conn->ack_seq;
     conn->seq += payload_len;
@@ -122,29 +108,6 @@ int egress_handler(struct __sk_buff* skb) {
         conn->retry_tstamp = conn->reset_tstamp = tstamp;
         bpf_spin_unlock(&conn->lock);
         send_ctrl_packet(&conn_key, SYN, seq, ack_seq, 0xffff);
-        break;
-      case CONN_SYN_SENT:
-        if (tstamp > conn->reset_tstamp + 10 * SECOND) {
-          // Give up after >10 seconds of no response
-          return conn_reset_state(conn, &conn_key);
-        } else if (tstamp > conn->retry_tstamp + 1 * SECOND) {
-          // Retry sending SYN not sooner than 1s after previous attempt
-          seq = conn->seq - 1;
-          ack_seq = 0;
-          conn->retry_tstamp = tstamp;
-          bpf_spin_unlock(&conn->lock);
-          send_ctrl_packet(&conn_key, SYN, seq, ack_seq, 0xffff);
-        } else {
-          bpf_spin_unlock(&conn->lock);
-        }
-        break;
-      case CONN_SYN_RECV:
-        // TODO: timeout send ACK/SYN+ACK again
-        if (tstamp > conn->reset_tstamp + 10 * SECOND) {
-          return conn_reset_state(conn, &conn_key);
-        } else {
-          bpf_spin_unlock(&conn->lock);
-        }
         break;
       default:
         bpf_spin_unlock(&conn->lock);

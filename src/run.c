@@ -352,23 +352,74 @@ static inline __u64 ktime_get_boot_ns() {
   return ts.tv_sec * SECOND + ts.tv_nsec;
 }
 
-static int free_stale_connections(int conns_fd, __u64 tstamp) {
-  bool del_prev = false;
-  struct conn_tuple key, prev_key;
+struct conn_to_free {
+  struct conn_tuple key;
+  struct pktbuf* buf;
+};
+
+static int keepalive(int conns_fd, __u64 tstamp, bool do_cleanup, const char* ifname) {
+  int retcode = 0;
+
+  struct list free_list = {};
+  struct conn_tuple key;
   struct connection conn;
   struct bpf_map_iter iter = {.map_fd = conns_fd, .map_name = "mimic_conns"};
 
-  while (try(bpf_map_iter_next(&iter, &key))) {
-    if (del_prev) bpf_map_delete_elem(conns_fd, &prev_key);
-    try(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK),
-        _("failed to get value from map '%s': %s"), "mimic_conns", strerror(-_ret));
-    if (tstamp > conn.reset_tstamp + 60 * 60 * SECOND) {
-      prev_key = key;
-      del_prev = true;
-      pktbuf_free((struct pktbuf*)conn.pktbuf);
+  while (try2(bpf_map_iter_next(&iter, &key))) {
+    try2(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK),
+         _("failed to get value from map '%s': %s"), "mimic_conns", strerror(-_ret));
+
+    if (do_cleanup && tstamp > conn.reset_tstamp + 3600 * SECOND) goto reset;
+
+    // TODO: TCP Keepalive, move reset logic here
+    switch (conn.state) {
+      case CONN_ESTABLISHED:
+        if (tstamp > conn.reset_tstamp + 600 * SECOND) goto reset;
+        break;
+      case CONN_SYN_SENT:
+        if (tstamp > conn.reset_tstamp + 10 * SECOND) {
+          goto reset;
+        } else if (tstamp > conn.retry_tstamp + 1 * SECOND) {
+          struct send_options s = {
+            .conn = key,
+            .syn = true,
+            .seq = conn.seq - 1,
+            .ack_seq = 0,
+            .cwnd = 0xffff,
+          };
+          send_ctrl_packet(&s, ifname);
+          conn.retry_tstamp = tstamp;
+          bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
+        }
+        break;
+      case CONN_SYN_RECV:
+        // TODO: timeout send ACK/SYN+ACK again
+        if (tstamp > conn.reset_tstamp + 10 * SECOND) goto reset;
+        break;
+      default:
+        break;
     }
+    continue;
+  reset:;
+    log_warn("reset");
+    struct conn_to_free* item = malloc(sizeof(*item));
+    item->key = key;
+    item->buf = (struct pktbuf*)conn.pktbuf;
+    list_push(&free_list, item, free);
+    struct send_options s = {.conn = key, .rst = true};
+    send_ctrl_packet(&s, ifname);
   }
-  return 0;
+
+  retcode = 0;
+cleanup:;
+  struct list_node* node;
+  while ((node = list_drain(&free_list))) {
+    struct conn_to_free* item = node->data;
+    bpf_map_delete_elem(conns_fd, &item->key);
+    pktbuf_free(item->buf);
+    list_node_free(node);
+  }
+  return retcode;
 }
 
 #define EPOLL_MAX_EVENTS 10
@@ -495,7 +546,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   epfd = try_e(epoll_create1(0), _("failed to create epoll: %s"), strerror(-_ret));
 
   // BPF log handler / packet sending handler
-  int rb_epfd = ring_buffer__epoll_fd(rb), nfds, i;
+  int rb_epfd = ring_buffer__epoll_fd(rb);
   ev = (typeof(ev)){.events = EPOLLIN, .data.fd = rb_epfd};
   try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, rb_epfd, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
 
@@ -515,16 +566,18 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   // Timer
   timer = try2_e(timerfd_create(CLOCK_BOOTTIME, TFD_NONBLOCK), _("error creating timer: %s"),
                  strerror(-_ret));
-  struct itimerspec utmr = {.it_value.tv_sec = 600, .it_interval.tv_sec = 600};
+  struct itimerspec utmr = {.it_value.tv_sec = 1, .it_interval.tv_sec = 1};
   try2_e(timerfd_settime(timer, 0, &utmr, NULL), _("error setting timer: %s"), strerror(-_ret));
   ev = (typeof(ev)){.events = EPOLLIN | EPOLLET, .data.fd = timer};
   try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, timer, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
 
-  while (true) {
-    nfds = try2_e(epoll_wait(epfd, events, EPOLL_MAX_EVENTS, -1), _("error waiting for epoll: %s"),
-                  strerror(-_ret));
+  __u64 cleanup_tstamp = ktime_get_boot_ns();
 
-    for (i = 0; i < nfds; i++) {
+  while (true) {
+    int nfds = try2_e(epoll_wait(epfd, events, EPOLL_MAX_EVENTS, -1),
+                      _("error waiting for epoll: %s"), strerror(-_ret));
+
+    for (int i = 0; i < nfds; i++) {
       if (events[i].data.fd == rb_epfd) {
         try2(ring_buffer__poll(rb, 0), _("failed to poll ring buffer '%s': %s"), "mimic_rb",
              strerror(-_ret));
@@ -539,10 +592,18 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
           log_warn(_("%s received, exiting"), sigstr);
           cleanup(0);
         }
+
       } else if (events[i].data.fd == timer) {
-        __u64 expirations;
+        __u64 expirations, tstamp = ktime_get_boot_ns();
+        bool do_cleanup = false;
+
         read(timer, &expirations, sizeof(expirations));
-        free_stale_connections(skel);
+        if (tstamp > cleanup_tstamp + 600 * SECOND) {
+          do_cleanup = true;
+          cleanup_tstamp = tstamp;
+        }
+
+        keepalive(mimic_conns_fd, tstamp, do_cleanup, ifname);
 
       } else {
         cleanup(-1, _("unknown fd: %d"), events[i].data.fd);

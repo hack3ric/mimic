@@ -55,15 +55,26 @@ int lock_read(FILE* file, struct lock_content* c);
 
 int parse_filter(const char* filter_str, struct pkt_filter* filter);
 
-struct packet {
-  struct packet* next;
-  char* data;
-  size_t len;
+struct list {
+  struct list_node {
+    struct list_node* next;
+    void* data;
+    void (*data_free)(void*);
+  } *head, *tail;
 };
+
+int list_push(struct list* list, void* data, void (*data_free)(void*));
+struct list_node* list_drain(struct list* list);
+void list_node_free(struct list_node* node);
+void list_free(struct list* list);
 
 struct pktbuf {
   struct conn_tuple conn;
-  struct packet *head, *tail;
+  struct packet {
+    struct packet* next;
+    char* data;
+    size_t len;
+  } *head, *tail;
 };
 
 struct pktbuf* pktbuf_new(struct conn_tuple* conn);
