@@ -78,54 +78,6 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
 
 const struct argp run_argp = {options, args_parse_opt, N_("<interface>"), NULL};
 
-static inline int parse_config_file(FILE* file, struct run_args* args) {
-  int retcode;
-  char *line = NULL, *key, *value, *endptr;
-  size_t len = 0;
-  ssize_t read;
-
-  errno = 0;
-  while ((read = getline(&line, &len, file)) != -1) {
-    if (line[0] == '\n' || line[0] == '#') continue;
-
-    char* delim_pos = strchr(line, '=');
-    if (delim_pos == NULL || delim_pos == line) {
-      cleanup(-1, _("configuration format should look like `key=value`: %s"), line);
-    }
-
-    // Overwrite delimiter and newline
-    delim_pos[0] = '\0';
-    if (line[read - 1] == '\n') line[read - 1] = '\0';
-
-    key = line;
-    value = delim_pos + 1;
-    endptr = NULL;
-
-    if (strcmp(key, "log.verbosity") == 0) {
-      int parsed = strtol(value, &endptr, 10);
-      if (endptr && endptr != value + strlen(value)) cleanup(-1, _("invalid integer: %s"), value);
-      if (parsed < 0) parsed = 0;
-      if (parsed > 4) parsed = 4;
-      log_verbosity = parsed;
-
-    } else if (strcmp(key, "filter") == 0) {
-      try(parse_filter(value, &args->filters[args->filter_count]));
-      if (args->filter_count++ > 8) {
-        cleanup(-1, _("currently only maximum of 8 filters is supported"));
-      }
-    } else {
-      cleanup(-1, _("unknown key '%s'"), key);
-    }
-  }
-
-  if (errno) cleanup(-errno, _("failed to read line: %s"), strerror(errno));
-
-  retcode = 0;
-cleanup:
-  if (line) free(line);
-  return retcode;
-}
-
 static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts,
                                       const struct bpf_program* prog, char* name) {
   int result = bpf_tc_hook_create(hook);
@@ -147,41 +99,13 @@ static inline int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* 
   return ret ?: bpf_tc_hook_destroy(hook);
 }
 
-static int handle_log_event(struct log_event* e) {
-  const char* dir_str = e->ingress ? _("ingress") : _("egress");
-  switch (e->type) {
-    case LOG_TYPE_TCP_PKT:
-      log_any(e->level, "%s: %s: seq %08x, ack %08x", dir_str, log_type_to_str(e->ingress, e->type),
-              e->info.tcp.seq, e->info.tcp.ack_seq);
-      break;
-    case LOG_TYPE_STATE:
-      log_any(e->level, "%s: %s: %s, seq %08x, ack %08x", dir_str,
-              log_type_to_str(e->ingress, e->type), conn_state_to_str(e->info.tcp.state),
-              e->info.tcp.seq, e->info.tcp.ack_seq);
-      break;
-    case LOG_TYPE_QUICK_MSG:
-      log_any(e->level, "%s", e->info.msg);
-      break;
-    default: {
-      char from[IP_PORT_MAX_LEN], to[IP_PORT_MAX_LEN];
-      struct conn_tuple* pkt = &e->info.conn;
-      // invert again, since conn_tuple passed to it is already inverted
-      if (e->ingress) {
-        ip_port_fmt(pkt->protocol, pkt->local, pkt->local_port, to);
-        ip_port_fmt(pkt->protocol, pkt->remote, pkt->remote_port, from);
-      } else {
-        ip_port_fmt(pkt->protocol, pkt->local, pkt->local_port, from);
-        ip_port_fmt(pkt->protocol, pkt->remote, pkt->remote_port, to);
-      }
-      log_any(e->level, "%s: %s: %s => %s", dir_str, log_type_to_str(e->ingress, e->type), from,
-              to);
-      break;
-    }
-  }
-  return 0;
-}
-
-static inline int send_ctrl_packet(struct send_options* s, const char* ifname) {
+// This function is somewhat heavy (see comments below), and is called often. Probably does
+// not really matter since this is not performance-critical either.
+static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
+  // We don't store raw socket because if we do, kernel will forward all TCP traffic to it.
+  //
+  // Maybe setting reception buffer size to 0 will help, but it's just prevent packets from storing
+  // and they will be forwarded to the socket and discarded anyway.
   _cleanup_fd int sk = try(socket(s->conn.protocol, SOCK_RAW | SOCK_NONBLOCK, IPPROTO_TCP));
 
   struct sockaddr_storage saddr, daddr;
@@ -205,8 +129,8 @@ static inline int send_ctrl_packet(struct send_options* s, const char* ifname) {
   // TCP header + (MSS + window scale + SACK PERM) if SYN
   size_t buf_len = sizeof(struct tcphdr) + (s->syn ? 3 * 4 : 0);
   csum += buf_len;
-  _cleanup_malloc void* buf = malloc(buf_len);
 
+  _cleanup_malloc void* buf = malloc(buf_len);
   struct tcphdr* tcp = (typeof(tcp))buf;
   *tcp = (typeof(*tcp)){
     .source = s->conn.local_port,
@@ -223,11 +147,7 @@ static inline int send_ctrl_packet(struct send_options* s, const char* ifname) {
   };
 
   if (s->syn) {
-    struct _mss_opt {
-      __u8 t, l;
-      __be16 v;
-    };
-
+    // Look up MTU in time for (probably) correctness
     struct ifreq ifr;
     strncpy(ifr.ifr_name, ifname, sizeof(ifr.ifr_name));
     ioctl(sk, SIOCGIFMTU, &ifr);
@@ -235,7 +155,9 @@ static inline int send_ctrl_packet(struct send_options* s, const char* ifname) {
       s->conn.protocol == AF_INET ? max(ifr.ifr_mtu, 576) - 40 : max(ifr.ifr_mtu, 1280) - 60;
 
     __u8* opt = (__u8*)(tcp + 1);
-    memcpy(opt, &(struct _mss_opt){2, 4, htons(mss)}, 4);
+    // clang-format off
+    memcpy(opt, &(struct { __u8 t, l; __be16 v; }){2, 4, htons(mss)}, 4);
+    // clang-format on
     memcpy(opt += 4, (__u8[]){1, 3, 3, 7}, 4);
     memcpy(opt += 4, (__u8[]){1, 1, 4, 2}, 4);
   }
@@ -248,8 +170,22 @@ static inline int send_ctrl_packet(struct send_options* s, const char* ifname) {
   return 0;
 }
 
-static inline int store_packet(struct bpf_map* conns, struct conn_tuple* conn_key, const char* data,
-                               __u16 len, bool l4_csum_partial) {
+static inline int send_ctrl_packet(struct conn_tuple* conn, __u32 flags, __u32 seq, __u32 ack_seq,
+                                   __u16 cwnd, const char* ifname) {
+  struct send_options s = {
+    .conn = *conn,
+    .syn = flags & SYN,
+    .ack = flags & ACK,
+    .rst = flags & RST,
+    .seq = seq,
+    .ack_seq = ack_seq,
+    .cwnd = cwnd,
+  };
+  return handle_send_ctrl_packet(&s, ifname);
+}
+
+static int store_packet(struct bpf_map* conns, struct conn_tuple* conn_key, const char* data,
+                        __u16 len, bool l4_csum_partial) {
   int retcode;
   struct connection conn = {};
   try2(bpf_map__lookup_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn), BPF_F_LOCK));
@@ -284,7 +220,7 @@ static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx
       break;
     case RB_ITEM_SEND_OPTIONS:
       name = N_("sending control packets");
-      ret = send_ctrl_packet(&item->send_options, ifname);
+      ret = handle_send_ctrl_packet(&item->send_options, ifname);
       break;
     case RB_ITEM_STORE_PACKET:
       name = N_("storing packet");
@@ -310,7 +246,7 @@ static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx
       break;
     default:
       name = N_("handling unknown ring buffer item");
-      log_warn(_("unknown ring buffer item type %d, size %d"), item->type, data_sz);
+      log_error(_("unknown ring buffer item type %d, size %d"), item->type, data_sz);
       break;
   }
   if (ret < 0) log_error(_("error %s: %s"), gettext(name), strerror(-ret));
@@ -352,14 +288,14 @@ static inline __u64 ktime_get_boot_ns() {
   return ts.tv_sec * SECOND + ts.tv_nsec;
 }
 
-struct conn_to_free {
-  struct conn_tuple key;
-  struct pktbuf* buf;
-};
+// Retry, keepalive, cleanup
+static int do_routine(int conns_fd, __u64 tstamp, bool do_cleanup, const char* ifname) {
+  struct _conn_to_free {
+    struct conn_tuple key;
+    struct pktbuf* buf;
+  };
 
-static int keepalive(int conns_fd, __u64 tstamp, bool do_cleanup, const char* ifname) {
   int retcode = 0;
-
   struct list free_list = {};
   struct conn_tuple key;
   struct connection conn;
@@ -369,26 +305,20 @@ static int keepalive(int conns_fd, __u64 tstamp, bool do_cleanup, const char* if
     try2(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK),
          _("failed to get value from map '%s': %s"), "mimic_conns", strerror(-_ret));
 
-    if (do_cleanup && tstamp > conn.reset_tstamp + 3600 * SECOND) goto reset;
+    if (do_cleanup && tstamp > conn.reset_tstamp + 60 * 60 * SECOND) goto reset;
 
-    // TODO: TCP Keepalive, move reset logic here
     switch (conn.state) {
       case CONN_ESTABLISHED:
+        // TODO: TCP Keepalive
         if (tstamp > conn.reset_tstamp + 600 * SECOND) goto reset;
         break;
       case CONN_SYN_SENT:
         if (tstamp > conn.reset_tstamp + 10 * SECOND) {
           goto reset;
         } else if (tstamp > conn.retry_tstamp + 1 * SECOND) {
-          struct send_options s = {
-            .conn = key,
-            .syn = true,
-            .seq = conn.seq - 1,
-            .ack_seq = 0,
-            .cwnd = 0xffff,
-          };
-          send_ctrl_packet(&s, ifname);
           conn.retry_tstamp = tstamp;
+          send_ctrl_packet(&key, SYN, conn.seq - 1, 0, 0xffff, ifname);
+          pktbuf_drain((struct pktbuf*)conn.pktbuf);
           bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
         }
         break;
@@ -400,21 +330,25 @@ static int keepalive(int conns_fd, __u64 tstamp, bool do_cleanup, const char* if
         break;
     }
     continue;
+
   reset:;
-    log_warn("reset");
-    struct conn_to_free* item = malloc(sizeof(*item));
+    char from[IP_PORT_MAX_LEN], to[IP_PORT_MAX_LEN];
+    ip_port_fmt(key.protocol, key.local, key.local_port, from);
+    ip_port_fmt(key.protocol, key.remote, key.remote_port, to);
+    log_warn(_("connection reset: %s => %s"), from, to);
+
+    struct _conn_to_free* item = malloc(sizeof(*item));
     item->key = key;
     item->buf = (struct pktbuf*)conn.pktbuf;
     list_push(&free_list, item, free);
-    struct send_options s = {.conn = key, .rst = true};
-    send_ctrl_packet(&s, ifname);
+    send_ctrl_packet(&key, RST, 0, 0, 0, ifname);
   }
 
   retcode = 0;
 cleanup:;
   struct list_node* node;
   while ((node = list_drain(&free_list))) {
-    struct conn_to_free* item = node->data;
+    struct _conn_to_free* item = node->data;
     bpf_map_delete_elem(conns_fd, &item->key);
     pktbuf_free(item->buf);
     list_node_free(node);
@@ -603,7 +537,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
           cleanup_tstamp = tstamp;
         }
 
-        keepalive(mimic_conns_fd, tstamp, do_cleanup, ifname);
+        do_routine(mimic_conns_fd, tstamp, do_cleanup, ifname);
 
       } else {
         cleanup(-1, _("unknown fd: %d"), events[i].data.fd);

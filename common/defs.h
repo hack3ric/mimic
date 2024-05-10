@@ -72,6 +72,10 @@
 
 #endif  // _MIMIC_BPF
 
+#define SYN 1
+#define ACK 1 << 1
+#define RST 1 << 2
+
 // Mainly used for limiting loop counts
 #define MAX_PACKET_SIZE 9000
 

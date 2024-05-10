@@ -54,6 +54,7 @@ int lock_write(int fd, const struct lock_content* c);
 int lock_read(FILE* file, struct lock_content* c);
 
 int parse_filter(const char* filter_str, struct pkt_filter* filter);
+int parse_config_file(FILE* file, struct run_args* args);
 
 struct list {
   struct list_node {
@@ -80,6 +81,7 @@ struct pktbuf {
 struct pktbuf* pktbuf_new(struct conn_tuple* conn);
 int pktbuf_push(struct pktbuf* buf, const char* data, size_t len, bool l4_csum_partial);
 int pktbuf_consume(struct pktbuf* buf, bool* consumed);
+void pktbuf_drain(struct pktbuf* buf);
 void pktbuf_free(struct pktbuf* buf);
 
 int notify_ready();

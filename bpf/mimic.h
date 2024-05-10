@@ -107,10 +107,6 @@ static __always_inline void change_cwnd(__u16* cwnd, __u32 r1, __u32 r2, __u32 r
   }
 }
 
-#define SYN 1
-#define ACK 1 << 1
-#define RST 1 << 2
-
 int send_ctrl_packet(struct conn_tuple* conn, __u32 flags, __u32 seq, __u32 ack_seq, __u16 cwnd);
 int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key);
 int use_pktbuf(enum rb_item_type type, uintptr_t buf);

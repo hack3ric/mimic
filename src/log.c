@@ -5,6 +5,7 @@
 
 #include "../common/defs.h"
 #include "log.h"
+#include "mimic.h"
 
 static const char* _log_prefixes[][2] = {
   {BOLD RED, N_("Error")},  {BOLD YELLOW, N_(" Warn")}, {BOLD GREEN, N_(" Info")},
@@ -76,4 +77,39 @@ const char* log_type_to_str(bool ingress, enum log_type type) {
     default:
       return "";
   }
+}
+
+int handle_log_event(struct log_event* e) {
+  const char* dir_str = e->ingress ? _("ingress") : _("egress");
+  switch (e->type) {
+    case LOG_TYPE_TCP_PKT:
+      log_any(e->level, "%s: %s: seq %08x, ack %08x", dir_str, log_type_to_str(e->ingress, e->type),
+              e->info.tcp.seq, e->info.tcp.ack_seq);
+      break;
+    case LOG_TYPE_STATE:
+      log_any(e->level, "%s: %s: %s, seq %08x, ack %08x", dir_str,
+              log_type_to_str(e->ingress, e->type), conn_state_to_str(e->info.tcp.state),
+              e->info.tcp.seq, e->info.tcp.ack_seq);
+      break;
+    case LOG_TYPE_QUICK_MSG:
+      log_any(e->level, "%s", e->info.msg);
+      break;
+    default: {
+      char from[IP_PORT_MAX_LEN], to[IP_PORT_MAX_LEN];
+      struct conn_tuple* pkt = &e->info.conn;
+      // invert again, since conn_tuple passed to it is already inverted
+      // TODO: some type does not need inversion (ones logging connections, not packets)
+      if (e->ingress) {
+        ip_port_fmt(pkt->protocol, pkt->local, pkt->local_port, to);
+        ip_port_fmt(pkt->protocol, pkt->remote, pkt->remote_port, from);
+      } else {
+        ip_port_fmt(pkt->protocol, pkt->local, pkt->local_port, from);
+        ip_port_fmt(pkt->protocol, pkt->remote, pkt->remote_port, to);
+      }
+      log_any(e->level, "%s: %s: %s => %s", dir_str, log_type_to_str(e->ingress, e->type), from,
+              to);
+      break;
+    }
+  }
+  return 0;
 }

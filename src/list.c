@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <errno.h>
 #include <linux/types.h>
 #include <linux/udp.h>
 #include <netinet/in.h>
@@ -123,12 +124,17 @@ int pktbuf_consume(struct pktbuf* buf, bool* consumed) {
   return ret;
 }
 
-void pktbuf_free(struct pktbuf* buf) {
+void pktbuf_drain(struct pktbuf* buf) {
   if (!buf) return;
   for (struct packet *p = buf->head, *oldp; p;) {
     oldp = p;
     p = p->next;
     packet_free(oldp);
   }
+}
+
+void pktbuf_free(struct pktbuf* buf) {
+  if (!buf) return;
+  pktbuf_drain(buf);
   free(buf);
 }

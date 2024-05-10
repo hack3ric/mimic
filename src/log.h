@@ -28,5 +28,6 @@ void log_any(int level, const char* fmt, ...);
 int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list args);
 
 const char* log_type_to_str(bool ingress, enum log_type type);
+int handle_log_event(struct log_event* e);
 
 #endif  // _MIMIC_LOG_H

@@ -178,6 +178,7 @@ int ingress_handler(struct xdp_md* xdp) {
       break;
 
     case CONN_ESTABLISHED:
+      // TODO: handle keepalive
       if (tcp->syn) {
         rst = will_send_ctrl_packet = true;
         swap(pktbuf, conn->pktbuf);
@@ -196,7 +197,7 @@ int ingress_handler(struct xdp_md* xdp) {
   log_tcp(LOG_LEVEL_TRACE, true, LOG_TYPE_STATE, state, conn_seq, conn_ack_seq);
 
   if (will_send_ctrl_packet) {
-    send_ctrl_packet(&conn_key, syn + (ack << 1) + (rst << 2), seq, ack_seq, cwnd);
+    send_ctrl_packet(&conn_key, syn + (ack << 1) + (rst << 2), seq, ack_seq, rst ? 0 : cwnd);
   }
   if (rst) {
     bpf_map_delete_elem(&mimic_conns, &conn_key);
