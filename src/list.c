@@ -131,6 +131,7 @@ void pktbuf_drain(struct pktbuf* buf) {
     p = p->next;
     packet_free(oldp);
   }
+  buf->head = buf->tail = NULL;
 }
 
 void pktbuf_free(struct pktbuf* buf) {

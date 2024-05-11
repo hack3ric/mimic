@@ -288,6 +288,15 @@ static inline __u64 ktime_get_boot_ns() {
   return ts.tv_sec * SECOND + ts.tv_nsec;
 }
 
+static inline int time_diff_sec(__u64 a, __u64 b) {
+  if (a <= b) return 0;
+  if ((a - b) % SECOND < SECOND / 2) {
+    return (a - b) / SECOND;
+  } else {
+    return (a - b) / SECOND + 1;
+  }
+}
+
 // Retry, keepalive, cleanup
 static int do_routine(int conns_fd, __u64 tstamp, bool do_cleanup, const char* ifname) {
   struct _conn_to_free {
@@ -302,46 +311,65 @@ static int do_routine(int conns_fd, __u64 tstamp, bool do_cleanup, const char* i
   struct bpf_map_iter iter = {.map_fd = conns_fd, .map_name = "mimic_conns"};
 
   while (try2(bpf_map_iter_next(&iter, &key))) {
+    bool reset = false;
     try2(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK),
          _("failed to get value from map '%s': %s"), "mimic_conns", strerror(-_ret));
 
-    if (do_cleanup && tstamp > conn.reset_tstamp + 60 * 60 * SECOND) goto reset;
-
-    switch (conn.state) {
-      case CONN_ESTABLISHED:
-        // TODO: TCP Keepalive
-        if (tstamp > conn.reset_tstamp + 600 * SECOND) goto reset;
-        break;
-      case CONN_SYN_SENT:
-        if (tstamp > conn.reset_tstamp + 10 * SECOND) {
-          goto reset;
-        } else if (tstamp > conn.retry_tstamp + 1 * SECOND) {
-          conn.retry_tstamp = tstamp;
-          send_ctrl_packet(&key, SYN, conn.seq - 1, 0, 0xffff, ifname);
-          pktbuf_drain((struct pktbuf*)conn.pktbuf);
-          bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
-        }
-        break;
-      case CONN_SYN_RECV:
-        // TODO: timeout send ACK/SYN+ACK again
-        if (tstamp > conn.reset_tstamp + 10 * SECOND) goto reset;
-        break;
-      default:
-        break;
+    int retry_secs = time_diff_sec(tstamp, conn.retry_tstamp);
+    if (do_cleanup && retry_secs >= 3600) {
+      reset = true;
+    } else {
+      // log_info("retry_secs = %d", retry_secs);
+      switch (conn.state) {
+        case CONN_ESTABLISHED:
+          if (retry_secs >= 10) {
+            if (conn.retry_tstamp >= conn.reset_tstamp) {
+              // log_info("keepalive");
+              conn.reset_tstamp = tstamp;
+              conn.keepalive_sent = true;
+              send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
+              bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
+            } else {
+              int reset_secs = time_diff_sec(tstamp, conn.reset_tstamp);
+              if (reset_secs >= 6) {
+                reset = true;
+              } else if (reset_secs % 2 == 0) {
+                send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
+              }
+            }
+          }
+          break;
+        case CONN_SYN_SENT:
+          if (retry_secs >= 8) {
+            // log_info("give up");
+            reset = true;
+          } else if (retry_secs != 0 && retry_secs % 2 == 0) {
+            // log_info("retry SYN");
+            send_ctrl_packet(&key, SYN, conn.seq - 1, 0, 0xffff, ifname);
+            pktbuf_drain((struct pktbuf*)conn.pktbuf);
+          }
+          break;
+        case CONN_SYN_RECV:
+          // TODO: timeout send ACK/SYN+ACK again
+          if (retry_secs >= 8) reset = true;
+          break;
+        default:
+          break;
+      }
     }
-    continue;
 
-  reset:;
-    char from[IP_PORT_MAX_LEN], to[IP_PORT_MAX_LEN];
-    ip_port_fmt(key.protocol, key.local, key.local_port, from);
-    ip_port_fmt(key.protocol, key.remote, key.remote_port, to);
-    log_warn(_("connection reset: %s => %s"), from, to);
+    if (reset) {
+      char from[IP_PORT_MAX_LEN], to[IP_PORT_MAX_LEN];
+      ip_port_fmt(key.protocol, key.local, key.local_port, from);
+      ip_port_fmt(key.protocol, key.remote, key.remote_port, to);
+      log_warn(_("connection reset: %s => %s"), from, to);
 
-    struct _conn_to_free* item = malloc(sizeof(*item));
-    item->key = key;
-    item->buf = (struct pktbuf*)conn.pktbuf;
-    list_push(&free_list, item, free);
-    send_ctrl_packet(&key, RST, 0, 0, 0, ifname);
+      struct _conn_to_free* item = malloc(sizeof(*item));
+      item->key = key;
+      item->buf = (struct pktbuf*)conn.pktbuf;
+      list_push(&free_list, item, free);
+      send_ctrl_packet(&key, RST, 0, 0, 0, ifname);
+    }
   }
 
   retcode = 0;

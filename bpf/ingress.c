@@ -134,63 +134,79 @@ int ingress_handler(struct xdp_md* xdp) {
   __u32 random = bpf_get_prandom_u32();
   __u64 tstamp = bpf_ktime_get_boot_ns();
   enum conn_state state;
-  syn = ack = rst = will_send_ctrl_packet = newly_estab = false;
-  will_drop = true;
+  syn = ack = rst = newly_estab = false;
+  will_send_ctrl_packet = will_drop = true;
 
   bpf_spin_lock(&conn->lock);
-  conn->reset_tstamp = conn->retry_tstamp = tstamp;
+
+  // Incoming traffic == activity
+  conn->retry_tstamp = conn->reset_tstamp = tstamp;
+
   switch (conn->state) {
     case CONN_IDLE:
     case CONN_SYN_RECV:
       if (tcp->syn && !tcp->ack) {
-        syn = ack = will_send_ctrl_packet = true;
+        syn = ack = true;
         pre_syn_ack(&seq, &ack_seq, conn, tcp, payload_len, random);
       } else if (conn->state == CONN_SYN_RECV && !tcp->syn && tcp->ack) {
+        will_send_ctrl_packet = false;
         conn->state = CONN_ESTABLISHED;
         conn->ack_seq = new_ack_seq(tcp, payload_len);
         newly_estab = true;
         swap(pktbuf, conn->pktbuf);
       } else {
-        rst = will_send_ctrl_packet = true;
+        rst = true;
         swap(pktbuf, conn->pktbuf);
       }
       break;
 
     case CONN_SYN_SENT:
       if (tcp->syn) {
-        ack = will_send_ctrl_packet = true;
+        ack = true;
         conn->cwnd += random % 31 - 15;
         cwnd = conn->cwnd;
-      }
-      if (tcp->syn && tcp->ack) {
-        conn->state = CONN_ESTABLISHED;
-        newly_estab = true;
-        swap(pktbuf, conn->pktbuf);
-        pre_ack(&seq, &ack_seq, conn, tcp, payload_len);
-      } else if (tcp->syn && !tcp->ack) {
-        // Simultaneous open
-        conn->state = CONN_SYN_RECV;
-        pre_ack(&seq, &ack_seq, conn, tcp, payload_len);
+        if (tcp->ack) {
+          // 3-way handshake
+          conn->state = CONN_ESTABLISHED;
+          newly_estab = true;
+          swap(pktbuf, conn->pktbuf);
+          pre_ack(&seq, &ack_seq, conn, tcp, payload_len);
+        } else {
+          // Simultaneous open a.k.a. 4-way handshake
+          conn->state = CONN_SYN_RECV;
+          pre_ack(&seq, &ack_seq, conn, tcp, payload_len);
+        }
       } else {
-        rst = will_send_ctrl_packet = true;
+        rst = true;
         swap(pktbuf, conn->pktbuf);
       }
       break;
 
     case CONN_ESTABLISHED:
-      // TODO: handle keepalive
       if (tcp->syn) {
-        rst = will_send_ctrl_packet = true;
+        rst = true;
         swap(pktbuf, conn->pktbuf);
+      } else if (ntohl(tcp->seq) == conn->ack_seq - 1) {
+        // Received keepalive; send keepalive ACK
+        ack = true;
+        seq = conn->seq;
+        ack_seq = conn->ack_seq;
+        cwnd = conn->cwnd;
+      } else if (conn->keepalive_sent && payload_len == 0) {
+        // Received keepalive ACK
+        will_send_ctrl_packet = false;
+        conn->keepalive_sent = false;
       } else {
-        will_drop = false;
+        will_send_ctrl_packet = will_drop = false;
         conn->ack_seq += payload_len;
       }
       break;
   }
+
   state = conn->state;
   conn_seq = conn->seq;
   conn_ack_seq = conn->ack_seq;
+
   bpf_spin_unlock(&conn->lock);
 
   log_tcp(LOG_LEVEL_TRACE, true, LOG_TYPE_TCP_PKT, 0, ntohl(tcp->seq), ntohl(tcp->ack_seq));

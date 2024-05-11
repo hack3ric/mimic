@@ -130,7 +130,7 @@ struct connection {
   uintptr_t pktbuf;
   __u16 cwnd;
   __u64 retry_tstamp, reset_tstamp;
-  // TODO: record initial seq and ack_seq, reject unmatched ones
+  bool keepalive_sent;
 };
 
 enum rst_result {
