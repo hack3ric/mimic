@@ -89,7 +89,7 @@ static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_op
   }
 
   opts->prog_fd = bpf_program__fd(prog);
-  try_e(bpf_tc_attach(hook, opts), _("failed to attach to TC %s hook: %s"), name, strerror(-_ret));
+  try_e(bpf_tc_attach(hook, opts), _("failed to attach to TC %s hook: %s"), name, strret);
   return 0;
 }
 
@@ -123,8 +123,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
   }
   csum += IPPROTO_TCP;
 
-  try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"),
-        strerror(-_ret));
+  try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strret);
 
   // TCP header + (MSS + window scale + SACK PERM) if SYN
   size_t buf_len = sizeof(struct tcphdr) + (s->syn ? 3 * 4 : 0);
@@ -166,7 +165,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
   tcp->check = htons(csum_fold(csum));
 
   try_e(sendto(sk, buf, buf_len, 0, (struct sockaddr*)&daddr, sizeof(daddr)),
-        _("failed to send: %s"), strerror(-_ret));
+        _("failed to send: %s"), strret);
   return 0;
 }
 
@@ -312,7 +311,7 @@ static int do_routine(int conns_fd, const char* ifname) {
   while (try2(bpf_map_iter_next(&iter, &key))) {
     bool reset = false;
     try2(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK),
-         _("failed to get value from map '%s': %s"), "mimic_conns", strerror(-_ret));
+         _("failed to get value from map '%s': %s"), "mimic_conns", strret);
 
     int retry_secs = time_diff_sec(tstamp, conn.retry_tstamp);
     // log_info("retry_secs = %d", retry_secs);
@@ -381,13 +380,12 @@ cleanup:;
 
 #define EPOLL_MAX_EVENTS 10
 
-#define _get_id(_Type, _TypeFull, _Name, _E1, _E2)                                                \
-  ({                                                                                              \
-    _Name##_fd = try2(bpf_##_TypeFull##__fd(skel->_Type##s._Name), _E1, #_Name, strerror(-_ret)); \
-    memset(&_Type##_info, 0, _Type##_len);                                                        \
-    try2(bpf_obj_get_info_by_fd(_Name##_fd, &_Type##_info, &_Type##_len), _E2, #_Name,            \
-         strerror(-_ret));                                                                        \
-    _Type##_info.id;                                                                              \
+#define _get_id(_Type, _TypeFull, _Name, _E1, _E2)                                              \
+  ({                                                                                            \
+    _Name##_fd = try2(bpf_##_TypeFull##__fd(skel->_Type##s._Name), _E1, #_Name, strret);        \
+    memset(&_Type##_info, 0, _Type##_len);                                                      \
+    try2(bpf_obj_get_info_by_fd(_Name##_fd, &_Type##_info, &_Type##_len), _E2, #_Name, strret); \
+    _Type##_info.id;                                                                            \
   })
 
 #define _get_prog_id(_name)                                                \
@@ -414,7 +412,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   ffi_closure* closure = NULL;
   ffi_cif cif;
 
-  skel = try2_p(mimic_bpf__open(), _("failed to open BPF program: %s"), strerror(-_ret));
+  skel = try2_p(mimic_bpf__open(), _("failed to open BPF program: %s"), strret);
 
   retcode = mimic_bpf__load(skel);
   if (retcode < 0) {
@@ -468,7 +466,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   // Get ring buffers in advance so we can return earlier if error
   struct handle_rb_event_ctx ctx = {.conns = skel->maps.mimic_conns, .ifname = ifname};
   rb = try2_p(ring_buffer__new(mimic_rb_fd, handle_rb_event(&ctx, &cif, &closure), NULL, NULL),
-              _("failed to attach BPF ring buffer '%s': %s"), "mimic_rb", strerror(-_ret));
+              _("failed to attach BPF ring buffer '%s': %s"), "mimic_rb", strret);
 
   // TC and XDP
   tc_hook_egress = (typeof(tc_hook_egress)){
@@ -478,7 +476,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   tc_hook_created = true;
   try2(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler, "egress"));
   xdp_ingress = try2_p(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
-                       _("failed to attach XDP program: %s"), strerror(-_ret));
+                       _("failed to attach XDP program: %s"), strret);
 
   retcode = notify_ready();
   if (retcode < 0) {
@@ -500,47 +498,45 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
 
   struct epoll_event ev;
   struct epoll_event events[EPOLL_MAX_EVENTS];
-  epfd = try_e(epoll_create1(0), _("failed to create epoll: %s"), strerror(-_ret));
+  epfd = try_e(epoll_create1(0), _("failed to create epoll: %s"), strret);
 
   // BPF log handler / packet sending handler
   int rb_epfd = ring_buffer__epoll_fd(rb);
   ev = (typeof(ev)){.events = EPOLLIN, .data.fd = rb_epfd};
-  try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, rb_epfd, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
+  try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, rb_epfd, &ev), _("epoll_ctl error: %s"), strret);
 
   // Signal handler
   sigset_t mask = {};
   sigaddset(&mask, SIGINT);
   sigaddset(&mask, SIGTERM);
-  sfd =
-    try2_e(signalfd(-1, &mask, SFD_NONBLOCK), _("error creating signalfd: %s"), strerror(-_ret));
+  sfd = try2_e(signalfd(-1, &mask, SFD_NONBLOCK), _("error creating signalfd: %s"), strret);
   ev = (typeof(ev)){.events = EPOLLIN | EPOLLET, .data.fd = sfd};
-  try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
+  try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, sfd, &ev), _("epoll_ctl error: %s"), strret);
 
   // Block default handler for signals of interest
-  try2_e(sigprocmask(SIG_SETMASK, &mask, NULL), _("error setting signal mask: %s"),
-         strerror(-_ret));
+  try2_e(sigprocmask(SIG_SETMASK, &mask, NULL), _("error setting signal mask: %s"), strret);
 
   // Timer
-  timer = try2_e(timerfd_create(CLOCK_BOOTTIME, TFD_NONBLOCK), _("error creating timer: %s"),
-                 strerror(-_ret));
+  timer =
+    try2_e(timerfd_create(CLOCK_BOOTTIME, TFD_NONBLOCK), _("error creating timer: %s"), strret);
   struct itimerspec utmr = {.it_value.tv_sec = 1, .it_interval.tv_sec = 1};
-  try2_e(timerfd_settime(timer, 0, &utmr, NULL), _("error setting timer: %s"), strerror(-_ret));
+  try2_e(timerfd_settime(timer, 0, &utmr, NULL), _("error setting timer: %s"), strret);
   ev = (typeof(ev)){.events = EPOLLIN | EPOLLET, .data.fd = timer};
-  try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, timer, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
+  try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, timer, &ev), _("epoll_ctl error: %s"), strret);
 
   while (true) {
     int nfds = try2_e(epoll_wait(epfd, events, EPOLL_MAX_EVENTS, -1),
-                      _("error waiting for epoll: %s"), strerror(-_ret));
+                      _("error waiting for epoll: %s"), strret);
 
     for (int i = 0; i < nfds; i++) {
       if (events[i].data.fd == rb_epfd) {
         try2(ring_buffer__poll(rb, 0), _("failed to poll ring buffer '%s': %s"), "mimic_rb",
-             strerror(-_ret));
+             strret);
 
       } else if (events[i].data.fd == sfd) {
         struct signalfd_siginfo siginfo;
-        int len = try2_e(read(sfd, &siginfo, sizeof(siginfo)), _("failed to read signalfd: %s"),
-                         strerror(-_ret));
+        int len =
+          try2_e(read(sfd, &siginfo, sizeof(siginfo)), _("failed to read signalfd: %s"), strret);
         if (len != sizeof(siginfo)) cleanup(-1, "len != sizeof(siginfo)");
         if (siginfo.ssi_signo == SIGINT || siginfo.ssi_signo == SIGTERM) {
           const char* sigstr = siginfo.ssi_signo == SIGINT ? "SIGINT" : "SIGTERM";
@@ -562,6 +558,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   retcode = 0;
 cleanup:
   log_info("cleaning up");
+  sigprocmask(SIG_SETMASK, NULL, NULL);
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
   if (xdp_ingress) bpf_link__destroy(xdp_ingress);
   if (rb) ring_buffer__free(rb);
@@ -591,7 +588,7 @@ int subcmd_run(struct run_args* args) {
   if (stat(MIMIC_RUNTIME_DIR, &st) < 0) {
     if (errno == ENOENT) {
       try_e(mkdir(MIMIC_RUNTIME_DIR, 0755), _("failed to create directory %s: %s"),
-            MIMIC_RUNTIME_DIR, strerror(-_ret));
+            MIMIC_RUNTIME_DIR, strret);
     } else {
       ret(-errno, _("failed to stat %s: %s"), MIMIC_RUNTIME_DIR, strerror(errno));
     }

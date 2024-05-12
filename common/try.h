@@ -164,4 +164,6 @@
 #define try_p_pass(x) try_p_ret(x, XDP_PASS)
 #define try_p_drop(x) try_p_ret(x, XDP_DROP)
 
+#define strret strerror(-_ret)
+
 #endif  // _MIMIC_COMMON_TRY_H

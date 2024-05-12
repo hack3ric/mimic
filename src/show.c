@@ -53,7 +53,7 @@ int subcmd_show(struct show_args* args) {
   get_lock_file_name(lock, sizeof(lock), ifindex);
   {
     _cleanup_file FILE* lock_file =
-      try_p(fopen(lock, "r"), _("failed to open lock file at %s: %s"), lock, strerror(-_ret));
+      try_p(fopen(lock, "r"), _("failed to open lock file at %s: %s"), lock, strret);
     try(lock_read(lock_file, &lock_content));
   }
 
@@ -67,7 +67,7 @@ int subcmd_show(struct show_args* args) {
 
     _cleanup_fd int whitelist_fd =
       try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
-          "mimic_whitelist", strerror(-_ret));
+          "mimic_whitelist", strret);
 
     char buf[FILTER_FMT_MAX_LEN];
     struct pkt_filter filter;
@@ -90,9 +90,8 @@ int subcmd_show(struct show_args* args) {
   if (args->show_process && args->show_command) printf("\n");
 
   if (args->show_command) {
-    _cleanup_fd int conns_fd =
-      try(bpf_map_get_fd_by_id(lock_content.conns_id), _("failed to get fd of map '%s': %s"),
-          "mimic_conns", strerror(-_ret));
+    _cleanup_fd int conns_fd = try(bpf_map_get_fd_by_id(lock_content.conns_id),
+                                   _("failed to get fd of map '%s': %s"), "mimic_conns", strret);
 
     char local[IP_PORT_MAX_LEN], remote[IP_PORT_MAX_LEN];
     struct conn_tuple key;
@@ -105,7 +104,7 @@ int subcmd_show(struct show_args* args) {
       printf(_("%sConnection%s %s => %s\n"), BOLD GREEN, RESET, local, remote);
 
       try(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK),
-          _("failed to get value from map '%s': %s"), "mimic_conns", strerror(-_ret));
+          _("failed to get value from map '%s': %s"), "mimic_conns", strret);
 
       printf(_("- %sstate:%s %s\n"), BOLD, RESET, gettext(conn_state_to_str(conn.state)));
       printf(_("- %ssequence:%s\n"), BOLD, RESET);
