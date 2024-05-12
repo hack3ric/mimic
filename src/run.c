@@ -282,12 +282,6 @@ static ring_buffer_sample_fn handle_rb_event(struct handle_rb_event_ctx* ctx, ff
   return fn;
 }
 
-static inline __u64 ktime_get_boot_ns() {
-  struct timespec ts;
-  clock_gettime(CLOCK_BOOTTIME, &ts);
-  return ts.tv_sec * SECOND + ts.tv_nsec;
-}
-
 static inline int time_diff_sec(__u64 a, __u64 b) {
   if (a <= b) return 0;
   if ((a - b) % SECOND < SECOND / 2) {
@@ -298,13 +292,18 @@ static inline int time_diff_sec(__u64 a, __u64 b) {
 }
 
 // Retry, keepalive, cleanup
-static int do_routine(int conns_fd, __u64 tstamp, bool do_cleanup, const char* ifname) {
+static int do_routine(int conns_fd, const char* ifname) {
   struct _conn_to_free {
     struct conn_tuple key;
     struct pktbuf* buf;
   };
 
   int retcode = 0;
+
+  struct timespec ts;
+  clock_gettime(CLOCK_BOOTTIME, &ts);
+  __u64 tstamp = ts.tv_sec * SECOND + ts.tv_nsec;
+
   struct list free_list = {};
   struct conn_tuple key;
   struct connection conn;
@@ -316,46 +315,42 @@ static int do_routine(int conns_fd, __u64 tstamp, bool do_cleanup, const char* i
          _("failed to get value from map '%s': %s"), "mimic_conns", strerror(-_ret));
 
     int retry_secs = time_diff_sec(tstamp, conn.retry_tstamp);
-    if (do_cleanup && retry_secs >= 3600) {
-      reset = true;
-    } else {
-      // log_info("retry_secs = %d", retry_secs);
-      switch (conn.state) {
-        case CONN_ESTABLISHED:
-          if (retry_secs >= 10) {
-            if (conn.retry_tstamp >= conn.reset_tstamp) {
-              // log_info("keepalive");
-              conn.reset_tstamp = tstamp;
-              conn.keepalive_sent = true;
+    // log_info("retry_secs = %d", retry_secs);
+    switch (conn.state) {
+      case CONN_ESTABLISHED:
+        if (retry_secs >= 10) {
+          if (conn.retry_tstamp >= conn.reset_tstamp) {
+            // log_info("keepalive");
+            conn.reset_tstamp = tstamp;
+            conn.keepalive_sent = true;
+            send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
+            bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
+          } else {
+            int reset_secs = time_diff_sec(tstamp, conn.reset_tstamp);
+            if (reset_secs >= 6) {
+              reset = true;
+            } else if (reset_secs % 2 == 0) {
               send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
-              bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
-            } else {
-              int reset_secs = time_diff_sec(tstamp, conn.reset_tstamp);
-              if (reset_secs >= 6) {
-                reset = true;
-              } else if (reset_secs % 2 == 0) {
-                send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
-              }
             }
           }
-          break;
-        case CONN_SYN_SENT:
-          if (retry_secs >= 8) {
-            // log_info("give up");
-            reset = true;
-          } else if (retry_secs != 0 && retry_secs % 2 == 0) {
-            // log_info("retry SYN");
-            send_ctrl_packet(&key, SYN, conn.seq - 1, 0, 0xffff, ifname);
-            pktbuf_drain((struct pktbuf*)conn.pktbuf);
-          }
-          break;
-        case CONN_SYN_RECV:
-          // TODO: timeout send ACK/SYN+ACK again
-          if (retry_secs >= 8) reset = true;
-          break;
-        default:
-          break;
-      }
+        }
+        break;
+      case CONN_SYN_SENT:
+        if (retry_secs >= 8) {
+          // log_info("give up");
+          reset = true;
+        } else if (retry_secs != 0 && retry_secs % 2 == 0) {
+          // log_info("retry SYN");
+          send_ctrl_packet(&key, SYN, conn.seq - 1, 0, 0xffff, ifname);
+          pktbuf_drain((struct pktbuf*)conn.pktbuf);
+        }
+        break;
+      case CONN_SYN_RECV:
+        // TODO: timeout send ACK/SYN+ACK again
+        if (retry_secs >= 8) reset = true;
+        break;
+      default:
+        break;
     }
 
     if (reset) {
@@ -533,8 +528,6 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   ev = (typeof(ev)){.events = EPOLLIN | EPOLLET, .data.fd = timer};
   try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, timer, &ev), _("epoll_ctl error: %s"), strerror(-_ret));
 
-  __u64 cleanup_tstamp = ktime_get_boot_ns();
-
   while (true) {
     int nfds = try2_e(epoll_wait(epfd, events, EPOLL_MAX_EVENTS, -1),
                       _("error waiting for epoll: %s"), strerror(-_ret));
@@ -556,16 +549,9 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
         }
 
       } else if (events[i].data.fd == timer) {
-        __u64 expirations, tstamp = ktime_get_boot_ns();
-        bool do_cleanup = false;
-
+        __u64 expirations;
         read(timer, &expirations, sizeof(expirations));
-        if (tstamp > cleanup_tstamp + 600 * SECOND) {
-          do_cleanup = true;
-          cleanup_tstamp = tstamp;
-        }
-
-        do_routine(mimic_conns_fd, tstamp, do_cleanup, ifname);
+        do_routine(mimic_conns_fd, ifname);
 
       } else {
         cleanup(-1, _("unknown fd: %d"), events[i].data.fd);
