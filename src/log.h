@@ -29,5 +29,6 @@ int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list a
 
 const char* log_type_to_str(bool ingress, enum log_type type);
 int handle_log_event(struct log_event* e);
+void log_conn(int level, const char* msg, struct conn_tuple* conn);
 
 #endif  // _MIMIC_LOG_H

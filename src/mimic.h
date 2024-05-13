@@ -90,11 +90,6 @@ void get_lock_file_name(char* dest, size_t dest_len, int ifindex);
 void conn_tuple_to_addrs(const struct conn_tuple* conn, struct sockaddr_storage* saddr,
                          struct sockaddr_storage* daddr);
 
-// max: "[%pI6]:%d\0"
-#define IP_PORT_MAX_LEN (INET6_ADDRSTRLEN + 2 + 5 + 1)
-// max: "remote=[%pI6]:%d\0"
-#define FILTER_FMT_MAX_LEN (8 + INET6_ADDRSTRLEN + 2 + 5 + 1)
-
 void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __be16 port, char* dest);
 void pkt_filter_fmt(const struct pkt_filter* filter, char* dest);
 const char* conn_state_to_str(enum conn_state s);

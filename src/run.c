@@ -314,12 +314,11 @@ static int do_routine(int conns_fd, const char* ifname) {
          _("failed to get value from map '%s': %s"), "mimic_conns", strret);
 
     int retry_secs = time_diff_sec(tstamp, conn.retry_tstamp);
-    // log_info("retry_secs = %d", retry_secs);
     switch (conn.state) {
       case CONN_ESTABLISHED:
-        if (retry_secs >= 10) {
+        if (retry_secs >= 5) {
           if (conn.retry_tstamp >= conn.reset_tstamp) {
-            // log_info("keepalive");
+            log_conn(LOG_LEVEL_INFO, _("sending keepalive"), &key);
             conn.reset_tstamp = tstamp;
             conn.keepalive_sent = true;
             send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
@@ -329,6 +328,7 @@ static int do_routine(int conns_fd, const char* ifname) {
             if (reset_secs >= 6) {
               reset = true;
             } else if (reset_secs % 2 == 0) {
+              log_conn(LOG_LEVEL_INFO, _("sending keepalive"), &key);
               send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
             }
           }
@@ -336,10 +336,9 @@ static int do_routine(int conns_fd, const char* ifname) {
         break;
       case CONN_SYN_SENT:
         if (retry_secs >= 8) {
-          // log_info("give up");
           reset = true;
         } else if (retry_secs != 0 && retry_secs % 2 == 0) {
-          // log_info("retry SYN");
+          log_conn(LOG_LEVEL_INFO, _("retry sending SYN"), &key);
           send_ctrl_packet(&key, SYN, conn.seq - 1, 0, 0xffff, ifname);
           pktbuf_drain((struct pktbuf*)conn.pktbuf);
         }
@@ -353,11 +352,7 @@ static int do_routine(int conns_fd, const char* ifname) {
     }
 
     if (reset) {
-      char from[IP_PORT_MAX_LEN], to[IP_PORT_MAX_LEN];
-      ip_port_fmt(key.protocol, key.local, key.local_port, from);
-      ip_port_fmt(key.protocol, key.remote, key.remote_port, to);
-      log_warn(_("connection reset: %s => %s"), from, to);
-
+      log_conn(LOG_LEVEL_WARN, _("connection destroyed"), &key);
       struct _conn_to_free* item = malloc(sizeof(*item));
       item->key = key;
       item->buf = (struct pktbuf*)conn.pktbuf;

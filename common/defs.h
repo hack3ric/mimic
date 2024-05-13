@@ -74,6 +74,11 @@
 
 #endif  // _MIMIC_BPF
 
+// max: "[%pI6]:%d\0"
+#define IP_PORT_MAX_LEN (INET6_ADDRSTRLEN + 2 + 5 + 1)
+// max: "remote=[%pI6]:%d\0"
+#define FILTER_FMT_MAX_LEN (8 + INET6_ADDRSTRLEN + 2 + 5 + 1)
+
 #define SYN 1
 #define ACK 1 << 1
 #define RST 1 << 2

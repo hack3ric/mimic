@@ -115,3 +115,10 @@ int handle_log_event(struct log_event* e) {
   }
   return 0;
 }
+
+void log_conn(int level, const char* msg, struct conn_tuple* conn) {
+  char from[IP_PORT_MAX_LEN], to[IP_PORT_MAX_LEN];
+  ip_port_fmt(conn->protocol, conn->local, conn->local_port, from);
+  ip_port_fmt(conn->protocol, conn->remote, conn->remote_port, to);
+  log_any(level, "%s: %s => %s", msg, from, to);
+}
