@@ -89,12 +89,6 @@ static inline int log_conn(enum log_level level, bool ingress, enum log_type typ
   return log_any(level, ingress, type, &(union log_info){.conn = *conn});
 }
 
-static __always_inline int log_tcp(enum log_level level, bool ingress, enum log_type type,
-                                   enum conn_state state, __u32 seq, __u32 ack_seq) {
-  return log_any(level, ingress, type,
-                 &(union log_info){.tcp = {.state = state, .seq = seq, .ack_seq = ack_seq}});
-}
-
 static __always_inline void change_cwnd(__u16* cwnd, __u32 r1, __u32 r2, __u32 r3, __u32 r4) {
   if (r4 > (__u32)(-1) * STABLE_FACTOR) {
     // Assuming r1, r2, r3 ~ U(0, U32_MAX), this performs Bernoulli trial 96 times, p = 1/2

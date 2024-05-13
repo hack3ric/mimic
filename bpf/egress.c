@@ -77,7 +77,7 @@ int egress_handler(struct __sk_buff* skb) {
   if (!matches_whitelist(QUARTET_UDP, false)) return TC_ACT_OK;
 
   struct conn_tuple conn_key = gen_conn_key(QUARTET_UDP, false);
-  log_conn(LOG_LEVEL_DEBUG, false, LOG_TYPE_MATCHED, &conn_key);
+  log_conn(LOG_LEVEL_TRACE, false, LOG_PKT_MATCHED, &conn_key);
   struct connection* conn = try_p_shot(get_conn(&conn_key));
 
   struct udphdr old_udp = *udp;
@@ -87,11 +87,10 @@ int egress_handler(struct __sk_buff* skb) {
   __u16 udp_len = ntohs(udp->len);
   __u16 payload_len = udp_len - sizeof(*udp);
 
-  __u32 seq = 0, ack_seq = 0, conn_seq, conn_ack_seq, conn_cwnd;
+  __u32 seq = 0, ack_seq = 0, conn_cwnd;
   __u32 random = bpf_get_prandom_u32();
   __u32 r1 = bpf_get_prandom_u32(), r2 = bpf_get_prandom_u32(), r3 = bpf_get_prandom_u32();
   __u64 tstamp = bpf_ktime_get_boot_ns();
-  enum conn_state conn_state;
 
   bpf_spin_lock(&conn->lock);
   if (conn->state == CONN_ESTABLISHED) {
@@ -107,6 +106,7 @@ int egress_handler(struct __sk_buff* skb) {
         ack_seq = conn->ack_seq = 0;
         conn->retry_tstamp = conn->reset_tstamp = tstamp;
         bpf_spin_unlock(&conn->lock);
+        log_conn(LOG_LEVEL_DEBUG, false, LOG_CONN_INIT, &conn_key);
         send_ctrl_packet(&conn_key, SYN, seq, ack_seq, 0xffff);
         break;
       default:
@@ -116,14 +116,8 @@ int egress_handler(struct __sk_buff* skb) {
     return store_packet(skb, ip_end, &conn_key);
   }
   change_cwnd(&conn->cwnd, r1, r2, r3, random);
-  conn_state = conn->state;
-  conn_seq = conn->seq;
-  conn_ack_seq = conn->ack_seq;
   conn_cwnd = conn->cwnd;
   bpf_spin_unlock(&conn->lock);
-
-  log_tcp(LOG_LEVEL_TRACE, false, LOG_TYPE_TCP_PKT, 0, seq, ack_seq);
-  log_tcp(LOG_LEVEL_TRACE, false, LOG_TYPE_STATE, conn_state, conn_seq, conn_ack_seq);
 
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;

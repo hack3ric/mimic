@@ -35,11 +35,9 @@ struct lock_error {
 
 int lock_error_fmt(struct lock_error* error, char* buf, size_t len) {
   switch (error->kind) {
-    case ERR_NULL: {
-      const char* msg = _("Success");
-      strncpy(buf, msg, len);
-      return strlen(msg);
-    }
+    case ERR_NULL:
+      strncpy(buf, _("Success"), len);
+      return strlen(buf);
     case ERR_INVALID_TYPE:
       return snprintf(buf, len, _("expected %s for field '%s', got %s"),
                       json_type_to_name(error->invalid_type.expected), error->invalid_type.field,
@@ -121,14 +119,18 @@ struct lock_content lock_deserialize(const struct json_object* obj, struct lock_
     if (error) {
       *error = (typeof(*error)){
         .kind = ERR_INVALID_TYPE,
-        .invalid_type = {.field = NULL, .expected = json_type_object, .got = obj_type}};
+        .invalid_type = {.field = NULL, .expected = json_type_object, .got = obj_type},
+      };
     }
     return c;
   }
   const char* version = lock_parse_field_string(obj, "version", error, &errored);
   if (!errored && strcmp(version, argp_program_version) != 0) {
     if (error) {
-      *error = (typeof(*error)){.kind = ERR_VERSION_MISMATCH, .version_mismatch.got = version};
+      *error = (typeof(*error)){
+        .kind = ERR_VERSION_MISMATCH,
+        .version_mismatch.got = version,
+      };
     }
     return c;
   }

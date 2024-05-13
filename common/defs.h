@@ -170,19 +170,14 @@ struct log_event {
   } level;
   bool ingress;
   enum log_type {
-    LOG_TYPE_MATCHED,         // pkt
-    LOG_TYPE_CONN_ESTABLISH,  // conn
-    LOG_TYPE_TCP_PKT,         // tcp (ignore state)
-    LOG_TYPE_STATE,           // tcp
-    LOG_TYPE_RST,             // pkt
-    LOG_TYPE_CONN_DESTROY,    // conn
-    LOG_TYPE_QUICK_MSG,       // msg
+    LOG_CONN_INIT,
+    LOG_CONN_ESTAB,
+    LOG_CONN_DESTROY,
+    LOG_PKT_MATCHED,
+    LOG_PKT_RST,
+    LOG_MSG,
   } type;
   union log_info {
-    struct fake_tcp_info {
-      enum conn_state state;
-      __u32 seq, ack_seq;
-    } tcp;
     struct conn_tuple conn;
     char msg[40];
   } info;

@@ -199,7 +199,7 @@ static int store_packet(struct bpf_map* conns, struct conn_tuple* conn_key, cons
   return 0;
 cleanup:
   if (retcode == -ENOENT) {
-    log_debug(_("connection released when attempting to store packet; freeing packet buffer"));
+    log_trace(_("connection released when attempting to store packet; freeing packet buffer"));
     retcode = 0;
   }
   if (conn.pktbuf) pktbuf_free((struct pktbuf*)conn.pktbuf);
@@ -223,7 +223,7 @@ static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx
       break;
     case RB_ITEM_STORE_PACKET:
       name = N_("storing packet");
-      log_debug(_("userspace received packet with UDP length %d, checksum partial %d"),
+      log_trace(_("userspace received packet with UDP length %d, checksum partial %d"),
                 item->store_packet.len, item->store_packet.l4_csum_partial);
       if (item->store_packet.len > data_sz - sizeof(*item)) break;
       ret = store_packet(conns, &item->store_packet.conn_key, (char*)(item + 1),
@@ -316,9 +316,9 @@ static int do_routine(int conns_fd, const char* ifname) {
     int retry_secs = time_diff_sec(tstamp, conn.retry_tstamp);
     switch (conn.state) {
       case CONN_ESTABLISHED:
-        if (retry_secs >= 5) {
+        if (retry_secs >= 30) {
           if (conn.retry_tstamp >= conn.reset_tstamp) {
-            log_conn(LOG_LEVEL_INFO, _("sending keepalive"), &key);
+            log_conn(LOG_LEVEL_DEBUG, _("sending keepalive"), &key);
             conn.reset_tstamp = tstamp;
             conn.keepalive_sent = true;
             send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
@@ -328,24 +328,24 @@ static int do_routine(int conns_fd, const char* ifname) {
             if (reset_secs >= 6) {
               reset = true;
             } else if (reset_secs % 2 == 0) {
-              log_conn(LOG_LEVEL_INFO, _("sending keepalive"), &key);
+              log_conn(LOG_LEVEL_DEBUG, _("sending keepalive"), &key);
               send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
             }
           }
         }
         break;
       case CONN_SYN_SENT:
-        if (retry_secs >= 8) {
+        if (retry_secs >= 6) {
           reset = true;
         } else if (retry_secs != 0 && retry_secs % 2 == 0) {
-          log_conn(LOG_LEVEL_INFO, _("retry sending SYN"), &key);
+          log_conn(LOG_LEVEL_DEBUG, _("retry sending SYN"), &key);
           send_ctrl_packet(&key, SYN, conn.seq - 1, 0, 0xffff, ifname);
           pktbuf_drain((struct pktbuf*)conn.pktbuf);
         }
         break;
       case CONN_SYN_RECV:
         // TODO: timeout send ACK/SYN+ACK again
-        if (retry_secs >= 8) reset = true;
+        if (retry_secs >= 6) reset = true;
         break;
       default:
         break;
@@ -447,13 +447,13 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   for (int i = 0; i < args->filter_count; i++) {
     retcode = bpf_map__update_elem(skel->maps.mimic_whitelist, &args->filters[i],
                                    sizeof(struct pkt_filter), &value, sizeof(value), BPF_ANY);
-    if (retcode || LOG_ALLOW_DEBUG) {
+    if (retcode || LOG_ALLOW_TRACE) {
       char fmt[FILTER_FMT_MAX_LEN];
       pkt_filter_fmt(&args->filters[i], fmt);
       if (retcode) {
         cleanup(retcode, _("failed to add filter `%s`: %s"), fmt, strerror(-retcode));
-      } else if (LOG_ALLOW_DEBUG) {
-        log_debug(_("added filter: %s"), fmt);
+      } else {
+        log_trace(_("added filter: %s"), fmt);
       }
     }
   }
@@ -477,17 +477,17 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   if (retcode < 0) {
     log_warn(_("failed to notify supervisor: %s"), strerror(-retcode));
   } else if (retcode) {
-    log_debug(_("notified supervisor we are ready"));
+    log_trace(_("notified supervisor we are ready"));
   }
   if (args->filter_count <= 0) {
-    log_info(_("Mimic successfully deployed at %s"), args->ifname);
+    log_info(_("Mimic successfully deployed on %s"), args->ifname);
     log_warn(_("no filter specified"));
   } else {
-    log_info(_("Mimic successfully deployed at %s with filters:"), args->ifname);
+    log_info(_("Mimic successfully deployed on %s with filters:"), args->ifname);
     for (int i = 0; i < args->filter_count; i++) {
       char fmt[FILTER_FMT_MAX_LEN];
       pkt_filter_fmt(&args->filters[i], fmt);
-      log_info("- %s", fmt);
+      log_info("  %s", fmt);
     }
   }
 
