@@ -26,6 +26,8 @@
     y = t;           \
   })
 
+#define fallthrough
+
 #ifdef _MIMIC_BPF
 
 // Some missing declaration of vmlinux.h
@@ -163,11 +165,11 @@ struct log_event {
   } level;
   bool ingress;
   enum log_type {
-    LOG_TYPE_MATCHED,         // conn
+    LOG_TYPE_MATCHED,         // pkt
     LOG_TYPE_CONN_ESTABLISH,  // conn
     LOG_TYPE_TCP_PKT,         // tcp (ignore state)
     LOG_TYPE_STATE,           // tcp
-    LOG_TYPE_RST,             // conn
+    LOG_TYPE_RST,             // pkt
     LOG_TYPE_CONN_DESTROY,    // conn
     LOG_TYPE_QUICK_MSG,       // msg
   } type;
