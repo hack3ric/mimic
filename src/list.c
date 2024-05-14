@@ -103,10 +103,10 @@ int pktbuf_consume(struct pktbuf* buf, bool* consumed) {
   struct sockaddr_storage saddr, daddr;
   conn_tuple_to_addrs(&buf->conn, &saddr, &daddr);
 
-  if (log_verbosity >= LOG_LEVEL_TRACE) {
+  if (log_verbosity >= LOG_LEVEL_DEBUG) {
     char ip_str[INET6_ADDRSTRLEN];
     inet_ntop(buf->conn.protocol, &buf->conn.local, ip_str, sizeof(ip_str));
-    log_trace("pktbuf_consume: trying to bind %s", ip_str);
+    log_conn(LOG_LEVEL_DEBUG, &buf->conn, _("pktbuf_consume: trying to bind %s"), ip_str);
   }
   try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)));
 

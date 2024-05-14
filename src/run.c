@@ -166,10 +166,11 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
 
   try_e(sendto(sk, buf, buf_len, 0, (struct sockaddr*)&daddr, sizeof(daddr)),
         _("failed to send: %s"), strret);
+  log_tcp(LOG_LEVEL_TRACE, &s->conn, tcp, 0);
   return 0;
 }
 
-static inline int send_ctrl_packet(struct conn_tuple* conn, __u32 flags, __u32 seq, __u32 ack_seq,
+static inline int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_seq,
                                    __u16 cwnd, const char* ifname) {
   struct send_options s = {
     .conn = *conn,
@@ -209,6 +210,7 @@ cleanup:
 static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx, void* data,
                             size_t data_sz) {
   struct rb_item* item = data;
+  struct conn_tuple* conn = &item->store_packet.conn_key;
   const char* name;
   int ret = 0;
   bool consumed = false;
@@ -223,11 +225,11 @@ static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx
       break;
     case RB_ITEM_STORE_PACKET:
       name = N_("storing packet");
-      log_trace(_("userspace received packet with UDP length %d, checksum partial %d"),
-                item->store_packet.len, item->store_packet.l4_csum_partial);
+      log_conn(LOG_LEVEL_DEBUG, conn, _("userspace received packet, udp->len=%u, csum_partial=%d"),
+               item->store_packet.len, item->store_packet.l4_csum_partial);
       if (item->store_packet.len > data_sz - sizeof(*item)) break;
-      ret = store_packet(conns, &item->store_packet.conn_key, (char*)(item + 1),
-                         item->store_packet.len, item->store_packet.l4_csum_partial);
+      ret = store_packet(conns, conn, (char*)(item + 1), item->store_packet.len,
+                         item->store_packet.l4_csum_partial);
       break;
     case RB_ITEM_CONSUME_PKTBUF:
       name = N_("consuming packet buffer");
@@ -241,7 +243,6 @@ static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx
     case RB_ITEM_FREE_PKTBUF:
       name = N_("freeing packet buffer");
       pktbuf_free((struct pktbuf*)item->pktbuf);
-      log_trace(_("freed packet buffer"));
       break;
     default:
       name = N_("handling unknown ring buffer item");
@@ -318,7 +319,7 @@ static int do_routine(int conns_fd, const char* ifname) {
       case CONN_ESTABLISHED:
         if (retry_secs >= 30) {
           if (conn.retry_tstamp >= conn.reset_tstamp) {
-            log_conn(LOG_LEVEL_DEBUG, _("sending keepalive"), &key);
+            log_conn(LOG_LEVEL_DEBUG, &key, _("sending keepalive"));
             conn.reset_tstamp = tstamp;
             conn.keepalive_sent = true;
             send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
@@ -328,7 +329,7 @@ static int do_routine(int conns_fd, const char* ifname) {
             if (reset_secs >= 6) {
               reset = true;
             } else if (reset_secs % 2 == 0) {
-              log_conn(LOG_LEVEL_DEBUG, _("sending keepalive"), &key);
+              log_conn(LOG_LEVEL_DEBUG, &key, _("sending keepalive"));
               send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
             }
           }
@@ -338,7 +339,7 @@ static int do_routine(int conns_fd, const char* ifname) {
         if (retry_secs >= 6) {
           reset = true;
         } else if (retry_secs != 0 && retry_secs % 2 == 0) {
-          log_conn(LOG_LEVEL_DEBUG, _("retry sending SYN"), &key);
+          log_conn(LOG_LEVEL_INFO, &key, _("retry sending SYN"));
           send_ctrl_packet(&key, SYN, conn.seq - 1, 0, 0xffff, ifname);
           pktbuf_drain((struct pktbuf*)conn.pktbuf);
         }
@@ -352,7 +353,7 @@ static int do_routine(int conns_fd, const char* ifname) {
     }
 
     if (reset) {
-      log_conn(LOG_LEVEL_WARN, _("connection destroyed"), &key);
+      log_conn(LOG_LEVEL_WARN, &key, _("connection destroyed"));
       struct _conn_to_free* item = malloc(sizeof(*item));
       item->key = key;
       item->buf = (struct pktbuf*)conn.pktbuf;

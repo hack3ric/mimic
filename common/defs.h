@@ -80,8 +80,8 @@
 #define FILTER_FMT_MAX_LEN (8 + INET6_ADDRSTRLEN + 2 + 5 + 1)
 
 #define SYN 1
-#define ACK 1 << 1
-#define RST 1 << 2
+#define ACK (1 << 1)
+#define RST (1 << 2)
 
 // Mainly used for limiting loop counts
 #define MAX_PACKET_SIZE 9000
@@ -140,12 +140,6 @@ struct connection {
   bool keepalive_sent;
 };
 
-enum rst_result {
-  RST_NONE,
-  RST_ABORTED,
-  RST_DESTROYED,
-};
-
 struct send_options {
   struct conn_tuple conn;
   bool syn, ack, rst;
@@ -167,21 +161,29 @@ struct log_event {
     LOG_LEVEL_INFO,
     LOG_LEVEL_DEBUG,
     LOG_LEVEL_TRACE,
-  } level;
-  bool ingress;
+  } level : 4;
   enum log_type {
     LOG_CONN_INIT,
     LOG_CONN_ESTAB,
     LOG_CONN_DESTROY,
-    LOG_PKT_MATCHED,
-    LOG_PKT_RST,
+    LOG_PKT_SEND_TCP,
+    LOG_PKT_RECV_TCP,
+    LOG_PKT_RECV_RST,
     LOG_MSG,
-  } type;
+  } type : 4;
   union log_info {
-    struct conn_tuple conn;
-    char msg[40];
+    struct {
+      struct conn_tuple conn;
+      __u16 len, flags;
+      __u32 seq, ack_seq;
+    };
+    char msg[52];
   } info;
 };
+
+extern struct log_event _e;
+_Static_assert(sizeof(_e.info) == sizeof(_e.info.msg),
+               "Message length should match its parent union");
 
 struct rb_item {
   enum rb_item_type {

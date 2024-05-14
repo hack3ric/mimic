@@ -39,7 +39,7 @@ bool matches_whitelist(QUARTET_DEF, bool ingress) {
          bpf_map_lookup_elem(&mimic_whitelist, &remote);
 }
 
-int log_any(enum log_level level, bool ingress, enum log_type type, union log_info* info) {
+int log_any(enum log_level level, enum log_type type, union log_info* info) {
   if (log_verbosity < level || !info) return -1;
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
   if (!item) return -1;
@@ -47,14 +47,13 @@ int log_any(enum log_level level, bool ingress, enum log_type type, union log_in
   item->log_event = (struct log_event){
     .level = level,
     .type = type,
-    .ingress = ingress,
     .info = *info,
   };
   bpf_ringbuf_submit(item, 0);
   return 0;
 }
 
-int send_ctrl_packet(struct conn_tuple* conn, __u32 flags, __u32 seq, __u32 ack_seq, __u16 cwnd) {
+int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_seq, __u16 cwnd) {
   if (!conn) return -1;
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
   if (!item) return -1;

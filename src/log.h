@@ -2,6 +2,7 @@
 #define _MIMIC_LOG_H
 
 #include <bpf/libbpf.h>
+#include <linux/tcp.h>
 #include <stdarg.h>
 #include <stdbool.h>
 
@@ -18,6 +19,7 @@ extern int log_verbosity;
 #define RESET "\x1B[0m"
 
 void log_any(int level, const char* fmt, ...);
+void log_conn(int level, struct conn_tuple* conn, const char* fmt, ...);
 
 #define log_error(fmt, ...) log_any(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
 #define log_warn(fmt, ...) log_any(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)
@@ -27,8 +29,7 @@ void log_any(int level, const char* fmt, ...);
 
 int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list args);
 
-const char* log_type_to_str(bool ingress, enum log_type type);
+int log_tcp(enum log_level level, struct conn_tuple* conn, struct tcphdr* tcp, __u16 len);
 int handle_log_event(struct log_event* e);
-void log_conn(int level, const char* msg, struct conn_tuple* conn);
 
 #endif  // _MIMIC_LOG_H

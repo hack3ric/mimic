@@ -81,12 +81,24 @@ static inline struct connection* get_conn(struct conn_tuple* key) {
   return conn;
 }
 
-int log_any(enum log_level level, bool ingress, enum log_type type, union log_info* info);
+int log_any(enum log_level level, enum log_type type, union log_info* info);
 
-static inline int log_conn(enum log_level level, bool ingress, enum log_type type,
-                           struct conn_tuple* conn) {
-  if (!conn) return -1;
-  return log_any(level, ingress, type, &(union log_info){.conn = *conn});
+static inline int log_conn(enum log_level level, enum log_type type, struct conn_tuple* conn) {
+  if (!conn || log_verbosity < level) return -1;
+  return log_any(level, type, &(union log_info){.conn = *conn});
+}
+
+static inline int log_tcp(enum log_level level, bool recv, struct conn_tuple* conn,
+                          struct tcphdr* tcp, __u16 len) {
+  if (!conn || log_verbosity < level) return -1;
+  union log_info info = {
+    .conn = *conn,
+    .len = len,
+    .flags = tcp->syn * SYN | tcp->ack * ACK | tcp->rst * RST,
+    .seq = htonl(tcp->seq),
+    .ack_seq = htonl(tcp->ack_seq),
+  };
+  return log_any(level, recv ? LOG_PKT_RECV_TCP : LOG_PKT_SEND_TCP, &info);
 }
 
 static __always_inline void change_cwnd(__u16* cwnd, __u32 r1, __u32 r2, __u32 r3, __u32 r4) {
@@ -101,7 +113,7 @@ static __always_inline void change_cwnd(__u16* cwnd, __u32 r1, __u32 r2, __u32 r
   }
 }
 
-int send_ctrl_packet(struct conn_tuple* conn, __u32 flags, __u32 seq, __u32 ack_seq, __u16 cwnd);
+int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_seq, __u16 cwnd);
 int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key);
 int use_pktbuf(enum rb_item_type type, uintptr_t buf);
 

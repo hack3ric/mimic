@@ -86,47 +86,39 @@ int ingress_handler(struct xdp_md* xdp) {
   decl_pass(struct tcphdr, tcp, ip_end, xdp);
 
   if (!matches_whitelist(QUARTET_TCP, true)) return XDP_PASS;
-
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP, true);
-  log_conn(LOG_LEVEL_TRACE, true, LOG_PKT_MATCHED, &conn_key);
+  __u32 buf_len = bpf_xdp_get_buff_len(xdp);
+  __u32 payload_len = buf_len - ip_end - (tcp->doff << 2);
+  log_tcp(LOG_LEVEL_TRACE, true, &conn_key, tcp, payload_len);
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
 
   // TODO: verify checksum (probably not needed?)
 
-  enum rst_result rst_result = RST_NONE;
   uintptr_t pktbuf = 0;
+
+  // Quick path for RST
   if (tcp->rst) {
     if (conn) {
       bpf_spin_lock(&conn->lock);
-      if (conn->state == CONN_ESTABLISHED) {
-        rst_result = RST_DESTROYED;
-      } else if (conn->state == CONN_IDLE) {
-        rst_result = RST_NONE;
-      } else {
-        rst_result = RST_ABORTED;
-      }
       swap(pktbuf, conn->pktbuf);
       bpf_spin_unlock(&conn->lock);
       bpf_map_delete_elem(&mimic_conns, &conn_key);
       use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
-    }
-    // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there are
-    // no good ways to tell them apart.
-    log_conn(LOG_LEVEL_WARN, true, LOG_PKT_RST, &conn_key);
-    if (rst_result == RST_DESTROYED) {
-      log_conn(LOG_LEVEL_WARN, true, LOG_CONN_DESTROY, &conn_key);
+
+      // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there
+      // are no good ways to tell them apart.
+      log_conn(LOG_LEVEL_WARN, LOG_PKT_RECV_RST, &conn_key);
+      log_conn(LOG_LEVEL_WARN, LOG_CONN_DESTROY, &conn_key);
     }
     return XDP_DROP;
   }
 
   if (!conn) {
+    // TODO: quick path for ACK without connection
     struct connection conn_value = {.cwnd = INIT_CWND};
     try_drop(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
     conn = try_p_drop(bpf_map_lookup_elem(&mimic_conns, &conn_key));
   }
-
-  __u32 buf_len = bpf_xdp_get_buff_len(xdp);
-  __u32 payload_len = buf_len - ip_end - (tcp->doff << 2);
 
   bool syn, ack, rst, will_send_ctrl_packet, will_drop, newly_estab;
   __u32 seq = 0, ack_seq = 0;
@@ -156,6 +148,7 @@ int ingress_handler(struct xdp_md* xdp) {
       } else {
         rst = true;
         swap(pktbuf, conn->pktbuf);
+        seq = conn->seq;
       }
       break;
 
@@ -178,6 +171,7 @@ int ingress_handler(struct xdp_md* xdp) {
       } else {
         rst = true;
         swap(pktbuf, conn->pktbuf);
+        seq = conn->seq;
       }
       break;
 
@@ -185,6 +179,7 @@ int ingress_handler(struct xdp_md* xdp) {
       if (tcp->syn) {
         rst = true;
         swap(pktbuf, conn->pktbuf);
+        seq = conn->seq;
       } else if (ntohl(tcp->seq) == conn->ack_seq - 1) {
         // Received keepalive; send keepalive ACK
         ack = true;
@@ -205,13 +200,13 @@ int ingress_handler(struct xdp_md* xdp) {
   bpf_spin_unlock(&conn->lock);
 
   if (will_send_ctrl_packet) {
-    send_ctrl_packet(&conn_key, syn + (ack << 1) + (rst << 2), seq, ack_seq, rst ? 0 : cwnd);
+    send_ctrl_packet(&conn_key, syn * SYN | ack * ACK | rst * RST, seq, ack_seq, rst ? 0 : cwnd);
   }
   if (rst) {
     bpf_map_delete_elem(&mimic_conns, &conn_key);
     use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
   } else if (newly_estab) {
-    log_conn(LOG_LEVEL_INFO, true, LOG_CONN_ESTAB, &conn_key);
+    log_conn(LOG_LEVEL_INFO, LOG_CONN_ESTAB, &conn_key);
     use_pktbuf(RB_ITEM_CONSUME_PKTBUF, pktbuf);
   }
   if (will_drop) return XDP_DROP;
