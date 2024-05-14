@@ -101,6 +101,12 @@ static inline int log_tcp(enum log_level level, bool recv, struct conn_tuple* co
   return log_any(level, recv ? LOG_PKT_RECV_TCP : LOG_PKT_SEND_TCP, &info);
 }
 
+static inline int log_destroy(enum log_level level, struct conn_tuple* conn,
+                              enum destroy_type type) {
+  if (!conn || log_verbosity < level) return -1;
+  return log_any(level, LOG_CONN_DESTROY, &(union log_info){.conn = *conn, .destroy_type = type});
+}
+
 static __always_inline void change_cwnd(__u16* cwnd, __u32 r1, __u32 r2, __u32 r3, __u32 r4) {
   if (r4 > (__u32)(-1) * STABLE_FACTOR) {
     // Assuming r1, r2, r3 ~ U(0, U32_MAX), this performs Bernoulli trial 96 times, p = 1/2

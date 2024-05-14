@@ -29,7 +29,8 @@ void log_conn(int level, struct conn_tuple* conn, const char* fmt, ...);
 
 int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list args);
 
-int log_tcp(enum log_level level, struct conn_tuple* conn, struct tcphdr* tcp, __u16 len);
+void log_tcp(enum log_level level, struct conn_tuple* conn, struct tcphdr* tcp, __u16 len);
+void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_type type);
 int handle_log_event(struct log_event* e);
 
 #endif  // _MIMIC_LOG_H

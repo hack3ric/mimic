@@ -341,7 +341,7 @@ static int do_routine(int conns_fd, const char* ifname) {
         } else if (retry_secs != 0 && retry_secs % 2 == 0) {
           log_conn(LOG_LEVEL_INFO, &key, _("retry sending SYN"));
           send_ctrl_packet(&key, SYN, conn.seq - 1, 0, 0xffff, ifname);
-          pktbuf_drain((struct pktbuf*)conn.pktbuf);
+          // pktbuf_drain((struct pktbuf*)conn.pktbuf);
         }
         break;
       case CONN_SYN_RECV:
@@ -353,12 +353,12 @@ static int do_routine(int conns_fd, const char* ifname) {
     }
 
     if (reset) {
-      log_conn(LOG_LEVEL_WARN, &key, _("connection destroyed"));
+      log_destroy(LOG_LEVEL_WARN, &key, DESTROY_TIMED_OUT);
       struct _conn_to_free* item = malloc(sizeof(*item));
       item->key = key;
       item->buf = (struct pktbuf*)conn.pktbuf;
       list_push(&free_list, item, free);
-      send_ctrl_packet(&key, RST, 0, 0, 0, ifname);
+      send_ctrl_packet(&key, RST, conn.seq, 0, 0, ifname);
     }
   }
 

@@ -81,24 +81,9 @@ int libbpf_print_fn(enum libbpf_print_level bpf_level, const char* format, va_li
   return ret < 0 ? ret : 0;
 }
 
-static inline const char* log_type_to_str(enum log_type type) {
-  switch (type) {
-    case LOG_CONN_INIT:
-      return _("initializing connection");
-    case LOG_CONN_ESTAB:
-      return _("connection established");
-    case LOG_CONN_DESTROY:
-      return _("connection destroyed");
-    case LOG_PKT_RECV_RST:
-      return _("received RST");
-    default:
-      return "";
-  }
-}
-
-static int _log_tcp(enum log_level level, bool recv, struct conn_tuple* conn, __u16 len,
-                    __u16 flags, __u32 seq, __u32 ack_seq) {
-  if (log_verbosity < level) return 0;
+static void _log_tcp(enum log_level level, bool recv, struct conn_tuple* conn, __u16 len,
+                     __u16 flags, __u32 seq, __u32 ack_seq) {
+  if (log_verbosity < level) return;
   char buf[12] = {};
   if (flags) {
     if (flags & SYN) strcat(buf, "SYN,");
@@ -108,16 +93,44 @@ static int _log_tcp(enum log_level level, bool recv, struct conn_tuple* conn, __
     strcpy(buf, "<None>");
   }
   if (recv) {
-    log_conn(level, conn, _("recv, len=%u, %s seq=%08x, ack=%08x"), len, buf, seq, ack_seq);
+    log_conn(level, conn, _("recv - len=%u, %s seq=%08x, ack=%08x"), len, buf, seq, ack_seq);
   } else {
-    log_conn(level, conn, _("sent, len=%u, %s seq=%08x, ack=%08x"), len, buf, seq, ack_seq);
+    log_conn(level, conn, _("sent - len=%u, %s seq=%08x, ack=%08x"), len, buf, seq, ack_seq);
   }
-  return 0;
 }
 
-int log_tcp(enum log_level level, struct conn_tuple* conn, struct tcphdr* tcp, __u16 len) {
-  return _log_tcp(level, false, conn, len, tcp->syn * SYN | tcp->ack * ACK | tcp->rst * RST,
-                  htonl(tcp->seq), htonl(tcp->ack_seq));
+void log_tcp(enum log_level level, struct conn_tuple* conn, struct tcphdr* tcp, __u16 len) {
+  _log_tcp(level, false, conn, len, tcp->syn * SYN | tcp->ack * ACK | tcp->rst * RST,
+           htonl(tcp->seq), htonl(tcp->ack_seq));
+}
+
+void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_type type) {
+  const char* reason;
+  switch (type) {
+    case DESTROY_RECV_RST:
+      reason = _("received RST");
+      break;
+    case DESTROY_TIMED_OUT:
+      reason = _("timed out");
+      break;
+    default:
+      reason = _("unknown");
+      break;
+  }
+  log_conn(level, conn, _("connection destroyed (%s)"), reason);
+}
+
+static inline const char* log_type_to_str(enum log_type type) {
+  switch (type) {
+    case LOG_CONN_INIT:
+      return _("initializing connection");
+    case LOG_CONN_ACCEPT:
+      return _("accepting connection");
+    case LOG_CONN_ESTABLISH:
+      return _("connection established");
+    default:
+      return "";
+  }
 }
 
 int handle_log_event(struct log_event* e) {
@@ -129,6 +142,9 @@ int handle_log_event(struct log_event* e) {
       case LOG_PKT_RECV_TCP:
         _log_tcp(e->level, e->type == LOG_PKT_RECV_TCP, &e->info.conn, e->info.len, e->info.flags,
                  e->info.seq, e->info.ack_seq);
+        break;
+      case LOG_CONN_DESTROY:
+        log_destroy(e->level, &e->info.conn, e->info.destroy_type);
         break;
       default:
         log_conn(e->level, &e->info.conn, "%s", log_type_to_str(e->type));

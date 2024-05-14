@@ -164,18 +164,27 @@ struct log_event {
   } level : 4;
   enum log_type {
     LOG_CONN_INIT,
-    LOG_CONN_ESTAB,
+    LOG_CONN_ACCEPT,
+    LOG_CONN_ESTABLISH,
     LOG_CONN_DESTROY,
     LOG_PKT_SEND_TCP,
     LOG_PKT_RECV_TCP,
-    LOG_PKT_RECV_RST,
     LOG_MSG,
   } type : 4;
   union log_info {
     struct {
       struct conn_tuple conn;
-      __u16 len, flags;
-      __u32 seq, ack_seq;
+      union {
+        struct {
+          __u16 len, flags;
+          __u32 seq, ack_seq;
+        };
+        enum destroy_type {
+          DESTROY_RECV_RST,
+          DESTROY_TIMED_OUT,
+          DESTROY_INVALID,
+        } destroy_type;
+      };
     };
     char msg[52];
   } info;

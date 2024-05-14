@@ -104,12 +104,10 @@ int ingress_handler(struct xdp_md* xdp) {
       bpf_spin_unlock(&conn->lock);
       bpf_map_delete_elem(&mimic_conns, &conn_key);
       use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
-
-      // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there
-      // are no good ways to tell them apart.
-      log_conn(LOG_LEVEL_WARN, LOG_PKT_RECV_RST, &conn_key);
-      log_conn(LOG_LEVEL_WARN, LOG_CONN_DESTROY, &conn_key);
+      log_destroy(LOG_LEVEL_WARN, &conn_key, DESTROY_RECV_RST);
     }
+    // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there
+    // are no good ways to tell them apart.
     return XDP_DROP;
   }
 
@@ -199,14 +197,16 @@ int ingress_handler(struct xdp_md* xdp) {
 
   bpf_spin_unlock(&conn->lock);
 
+  if (syn && ack) log_conn(LOG_LEVEL_INFO, LOG_CONN_ACCEPT, &conn_key);
   if (will_send_ctrl_packet) {
     send_ctrl_packet(&conn_key, syn * SYN | ack * ACK | rst * RST, seq, ack_seq, rst ? 0 : cwnd);
   }
   if (rst) {
+    log_destroy(LOG_LEVEL_WARN, &conn_key, DESTROY_INVALID);
     bpf_map_delete_elem(&mimic_conns, &conn_key);
     use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
   } else if (newly_estab) {
-    log_conn(LOG_LEVEL_INFO, LOG_CONN_ESTAB, &conn_key);
+    log_conn(LOG_LEVEL_INFO, LOG_CONN_ESTABLISH, &conn_key);
     use_pktbuf(RB_ITEM_CONSUME_PKTBUF, pktbuf);
   }
   if (will_drop) return XDP_DROP;
