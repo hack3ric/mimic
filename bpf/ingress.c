@@ -112,7 +112,12 @@ int ingress_handler(struct xdp_md* xdp) {
   }
 
   if (!conn) {
-    // TODO: quick path for ACK without connection
+    // Quick path for ACK without connection
+    if (tcp->ack) {
+      send_ctrl_packet(&conn_key, RST, htonl(tcp->ack_seq), 0, 0);
+      return XDP_DROP;
+    }
+
     struct connection conn_value = {.cwnd = INIT_CWND};
     try_drop(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
     conn = try_p_drop(bpf_map_lookup_elem(&mimic_conns, &conn_key));
