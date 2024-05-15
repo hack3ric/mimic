@@ -15,11 +15,11 @@ struct mimic_rb_map mimic_rb SEC(".maps");
 bool matches_whitelist(QUARTET_DEF, bool ingress) {
   struct pkt_filter local = {.origin = ORIGIN_LOCAL}, remote = {.origin = ORIGIN_REMOTE};
   if (udp) {
-    local.port = udp->source;
-    remote.port = udp->dest;
+    local.port = ntohs(udp->source);
+    remote.port = ntohs(udp->dest);
   } else if (tcp) {
-    local.port = tcp->source;
-    remote.port = tcp->dest;
+    local.port = ntohs(tcp->source);
+    remote.port = ntohs(tcp->dest);
   }
   if (ipv4) {
     local.protocol = remote.protocol = PROTO_IPV4;

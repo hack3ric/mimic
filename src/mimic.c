@@ -51,12 +51,12 @@ void conn_tuple_to_addrs(const struct conn_tuple* conn, struct sockaddr_storage*
   }
 }
 
-void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __be16 port, char* dest) {
+void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __u16 port, char* dest) {
   *dest = '\0';
   if (protocol == PROTO_IPV6) strcat(dest, "[");
   inet_ntop(protocol, &ip, dest + strlen(dest), INET6_ADDRSTRLEN);
   if (protocol == PROTO_IPV6) strcat(dest, "]");
-  snprintf(dest + strlen(dest), 7, ":%d", ntohs(port));
+  snprintf(dest + strlen(dest), 7, ":%d", port);
 }
 
 // `dest` must be at least `FILTER_FMT_MAX_LEN` bytes long.

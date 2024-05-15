@@ -112,7 +112,7 @@ static inline __attribute__((__format_arg__(1))) const char* _(const char* text)
 struct pkt_filter {
   enum pkt_origin { ORIGIN_LOCAL, ORIGIN_REMOTE } origin;
   enum ip_proto { PROTO_IPV4 = AF_INET, PROTO_IPV6 = AF_INET6 } protocol;
-  __be16 port;
+  __u16 port;
   union ip_value {
     __be32 v4;
     struct in6_addr v6;
@@ -121,7 +121,7 @@ struct pkt_filter {
 
 struct conn_tuple {
   enum ip_proto protocol;
-  __be16 local_port, remote_port;
+  __u16 local_port, remote_port;
   union ip_value local, remote;
 };
 

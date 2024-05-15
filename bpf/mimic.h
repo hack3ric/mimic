@@ -48,11 +48,11 @@ bool matches_whitelist(QUARTET_DEF, bool ingress);
 static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress) {
   struct conn_tuple key = {};
   if (udp) {
-    key.local_port = udp->source;
-    key.remote_port = udp->dest;
+    key.local_port = ntohs(udp->source);
+    key.remote_port = ntohs(udp->dest);
   } else if (tcp) {
-    key.local_port = tcp->source;
-    key.remote_port = tcp->dest;
+    key.local_port = ntohs(tcp->source);
+    key.remote_port = ntohs(tcp->dest);
   }
   if (ipv4) {
     key.protocol = PROTO_IPV4;

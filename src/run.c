@@ -132,8 +132,8 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
   _cleanup_malloc void* buf = malloc(buf_len);
   struct tcphdr* tcp = (typeof(tcp))buf;
   *tcp = (typeof(*tcp)){
-    .source = s->conn.local_port,
-    .dest = s->conn.remote_port,
+    .source = htons(s->conn.local_port),
+    .dest = htons(s->conn.remote_port),
     .seq = htonl(s->seq),
     .ack_seq = htonl(s->ack_seq),
     .doff = buf_len >> 2,
