@@ -21,11 +21,11 @@ extern int log_verbosity;
 void log_any(int level, const char* fmt, ...);
 void log_conn(int level, struct conn_tuple* conn, const char* fmt, ...);
 
-#define log_error(fmt, ...) log_any(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
-#define log_warn(fmt, ...) log_any(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)
-#define log_info(fmt, ...) log_any(LOG_LEVEL_INFO, fmt, ##__VA_ARGS__)
-#define log_debug(fmt, ...) log_any(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
-#define log_trace(fmt, ...) log_any(LOG_LEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define log_error(fmt, ...) log_any(LOG_ERROR, fmt, ##__VA_ARGS__)
+#define log_warn(fmt, ...) log_any(LOG_WARN, fmt, ##__VA_ARGS__)
+#define log_info(fmt, ...) log_any(LOG_INFO, fmt, ##__VA_ARGS__)
+#define log_debug(fmt, ...) log_any(LOG_DEBUG, fmt, ##__VA_ARGS__)
+#define log_trace(fmt, ...) log_any(LOG_TRACE, fmt, ##__VA_ARGS__)
 
 int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list args);
 

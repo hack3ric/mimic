@@ -148,19 +148,19 @@ struct send_options {
 };
 
 // need to define `log_verbosity` besides including this file.
-#define LOG_ALLOW_ERROR (log_verbosity >= LOG_LEVEL_ERROR)
-#define LOG_ALLOW_WARN (log_verbosity >= LOG_LEVEL_WARN)
-#define LOG_ALLOW_INFO (log_verbosity >= LOG_LEVEL_INFO)
-#define LOG_ALLOW_DEBUG (log_verbosity >= LOG_LEVEL_DEBUG)
-#define LOG_ALLOW_TRACE (log_verbosity >= LOG_LEVEL_TRACE)
+#define LOG_ALLOW_ERROR (log_verbosity >= LOG_ERROR)
+#define LOG_ALLOW_WARN (log_verbosity >= LOG_WARN)
+#define LOG_ALLOW_INFO (log_verbosity >= LOG_INFO)
+#define LOG_ALLOW_DEBUG (log_verbosity >= LOG_DEBUG)
+#define LOG_ALLOW_TRACE (log_verbosity >= LOG_TRACE)
 
 struct log_event {
   enum log_level {
-    LOG_LEVEL_ERROR,
-    LOG_LEVEL_WARN,
-    LOG_LEVEL_INFO,
-    LOG_LEVEL_DEBUG,
-    LOG_LEVEL_TRACE,
+    LOG_ERROR,
+    LOG_WARN,
+    LOG_INFO,
+    LOG_DEBUG,
+    LOG_TRACE,
   } level : 4;
   enum log_type {
     LOG_CONN_INIT,

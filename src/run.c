@@ -166,7 +166,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
 
   try_e(sendto(sk, buf, buf_len, 0, (struct sockaddr*)&daddr, sizeof(daddr)),
         _("failed to send: %s"), strret);
-  log_tcp(LOG_LEVEL_TRACE, &s->conn, tcp, 0);
+  log_tcp(LOG_TRACE, &s->conn, tcp, 0);
   return 0;
 }
 
@@ -200,7 +200,8 @@ static int store_packet(struct bpf_map* conns, struct conn_tuple* conn_key, cons
   return 0;
 cleanup:
   if (retcode == -ENOENT) {
-    log_trace(_("connection released when attempting to store packet; freeing packet buffer"));
+    log_conn(LOG_DEBUG, conn_key,
+             _("connection released when attempting to store packet; freeing packet buffer"));
     retcode = 0;
   }
   if (conn.pktbuf) pktbuf_free((struct pktbuf*)conn.pktbuf);
@@ -225,7 +226,7 @@ static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx
       break;
     case RB_ITEM_STORE_PACKET:
       name = N_("storing packet");
-      log_conn(LOG_LEVEL_DEBUG, conn, _("userspace received packet, udp->len=%u, csum_partial=%d"),
+      log_conn(LOG_DEBUG, conn, _("userspace received packet, udp.len=%u, csum_partial=%d"),
                item->store_packet.len, item->store_packet.l4_csum_partial);
       if (item->store_packet.len > data_sz - sizeof(*item)) break;
       ret = store_packet(conns, conn, (char*)(item + 1), item->store_packet.len,
@@ -319,7 +320,7 @@ static int do_routine(int conns_fd, const char* ifname) {
       case CONN_ESTABLISHED:
         if (retry_secs >= 30) {
           if (conn.retry_tstamp >= conn.reset_tstamp) {
-            log_conn(LOG_LEVEL_DEBUG, &key, _("sending keepalive"));
+            log_conn(LOG_DEBUG, &key, _("sending keepalive"));
             conn.reset_tstamp = tstamp;
             conn.keepalive_sent = true;
             send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
@@ -329,7 +330,7 @@ static int do_routine(int conns_fd, const char* ifname) {
             if (reset_secs >= 6) {
               reset = true;
             } else if (reset_secs % 2 == 0) {
-              log_conn(LOG_LEVEL_DEBUG, &key, _("sending keepalive"));
+              log_conn(LOG_DEBUG, &key, _("sending keepalive"));
               send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
             }
           }
@@ -339,7 +340,7 @@ static int do_routine(int conns_fd, const char* ifname) {
         if (retry_secs >= 6) {
           reset = true;
         } else if (retry_secs != 0 && retry_secs % 2 == 0) {
-          log_conn(LOG_LEVEL_INFO, &key, _("retry sending SYN"));
+          log_conn(LOG_INFO, &key, _("retry sending SYN"));
           send_ctrl_packet(&key, SYN, conn.seq - 1, 0, 0xffff, ifname);
           // pktbuf_drain((struct pktbuf*)conn.pktbuf);
         }
@@ -353,7 +354,7 @@ static int do_routine(int conns_fd, const char* ifname) {
     }
 
     if (reset) {
-      log_destroy(LOG_LEVEL_WARN, &key, DESTROY_TIMED_OUT);
+      log_destroy(LOG_WARN, &key, DESTROY_TIMED_OUT);
       struct _conn_to_free* item = malloc(sizeof(*item));
       item->key = key;
       item->buf = (struct pktbuf*)conn.pktbuf;

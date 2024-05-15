@@ -104,7 +104,7 @@ int egress_handler(struct __sk_buff* skb) {
         ack_seq = conn->ack_seq = 0;
         conn->retry_tstamp = conn->reset_tstamp = tstamp;
         bpf_spin_unlock(&conn->lock);
-        log_conn(LOG_LEVEL_INFO, LOG_CONN_INIT, &conn_key);
+        log_conn(LOG_INFO, LOG_CONN_INIT, &conn_key);
         send_ctrl_packet(&conn_key, SYN, seq, ack_seq, 0xffff);
         break;
       default:
@@ -138,7 +138,7 @@ int egress_handler(struct __sk_buff* skb) {
 
   __u32 csum_off = ip_end + offsetof(struct tcphdr, check);
   redecl_shot(struct tcphdr, tcp, ip_end, skb);
-  log_tcp(LOG_LEVEL_TRACE, false, &conn_key, tcp, payload_len);
+  log_tcp(LOG_TRACE, false, &conn_key, tcp, payload_len);
 
   tcp->check = 0;
   csum_diff =

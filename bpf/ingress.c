@@ -89,7 +89,7 @@ int ingress_handler(struct xdp_md* xdp) {
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP, true);
   __u32 buf_len = bpf_xdp_get_buff_len(xdp);
   __u32 payload_len = buf_len - ip_end - (tcp->doff << 2);
-  log_tcp(LOG_LEVEL_TRACE, true, &conn_key, tcp, payload_len);
+  log_tcp(LOG_TRACE, true, &conn_key, tcp, payload_len);
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
 
   // TODO: verify checksum (probably not needed?)
@@ -104,7 +104,7 @@ int ingress_handler(struct xdp_md* xdp) {
       bpf_spin_unlock(&conn->lock);
       bpf_map_delete_elem(&mimic_conns, &conn_key);
       use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
-      log_destroy(LOG_LEVEL_WARN, &conn_key, DESTROY_RECV_RST);
+      log_destroy(LOG_WARN, &conn_key, DESTROY_RECV_RST);
     }
     // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there
     // are no good ways to tell them apart.
@@ -202,16 +202,16 @@ int ingress_handler(struct xdp_md* xdp) {
 
   bpf_spin_unlock(&conn->lock);
 
-  if (syn && ack) log_conn(LOG_LEVEL_INFO, LOG_CONN_ACCEPT, &conn_key);
+  if (syn && ack) log_conn(LOG_INFO, LOG_CONN_ACCEPT, &conn_key);
   if (will_send_ctrl_packet) {
     send_ctrl_packet(&conn_key, syn * SYN | ack * ACK | rst * RST, seq, ack_seq, rst ? 0 : cwnd);
   }
   if (rst) {
-    log_destroy(LOG_LEVEL_WARN, &conn_key, DESTROY_INVALID);
+    log_destroy(LOG_WARN, &conn_key, DESTROY_INVALID);
     bpf_map_delete_elem(&mimic_conns, &conn_key);
     use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
   } else if (newly_estab) {
-    log_conn(LOG_LEVEL_INFO, LOG_CONN_ESTABLISH, &conn_key);
+    log_conn(LOG_INFO, LOG_CONN_ESTABLISH, &conn_key);
     use_pktbuf(RB_ITEM_CONSUME_PKTBUF, pktbuf);
   }
   if (will_drop) return XDP_DROP;
