@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <linux/types.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,94 +13,125 @@
 #include "log.h"
 #include "mimic.h"
 
-int parse_filter(const char* filter_str, struct pkt_filter* filter) {
-  char* delim_pos = strchr(filter_str, '=');
-  if (delim_pos == NULL || delim_pos == filter_str) {
-    ret(-1, _("filter format should look like `key=value`: %s"), filter_str);
+static inline bool is_whitespace(char c) {
+  switch (c) {
+    case '\t' ... '\r':
+    case ' ':
+      return true;
+    default:
+      return false;
   }
+}
 
-  if (strncmp("local=", filter_str, 6) == 0) {
-    filter->origin = ORIGIN_LOCAL;
-  } else if (strncmp("remote=", filter_str, 7) == 0) {
-    filter->origin = ORIGIN_REMOTE;
-  } else {
-    *delim_pos = '\0';
-    ret(-1, _("unsupported filter type `%s`"), filter_str);
+static inline char* _trim_back(char* str, size_t len) {
+  if (len == 0) return str;
+  if (is_whitespace(str[len - 1])) {
+    str[len - 1] = '\0';
+    return _trim_back(str, len - 1);
   }
+  return str;
+}
 
-  char* value = delim_pos + 1;
-  char* port_str = strrchr(value, ':');
-  if (!port_str) ret(-1, _("no port number specified: %s"), value);
+static char* trim(char* str) {
+  if (!str) return NULL;
+  if (is_whitespace(str[0])) return trim(str + 1);
+  return _trim_back(str, strlen(str));
+}
+
+static int parse_kv(char* kv, char** k, char** v) {
+  if (!kv || !k || !v) return -EINVAL;
+  char* delim_pos = strchr(kv, '=');
+  if (delim_pos == NULL || delim_pos == kv) {
+    ret(-EINVAL, _("expected key-value pair: '%s'"), kv);
+  }
+  *delim_pos = 0;
+  *k = trim(kv);
+  *v = trim(delim_pos + 1);
+  return 0;
+}
+
+static int parse_ip_port(char* str, enum ip_proto* protocol, union ip_value* ip, __u16* port) {
+  char* port_str = strrchr(str, ':');
+  if (!port_str) ret(-EINVAL, _("no port number specified: %s"), str);
   *port_str = '\0';
   port_str++;
   char* endptr;
-  long port = strtol(port_str, &endptr, 10);
-  if (port <= 0 || port > 65535 || *endptr != '\0') {
-    ret(-1, _("invalid port number: `%s`"), port_str);
+  long _port = strtol(port_str, &endptr, 10);
+  if (_port <= 0 || _port > 65535 || *endptr != '\0') {
+    ret(-EINVAL, _("invalid port number: '%s'"), port_str);
   }
-  filter->port = port;
+  *port = _port;
 
-  int af;
-  if (strchr(value, ':')) {
-    if (*value != '[' || port_str[-2] != ']') {
-      ret(-1, _("did you forget square brackets around an IPv6 address?"));
+  if (strchr(str, ':')) {
+    if (*str != '[' || port_str[-2] != ']') {
+      ret(-EINVAL, _("did you forget square brackets around an IPv6 address?"));
     }
-    filter->protocol = PROTO_IPV6;
-    value++;
+    *protocol = AF_INET6;
+    str++;
     port_str[-2] = '\0';
-    af = AF_INET6;
   } else {
-    filter->protocol = PROTO_IPV4;
-    af = AF_INET;
+    *protocol = AF_INET;
   }
-  if (inet_pton(af, value, &filter->ip.v6) == 0) ret(-1, _("bad IP address: %s"), value);
+  if (inet_pton(*protocol, str, ip) == 0) ret(-EINVAL, _("bad IP address: '%s'"), str);
+  return 0;
+}
+
+int parse_filter(char* filter_str, struct pkt_filter* filter) {
+  char *k, *v;
+  try(parse_kv(filter_str, &k, &v));
+  if (strcmp("local", k) == 0) {
+    filter->origin = ORIGIN_LOCAL;
+  } else if (strcmp("remote", k) == 0) {
+    filter->origin = ORIGIN_REMOTE;
+  } else {
+    ret(-EINVAL, _("unsupported filter type '%s'"), k);
+  }
+  try(parse_ip_port(v, &filter->protocol, &filter->ip, &filter->port));
   return 0;
 }
 
 int parse_config_file(FILE* file, struct run_args* args) {
-  int retcode;
-  char *line = NULL, *key, *value, *endptr;
+  _cleanup_malloc_str char* line = NULL;
   size_t len = 0;
   ssize_t read;
 
   errno = 0;
   while ((read = getline(&line, &len, file)) != -1) {
     if (line[0] == '\n' || line[0] == '#') continue;
+    char *k, *v, *endptr = NULL;
+    try(parse_kv(line, &k, &v));
 
-    char* delim_pos = strchr(line, '=');
-    if (delim_pos == NULL || delim_pos == line) {
-      cleanup(-1, _("configuration format should look like `key=value`: %s"), line);
-    }
-
-    // Overwrite delimiter and newline
-    delim_pos[0] = '\0';
-    if (line[read - 1] == '\n') line[read - 1] = '\0';
-
-    key = line;
-    value = delim_pos + 1;
-    endptr = NULL;
-
-    if (strcmp(key, "log.verbosity") == 0) {
-      int parsed = strtol(value, &endptr, 10);
-      if (endptr && endptr != value + strlen(value)) cleanup(-1, _("invalid integer: %s"), value);
-      if (parsed < 0) parsed = 0;
-      if (parsed > 4) parsed = 4;
+    if (strcmp(k, "log.verbosity") == 0) {
+      int parsed = strtol(v, &endptr, 10);
+      if (endptr && endptr != v + strlen(v)) {
+        if (strcmp(v, "error") == 0) {
+          parsed = LOG_ERROR;
+        } else if (strcmp(v, "warn") == 0) {
+          parsed = LOG_WARN;
+        } else if (strcmp(v, "info") == 0) {
+          parsed = LOG_INFO;
+        } else if (strcmp(v, "debug") == 0) {
+          parsed = LOG_DEBUG;
+        } else if (strcmp(v, "trace") == 0) {
+          parsed = LOG_TRACE;
+        } else {
+          ret(-EINVAL, _("invalid integer: '%s'"), v);
+        }
+      } else {
+        if (parsed < LOG_ERROR) parsed = LOG_ERROR;
+        if (parsed > LOG_TRACE) parsed = LOG_TRACE;
+      }
       log_verbosity = parsed;
-
-    } else if (strcmp(key, "filter") == 0) {
-      try(parse_filter(value, &args->filters[args->filter_count]));
+    } else if (strcmp(k, "filter") == 0) {
+      try(parse_filter(v, &args->filters[args->filter_count]));
       if (args->filter_count++ > 8) {
-        cleanup(-1, _("currently only maximum of 8 filters is supported"));
+        ret(-E2BIG, _("currently only maximum of 8 filters is supported"));
       }
     } else {
-      cleanup(-1, _("unknown key '%s'"), key);
+      ret(-EINVAL, _("unknown key '%s'"), k);
     }
   }
 
-  if (errno) cleanup(-errno, _("failed to read line: %s"), strerror(errno));
-
-  retcode = 0;
-cleanup:
-  if (line) free(line);
-  return retcode;
+  if (errno) ret(-errno, _("failed to read line: %s"), strerror(errno));
+  return 0;
 }

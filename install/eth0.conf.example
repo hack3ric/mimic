@@ -2,13 +2,13 @@
 # create <interface>.conf in this directory and in the following format to
 # pass arguments to Mimic's systemd service (mimic@<interface>.service).
 #
-# Each configuration should be in the format of `key=value`. Note there
-# are no spaces between key, '=' and value, and should be kept in one
-# line. Empty lines and ones that start with '#' are ignored.
+# Each configuration should be in the format of `key=value`. There might be
+# whitespaces between key, '=' and value, and should be kept in one line. Empty
+# lines and ones that start with '#' are ignored.
 
 # Sets log verbosity. Log level equal to or higher (in number) than log
-# verbosity will be discarded. Must be greater than or equal to 0.
-# Defaults to 2.
+# verbosity will be discarded. Both number and string matching log levels are
+# accepted. Number must be greater than or equal to 0. Defaults to info (2).
 #
 # Log levels:
 #   0 - error (cannot be discarded)
@@ -16,12 +16,12 @@
 #   2 - info
 #   3 - debug
 #   4 - trace
-log.verbosity=2
+log.verbosity = trace
 
 # Specifies which packets should be processed by Mimic. Can be set more
 # than once to allow parallel rules (OR'ed).
 #
 # Filter format follows `(local|remote)=IP:port`. For IPv6, IP addresses
 # need to be surrounded by square brackets. See below for examples.
-filter=local=192.0.2.1:1234
-filter=remote=[2001:db8::cafe]:5678
+filter = local=192.0.2.1:1234
+filter = remote=[2001:db8::cafe]:5678

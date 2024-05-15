@@ -53,7 +53,7 @@ struct lock_content {
 int lock_write(int fd, const struct lock_content* c);
 int lock_read(FILE* file, struct lock_content* c);
 
-int parse_filter(const char* filter_str, struct pkt_filter* filter);
+int parse_filter(char* filter_str, struct pkt_filter* filter);
 int parse_config_file(FILE* file, struct run_args* args);
 
 struct list {
@@ -124,9 +124,11 @@ static inline void cleanup_file(FILE** file) {
 static inline void cleanup_malloc(void** ptr) {
   if (*ptr) free(*ptr);
 }
+static inline void cleanup_malloc_str(char** ptr) { cleanup_malloc((void*)ptr); }
 
 #define _cleanup_fd __attribute__((__cleanup__(cleanup_fd)))
 #define _cleanup_file __attribute__((__cleanup__(cleanup_file)))
 #define _cleanup_malloc __attribute__((__cleanup__(cleanup_malloc)))
+#define _cleanup_malloc_str __attribute__((__cleanup__(cleanup_malloc_str)))
 
 #endif  // _MIMIC_MIMIC_H
