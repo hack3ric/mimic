@@ -42,7 +42,12 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
   return 0;
 }
 
-const struct argp show_argp = {options, args_parse_opt, N_("<interface>"), NULL};
+const struct argp show_argp = {
+  options,
+  args_parse_opt,
+  N_("<interface>"),
+  N_("\vSee mimic(1) for detailed usage."),
+};
 
 int subcmd_show(struct show_args* args) {
   int ifindex = if_nametoindex(args->ifname);
@@ -70,11 +75,11 @@ int subcmd_show(struct show_args* args) {
           "mimic_whitelist", strret);
 
     char buf[FILTER_FMT_MAX_LEN];
-    struct pkt_filter filter;
+    struct filter filter;
     struct bpf_map_iter iter = {.map_fd = whitelist_fd, .map_name = "mimic_whitelist"};
 
     while (try(bpf_map_iter_next(&iter, &filter))) {
-      pkt_filter_fmt(&filter, buf);
+      filter_fmt(&filter, buf);
       printf(_("  %sfilter:%s %s\n"), BOLD, RESET, buf);
     }
     if (!iter.has_key) printf(_("  %sno active filter%s\n"), BOLD, RESET);

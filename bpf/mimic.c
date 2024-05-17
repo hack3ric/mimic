@@ -13,7 +13,7 @@ struct mimic_conns_map mimic_conns SEC(".maps");
 struct mimic_rb_map mimic_rb SEC(".maps");
 
 bool matches_whitelist(QUARTET_DEF, bool ingress) {
-  struct pkt_filter local = {.origin = ORIGIN_LOCAL}, remote = {.origin = ORIGIN_REMOTE};
+  struct filter local = {.origin = ORIGIN_LOCAL}, remote = {.origin = ORIGIN_REMOTE};
   if (udp) {
     local.port = ntohs(udp->source);
     remote.port = ntohs(udp->dest);

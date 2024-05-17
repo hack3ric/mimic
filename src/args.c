@@ -20,7 +20,9 @@ static const char doc[] = N_(
   "      run                    Run Mimic on an network interface\n"
   "      show                   Show overview of a currently running instance\n"
   "\n"
-  "Options:");
+  "Options:"
+  "\v"
+  "See mimic(1) for detailed usage.");
 
 static inline error_t argp_parse_cmd(struct argp_state* state, const char* cmdname,
                                      const struct argp* cmd_argp, void* args) {

@@ -76,7 +76,7 @@ static int parse_ip_port(char* str, enum ip_proto* protocol, union ip_value* ip,
   return 0;
 }
 
-int parse_filter(char* filter_str, struct pkt_filter* filter) {
+int parse_filter(char* filter_str, struct filter* filter) {
   char *k, *v;
   try(parse_kv(filter_str, &k, &v));
   if (strcmp("local", k) == 0) {
@@ -102,7 +102,7 @@ int parse_config_file(FILE* file, struct run_args* args) {
     try(parse_kv(line, &k, &v));
 
     if (strcmp(k, "log.verbosity") == 0) {
-      int parsed = strtol(v, &endptr, 10);
+      long parsed = strtol(v, &endptr, 10);
       if (endptr && endptr != v + strlen(v)) {
         if (strcmp(v, "error") == 0) {
           parsed = LOG_ERROR;
@@ -122,6 +122,11 @@ int parse_config_file(FILE* file, struct run_args* args) {
         if (parsed > LOG_TRACE) parsed = LOG_TRACE;
       }
       log_verbosity = parsed;
+    } else if (strcmp(k, "handshake.interval")) {
+    } else if (strcmp(k, "handshake.retry")) {
+    } else if (strcmp(k, "keepalive.time")) {
+    } else if (strcmp(k, "keepalive.interval")) {
+    } else if (strcmp(k, "keepalive.retry")) {
     } else if (strcmp(k, "filter") == 0) {
       try(parse_filter(v, &args->filters[args->filter_count]));
       if (args->filter_count++ > 8) {

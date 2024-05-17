@@ -12,7 +12,7 @@ extern int log_verbosity;
 extern struct mimic_whitelist_map {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 8);
-  __type(key, struct pkt_filter);
+  __type(key, struct filter);
   __type(value, bool);
 } mimic_whitelist;
 
@@ -55,11 +55,11 @@ static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress)
     key.remote_port = ntohs(tcp->dest);
   }
   if (ipv4) {
-    key.protocol = PROTO_IPV4;
+    key.protocol = AF_INET;
     key.local.v4 = ipv4->saddr;
     key.remote.v4 = ipv4->daddr;
   } else if (ipv6) {
-    key.protocol = PROTO_IPV6;
+    key.protocol = AF_INET6;
     key.local.v6 = ipv6->saddr;
     key.remote.v6 = ipv6->daddr;
   }

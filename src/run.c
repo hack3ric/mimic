@@ -33,11 +33,13 @@
 #include "mimic.h"
 
 static const struct argp_option options[] = {
-  {"filter", 'f', N_("FILTER"), 0,
-   N_("Specify what packets to process. This may be specified for multiple times."), 0},
   {"verbose", 'v', NULL, 0, N_("Output more information"), 0},
   {"quiet", 'q', NULL, 0, N_("Output less information"), 0},
-  {"file", 'F', N_("PATH"), 0, N_("Load configuration from file"), 1},
+  {"filter", 'f', N_("FILTER"), 0,
+   N_("Specify what packets to process. This may be specified for multiple times."), 1},
+  {"handshake", 'h', N_("i:r"), 0, N_("Controls retry behaviour of initiating connection"), 2},
+  {"keepalive", 'k', N_("t:i:r"), 0, N_("Controls keepalive mechanism"), 2},
+  {"file", 'F', N_("PATH"), 0, N_("Load configuration from file"), 3},
   {},
 };
 
@@ -76,7 +78,12 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
   return 0;
 }
 
-const struct argp run_argp = {options, args_parse_opt, N_("<interface>"), NULL};
+const struct argp run_argp = {
+  options,
+  args_parse_opt,
+  N_("<interface>"),
+  N_("\vSee mimic(1) for detailed usage."),
+};
 
 static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts,
                                       const struct bpf_program* prog, char* name) {
@@ -448,10 +455,10 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   bool value = true;
   for (int i = 0; i < args->filter_count; i++) {
     retcode = bpf_map__update_elem(skel->maps.mimic_whitelist, &args->filters[i],
-                                   sizeof(struct pkt_filter), &value, sizeof(value), BPF_ANY);
+                                   sizeof(struct filter), &value, sizeof(value), BPF_ANY);
     if (retcode || LOG_ALLOW_TRACE) {
       char fmt[FILTER_FMT_MAX_LEN];
-      pkt_filter_fmt(&args->filters[i], fmt);
+      filter_fmt(&args->filters[i], fmt);
       if (retcode) {
         cleanup(retcode, _("failed to add filter `%s`: %s"), fmt, strerror(-retcode));
       } else {
@@ -488,7 +495,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
     log_info(_("Mimic successfully deployed on %s with filters:"), args->ifname);
     for (int i = 0; i < args->filter_count; i++) {
       char fmt[FILTER_FMT_MAX_LEN];
-      pkt_filter_fmt(&args->filters[i], fmt);
+      filter_fmt(&args->filters[i], fmt);
       log_info("  %s", fmt);
     }
   }

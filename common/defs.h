@@ -109,7 +109,7 @@ static inline __attribute__((__format_arg__(1))) const char* _(const char* text)
 #endif
 #define N_(text) text
 
-struct pkt_filter {
+struct filter {
   enum pkt_origin { ORIGIN_LOCAL, ORIGIN_REMOTE } origin;
   enum ip_proto { PROTO_IPV4 = AF_INET, PROTO_IPV6 = AF_INET6 } protocol;
   __u16 port;
@@ -117,6 +117,11 @@ struct pkt_filter {
     __be32 v4;
     struct in6_addr v6;
   } ip;
+};
+
+struct filter_settings {
+  __u16 handshake_interval, handshake_retry;
+  __u16 keepalive_time, keepalive_interval, keepalive_retry;
 };
 
 struct conn_tuple {

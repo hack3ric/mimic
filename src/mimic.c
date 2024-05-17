@@ -60,7 +60,7 @@ void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __u16 port, char* de
 }
 
 // `dest` must be at least `FILTER_FMT_MAX_LEN` bytes long.
-void pkt_filter_fmt(const struct pkt_filter* filter, char* dest) {
+void filter_fmt(const struct filter* filter, char* dest) {
   *dest = '\0';
   if (filter->origin == ORIGIN_LOCAL) {
     strcat(dest, "local=");
