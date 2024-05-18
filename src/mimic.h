@@ -28,6 +28,7 @@ struct args {
     struct run_args {
       const char *ifname, *file;
       struct filter filters[8];
+      struct filter_settings filter_settings[8], global_filter_settings;
       unsigned int filter_count;
     } run;
     struct show_args {
@@ -53,7 +54,8 @@ struct lock_content {
 int lock_write(int fd, const struct lock_content* c);
 int lock_read(FILE* file, struct lock_content* c);
 
-int parse_filter(char* filter_str, struct filter* filter);
+int parse_number_seq(char* str, int* nums, size_t len);
+int parse_filter(char* filter_str, struct filter* filter, struct filter_settings* settings);
 int parse_config_file(FILE* file, struct run_args* args);
 
 struct list {
@@ -90,7 +92,7 @@ void get_lock_file_name(char* dest, size_t dest_len, int ifindex);
 void conn_tuple_to_addrs(const struct conn_tuple* conn, struct sockaddr_storage* saddr,
                          struct sockaddr_storage* daddr);
 
-void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __be16 port, char* dest);
+void ip_port_fmt(enum protocol protocol, union ip_value ip, __be16 port, char* dest);
 void filter_fmt(const struct filter* filter, char* dest);
 const char* conn_state_to_str(enum conn_state s);
 

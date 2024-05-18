@@ -13,7 +13,7 @@ struct mimic_conns_map mimic_conns SEC(".maps");
 struct mimic_rb_map mimic_rb SEC(".maps");
 
 bool matches_whitelist(QUARTET_DEF, bool ingress) {
-  struct filter local = {.origin = ORIGIN_LOCAL}, remote = {.origin = ORIGIN_REMOTE};
+  struct filter local = {.origin = O_LOCAL}, remote = {.origin = O_REMOTE};
   if (udp) {
     local.port = ntohs(udp->source);
     remote.port = ntohs(udp->dest);
@@ -22,18 +22,18 @@ bool matches_whitelist(QUARTET_DEF, bool ingress) {
     remote.port = ntohs(tcp->dest);
   }
   if (ipv4) {
-    local.protocol = remote.protocol = PROTO_IPV4;
+    local.protocol = remote.protocol = P_IPV4;
     local.ip.v4 = ipv4->saddr;
     remote.ip.v4 = ipv4->daddr;
   } else if (ipv6) {
-    local.protocol = remote.protocol = PROTO_IPV6;
+    local.protocol = remote.protocol = P_IPV6;
     local.ip.v6 = ipv6->saddr;
     remote.ip.v6 = ipv6->daddr;
   }
   if (ingress) {
     swap(local, remote);
-    local.origin = ORIGIN_LOCAL;
-    remote.origin = ORIGIN_REMOTE;
+    local.origin = O_LOCAL;
+    remote.origin = O_REMOTE;
   }
   return bpf_map_lookup_elem(&mimic_whitelist, &local) ||
          bpf_map_lookup_elem(&mimic_whitelist, &remote);

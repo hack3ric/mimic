@@ -45,19 +45,32 @@ static const struct argp_option options[] = {
 
 static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
   struct run_args* args = (struct run_args*)state->input;
+  int nums[3];
   switch (key) {
-    case 'f':
-      try(parse_filter(arg, &args->filters[args->filter_count]));
-      if (args->filter_count++ > 8) {
-        log_error(_("currently only maximum of 8 filters is supported"));
-        exit(1);
-      }
-      break;
     case 'v':
       if (log_verbosity < 4) log_verbosity++;
       break;
     case 'q':
       if (log_verbosity > 0) log_verbosity--;
+      break;
+    case 'f':
+      try(parse_filter(arg, &args->filters[args->filter_count],
+                       &args->filter_settings[args->filter_count]));
+      if (args->filter_count++ > 8) {
+        log_error(_("currently only maximum of 8 filters is supported"));
+        exit(1);
+      }
+      break;
+    case 'h':
+      try(parse_number_seq(arg, nums, 2));
+      if (nums[0] >= 0) args->global_filter_settings.handshake_interval = nums[0];
+      if (nums[1] >= 0) args->global_filter_settings.handshake_retry = nums[1];
+      break;
+    case 'k':
+      try(parse_number_seq(arg, nums, 3));
+      if (nums[0] >= 0) args->global_filter_settings.keepalive_time = nums[0];
+      if (nums[1] >= 0) args->global_filter_settings.keepalive_interval = nums[1];
+      if (nums[2] >= 0) args->global_filter_settings.keepalive_retry = nums[2];
       break;
     case 'F':
       args->file = arg;

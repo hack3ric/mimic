@@ -110,8 +110,8 @@ static inline __attribute__((__format_arg__(1))) const char* _(const char* text)
 #define N_(text) text
 
 struct filter {
-  enum pkt_origin { ORIGIN_LOCAL, ORIGIN_REMOTE } origin;
-  enum ip_proto { PROTO_IPV4 = AF_INET, PROTO_IPV6 = AF_INET6 } protocol;
+  enum origin { O_LOCAL, O_REMOTE } origin;
+  enum protocol { P_IPV4 = AF_INET, P_IPV6 = AF_INET6 } protocol;
   __u16 port;
   union ip_value {
     __be32 v4;
@@ -120,12 +120,12 @@ struct filter {
 };
 
 struct filter_settings {
-  __u16 handshake_interval, handshake_retry;
-  __u16 keepalive_time, keepalive_interval, keepalive_retry;
+  int handshake_interval, handshake_retry;
+  int keepalive_time, keepalive_interval, keepalive_retry;
 };
 
 struct conn_tuple {
-  enum ip_proto protocol;
+  enum protocol protocol;
   __u16 local_port, remote_port;
   union ip_value local, remote;
 };

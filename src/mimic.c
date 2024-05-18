@@ -51,21 +51,21 @@ void conn_tuple_to_addrs(const struct conn_tuple* conn, struct sockaddr_storage*
   }
 }
 
-void ip_port_fmt(enum ip_proto protocol, union ip_value ip, __u16 port, char* dest) {
+void ip_port_fmt(enum protocol protocol, union ip_value ip, __u16 port, char* dest) {
   *dest = '\0';
-  if (protocol == PROTO_IPV6) strcat(dest, "[");
+  if (protocol == P_IPV6) strcat(dest, "[");
   inet_ntop(protocol, &ip, dest + strlen(dest), INET6_ADDRSTRLEN);
-  if (protocol == PROTO_IPV6) strcat(dest, "]");
+  if (protocol == P_IPV6) strcat(dest, "]");
   snprintf(dest + strlen(dest), 7, ":%d", port);
 }
 
 // `dest` must be at least `FILTER_FMT_MAX_LEN` bytes long.
 void filter_fmt(const struct filter* filter, char* dest) {
   *dest = '\0';
-  if (filter->origin == ORIGIN_LOCAL) {
+  if (filter->origin == O_LOCAL) {
     strcat(dest, "local=");
     dest += 6;
-  } else if (filter->origin == ORIGIN_REMOTE) {
+  } else if (filter->origin == O_REMOTE) {
     strcat(dest, "remote=");
     dest += 7;
   }

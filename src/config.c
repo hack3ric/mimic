@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <asm-generic/errno-base.h>
 #include <errno.h>
 #include <linux/types.h>
 #include <stdbool.h>
@@ -50,7 +51,7 @@ static int parse_kv(char* kv, char** k, char** v) {
   return 0;
 }
 
-static int parse_ip_port(char* str, enum ip_proto* protocol, union ip_value* ip, __u16* port) {
+static int parse_ip_port(char* str, enum protocol* protocol, union ip_value* ip, __u16* port) {
   char* port_str = strrchr(str, ':');
   if (!port_str) ret(-EINVAL, _("no port number specified: %s"), str);
   *port_str = '\0';
@@ -76,17 +77,78 @@ static int parse_ip_port(char* str, enum ip_proto* protocol, union ip_value* ip,
   return 0;
 }
 
-int parse_filter(char* filter_str, struct filter* filter) {
+int parse_number_seq(char* str, int* nums, size_t len) {
+  if (!str || !nums) return -EINVAL;
+  size_t str_len = strlen(str);
+  char* head = str;
+  int nums_idx = 0;
+  for (int i = 0; i < str_len + 1; i++) {
+    if (str[i] == ':' || str[i] == '\0') {
+      char orig_char = str[i];
+      if (nums_idx >= len) ret(-EINVAL, _("sequence length out of range: '%s'"), str);
+      str[i] = '\0';
+      char* endptr = NULL;
+      if (*head == '\0') {
+        nums[nums_idx++] = -1;
+      } else {
+        long num = strtol(head, &endptr, 10);
+        if (*endptr != '\0') ret(-EINVAL, _("invalid number: '%s'"), head);
+        if (num < 0 || num > 65535) ret(-EINVAL, _("number out of range: '%d'"), num);
+        nums[nums_idx++] = num;
+      }
+      head = str + i + 1;
+      str[i] = orig_char;
+    }
+  }
+  if (nums_idx != len) ret(-EINVAL, _("expected %d numbers, got only %d: '%s'"), len, nums_idx, str);
+  return nums_idx;
+}
+
+int parse_filter(char* filter_str, struct filter* filter, struct filter_settings* settings) {
   char *k, *v;
+
+  char* delim = strchr(filter_str, ',');
+  if (delim) *delim = '\0';
+
   try(parse_kv(filter_str, &k, &v));
   if (strcmp("local", k) == 0) {
-    filter->origin = ORIGIN_LOCAL;
+    filter->origin = O_LOCAL;
   } else if (strcmp("remote", k) == 0) {
-    filter->origin = ORIGIN_REMOTE;
+    filter->origin = O_REMOTE;
   } else {
-    ret(-EINVAL, _("unsupported filter type '%s'"), k);
+    ret(-EINVAL, _("unsupported filter type: '%s'"), k);
   }
   try(parse_ip_port(v, &filter->protocol, &filter->ip, &filter->port));
+
+  *settings = (struct filter_settings){-1, -1, -1, -1, -1};
+  if (!delim) return 0;
+  char* next_delim = delim;
+  while (true) {
+    delim = next_delim + 1;
+    next_delim = strchr(delim, ',');
+    if (next_delim) *next_delim = '\0';
+
+    try(parse_kv(delim, &k, &v));
+    if (strcmp("handshake", k) == 0) {
+      int nums[2];
+      try(parse_number_seq(v, nums, 2));
+      if (nums[0] >= 0) settings->handshake_interval = nums[0];
+      if (nums[1] >= 0) settings->handshake_retry = nums[1];
+
+    } else if (strcmp("keepalive", k) == 0) {
+      int nums[3];
+      try(parse_number_seq(v, nums, 3));
+      if (nums[0] >= 0) settings->keepalive_time = nums[0];
+      if (nums[1] >= 0) settings->keepalive_interval = nums[1];
+      if (nums[2] >= 0) settings->keepalive_retry = nums[2];
+
+    } else {
+      ret(-EINVAL, _("unsupported option type: '%s'"), k);
+    }
+
+    if (!next_delim) break;
+  }
+  log_info("%d %d", settings->handshake_interval, settings->handshake_retry);
   return 0;
 }
 
@@ -122,16 +184,27 @@ int parse_config_file(FILE* file, struct run_args* args) {
         if (parsed > LOG_TRACE) parsed = LOG_TRACE;
       }
       log_verbosity = parsed;
-    } else if (strcmp(k, "handshake.interval")) {
-    } else if (strcmp(k, "handshake.retry")) {
-    } else if (strcmp(k, "keepalive.time")) {
-    } else if (strcmp(k, "keepalive.interval")) {
-    } else if (strcmp(k, "keepalive.retry")) {
+
+    } else if (strcmp(k, "handshake")) {
+      int nums[2];
+      try(parse_number_seq(v, nums, 2));
+      if (nums[0] >= 0) args->global_filter_settings.handshake_interval = nums[0];
+      if (nums[1] >= 0) args->global_filter_settings.handshake_retry = nums[1];
+
+    } else if (strcmp(k, "keepalive")) {
+      int nums[3];
+      try(parse_number_seq(v, nums, 3));
+      if (nums[0] >= 0) args->global_filter_settings.keepalive_time = nums[0];
+      if (nums[1] >= 0) args->global_filter_settings.keepalive_interval = nums[1];
+      if (nums[2] >= 0) args->global_filter_settings.keepalive_retry = nums[2];
+
     } else if (strcmp(k, "filter") == 0) {
-      try(parse_filter(v, &args->filters[args->filter_count]));
+      try(parse_filter(v, &args->filters[args->filter_count],
+                       &args->filter_settings[args->filter_count]));
       if (args->filter_count++ > 8) {
         ret(-E2BIG, _("currently only maximum of 8 filters is supported"));
       }
+
     } else {
       ret(-EINVAL, _("unknown key '%s'"), k);
     }
