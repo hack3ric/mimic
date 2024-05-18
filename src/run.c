@@ -338,7 +338,8 @@ static int do_routine(int conns_fd, const char* ifname) {
     int retry_secs = time_diff_sec(tstamp, conn.retry_tstamp);
     switch (conn.state) {
       case CONN_ESTABLISHED:
-        if (retry_secs >= 30) {
+        if (conn.settings.keepalive_time > 0 && conn.settings.keepalive_interval > 0 &&
+            retry_secs >= conn.settings.keepalive_time) {
           if (conn.retry_tstamp >= conn.reset_tstamp) {
             log_conn(LOG_DEBUG, &key, _("sending keepalive"));
             conn.reset_tstamp = tstamp;
@@ -347,9 +348,10 @@ static int do_routine(int conns_fd, const char* ifname) {
             bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
           } else {
             int reset_secs = time_diff_sec(tstamp, conn.reset_tstamp);
-            if (reset_secs >= 6) {
+            if (reset_secs >=
+                (conn.settings.keepalive_retry + 1) * conn.settings.keepalive_interval) {
               reset = true;
-            } else if (reset_secs % 2 == 0) {
+            } else if (reset_secs % conn.settings.keepalive_interval == 0) {
               log_conn(LOG_DEBUG, &key, _("sending keepalive"));
               send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
             }
@@ -357,9 +359,10 @@ static int do_routine(int conns_fd, const char* ifname) {
         }
         break;
       case CONN_SYN_SENT:
-        if (retry_secs >= 6) {
+        if (conn.settings.handshake_interval > 0 &&
+            retry_secs >= (conn.settings.handshake_retry + 1) * conn.settings.handshake_interval) {
           reset = true;
-        } else if (retry_secs != 0 && retry_secs % 2 == 0) {
+        } else if (retry_secs != 0 && retry_secs % conn.settings.handshake_interval == 0) {
           log_conn(LOG_INFO, &key, _("retry sending SYN"));
           send_ctrl_packet(&key, SYN, conn.seq - 1, 0, 0xffff, ifname);
           // pktbuf_drain((struct pktbuf*)conn.pktbuf);
@@ -465,10 +468,11 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
 
   skel->bss->log_verbosity = log_verbosity;
 
-  bool value = true;
   for (int i = 0; i < args->filter_count; i++) {
-    retcode = bpf_map__update_elem(skel->maps.mimic_whitelist, &args->filters[i],
-                                   sizeof(struct filter), &value, sizeof(value), BPF_ANY);
+    filter_settings_apply(&args->filter_settings[i], &args->global_filter_settings);
+    retcode =
+      bpf_map__update_elem(skel->maps.mimic_whitelist, &args->filters[i], sizeof(struct filter),
+                           &args->filter_settings[i], sizeof(struct filter_settings), BPF_NOEXIST);
     if (retcode || LOG_ALLOW_TRACE) {
       char fmt[FILTER_FMT_MAX_LEN];
       filter_fmt(&args->filters[i], fmt);

@@ -74,9 +74,10 @@ int egress_handler(struct __sk_buff* skb) {
   if (ip_proto != IPPROTO_UDP) return TC_ACT_OK;
   decl_ok(struct udphdr, udp, ip_end, skb);
 
-  if (!matches_whitelist(QUARTET_UDP, false)) return TC_ACT_OK;
-  struct conn_tuple conn_key = gen_conn_key(QUARTET_UDP, false);
-  struct connection* conn = try_p_shot(get_conn(&conn_key));
+  struct filter_settings* settings = matches_whitelist(QUARTET_UDP);
+  if (!settings) return TC_ACT_OK;
+  struct conn_tuple conn_key = gen_conn_key(QUARTET_UDP);
+  struct connection* conn = try_p_shot(get_conn(&conn_key, settings));
 
   struct udphdr old_udp = *udp;
   old_udp.check = 0;

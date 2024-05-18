@@ -1,5 +1,4 @@
 #include <arpa/inet.h>
-#include <asm-generic/errno-base.h>
 #include <errno.h>
 #include <linux/types.h>
 #include <stdbool.h>
@@ -100,7 +99,8 @@ int parse_number_seq(char* str, int* nums, size_t len) {
       str[i] = orig_char;
     }
   }
-  if (nums_idx != len) ret(-EINVAL, _("expected %d numbers, got only %d: '%s'"), len, nums_idx, str);
+  if (nums_idx != len)
+    ret(-EINVAL, _("expected %d numbers, got only %d: '%s'"), len, nums_idx, str);
   return nums_idx;
 }
 

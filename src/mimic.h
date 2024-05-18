@@ -3,12 +3,12 @@
 
 #include <argp.h>
 #include <bpf/bpf.h>
+#include <errno.h>
 #include <linux/types.h>
-#include <netinet/in.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/socket.h>
+#include <strings.h>
 #include <unistd.h>
 
 #include "../common/defs.h"

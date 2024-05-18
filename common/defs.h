@@ -124,6 +124,18 @@ struct filter_settings {
   int keepalive_time, keepalive_interval, keepalive_retry;
 };
 
+#define _filter_settings_apply(_field) \
+  if (local->_field < 0) local->_field = remote->_field;
+
+static inline void filter_settings_apply(struct filter_settings* local,
+                                         const struct filter_settings* remote) {
+  _filter_settings_apply(handshake_interval);
+  _filter_settings_apply(handshake_retry);
+  _filter_settings_apply(keepalive_time);
+  _filter_settings_apply(keepalive_interval);
+  _filter_settings_apply(keepalive_retry);
+}
+
 struct conn_tuple {
   enum protocol protocol;
   __u16 local_port, remote_port;
@@ -143,6 +155,8 @@ struct connection {
   __u16 cwnd;
   __u64 retry_tstamp, reset_tstamp;
   bool keepalive_sent;
+  // TODO: filter settings
+  struct filter_settings settings;
 };
 
 struct send_options {

@@ -4,7 +4,6 @@
 #include <bpf/libbpf.h>
 #include <linux/tcp.h>
 #include <stdarg.h>
-#include <stdbool.h>
 
 #include "../common/defs.h"
 

@@ -85,8 +85,9 @@ int ingress_handler(struct xdp_md* xdp) {
   if (ip_proto != IPPROTO_TCP) return XDP_PASS;
   decl_pass(struct tcphdr, tcp, ip_end, xdp);
 
-  if (!matches_whitelist(QUARTET_TCP, true)) return XDP_PASS;
-  struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP, true);
+  struct filter_settings* settings = matches_whitelist(QUARTET_TCP);
+  if (!settings) return XDP_PASS;
+  struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP);
   __u32 buf_len = bpf_xdp_get_buff_len(xdp);
   __u32 payload_len = buf_len - ip_end - (tcp->doff << 2);
   log_tcp(LOG_TRACE, true, &conn_key, tcp, payload_len);
@@ -118,7 +119,7 @@ int ingress_handler(struct xdp_md* xdp) {
       return XDP_DROP;
     }
 
-    struct connection conn_value = {.cwnd = INIT_CWND};
+    struct connection conn_value = {.cwnd = INIT_CWND, .settings = *settings};
     try_drop(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
     conn = try_p_drop(bpf_map_lookup_elem(&mimic_conns, &conn_key));
   }

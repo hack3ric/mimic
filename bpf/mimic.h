@@ -13,7 +13,7 @@ extern struct mimic_whitelist_map {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 8);
   __type(key, struct filter);
-  __type(value, bool);
+  __type(value, struct filter_settings);
 } mimic_whitelist;
 
 extern struct mimic_conns_map {
@@ -43,9 +43,36 @@ struct ph_part {
 #define QUARTET_TCP ipv4, ipv6, NULL, tcp
 // clang-format on
 
-bool matches_whitelist(QUARTET_DEF, bool ingress);
+static __always_inline struct filter_settings* matches_whitelist(QUARTET_DEF) {
+  struct filter local = {.origin = O_LOCAL}, remote = {.origin = O_REMOTE};
+  if (udp) {
+    local.port = ntohs(udp->source);
+    remote.port = ntohs(udp->dest);
+  } else if (tcp) {
+    local.port = ntohs(tcp->source);
+    remote.port = ntohs(tcp->dest);
+  }
+  if (ipv4) {
+    local.protocol = remote.protocol = AF_INET;
+    local.ip.v4 = ipv4->saddr;
+    remote.ip.v4 = ipv4->daddr;
+  } else if (ipv6) {
+    local.protocol = remote.protocol = AF_INET6;
+    local.ip.v6 = ipv6->saddr;
+    remote.ip.v6 = ipv6->daddr;
+  }
+  if (tcp) {
+    swap(local, remote);
+    local.origin = O_LOCAL;
+    remote.origin = O_REMOTE;
+  }
 
-static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress) {
+  struct filter_settings* result = bpf_map_lookup_elem(&mimic_whitelist, &local);
+  result = result ?: bpf_map_lookup_elem(&mimic_whitelist, &remote);
+  return result;
+}
+
+static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF) {
   struct conn_tuple key = {};
   if (udp) {
     key.local_port = ntohs(udp->source);
@@ -63,17 +90,18 @@ static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF, bool ingress)
     key.local.v6 = ipv6->saddr;
     key.remote.v6 = ipv6->daddr;
   }
-  if (ingress) {
+  if (tcp) {
     swap(key.local, key.remote);
     swap(key.local_port, key.remote_port);
   }
   return key;
 }
 
-static inline struct connection* get_conn(struct conn_tuple* key) {
+static __always_inline struct connection* get_conn(struct conn_tuple* key,
+                                                   struct filter_settings* settings) {
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, key);
   if (!conn) {
-    struct connection conn_value = {.cwnd = INIT_CWND};
+    struct connection conn_value = {.cwnd = INIT_CWND, .settings = *settings};
     if (bpf_map_update_elem(&mimic_conns, key, &conn_value, BPF_ANY)) return NULL;
     conn = bpf_map_lookup_elem(&mimic_conns, key);
     if (!conn) return NULL;
