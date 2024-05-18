@@ -1,5 +1,6 @@
 #include <linux/bpf.h>
 #include <linux/btf.h>
+#include <linux/btf_ids.h>
 #include <linux/skbuff.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
