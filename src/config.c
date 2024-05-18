@@ -148,7 +148,6 @@ int parse_filter(char* filter_str, struct filter* filter, struct filter_settings
 
     if (!next_delim) break;
   }
-  log_info("%d %d", settings->handshake_interval, settings->handshake_retry);
   return 0;
 }
 

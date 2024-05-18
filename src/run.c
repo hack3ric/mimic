@@ -359,8 +359,7 @@ static int do_routine(int conns_fd, const char* ifname) {
         }
         break;
       case CONN_SYN_SENT:
-        if (conn.settings.handshake_interval > 0 &&
-            retry_secs >= (conn.settings.handshake_retry + 1) * conn.settings.handshake_interval) {
+        if (retry_secs >= (conn.settings.handshake_retry + 1) * conn.settings.handshake_interval) {
           reset = true;
         } else if (retry_secs != 0 && retry_secs % conn.settings.handshake_interval == 0) {
           log_conn(LOG_INFO, &key, _("retry sending SYN"));
