@@ -9,12 +9,13 @@ Build-Depends:
  clang,
  llvm,
  python3,
+ bpftool,
+ pandoc,
  libbpf-dev,
  libjson-c-dev,
  libffi-dev,
  linux-source,
- linux-headers-generic,
- bpftool
+ linux-headers-generic
 Standards-Version: 4.5.1
 Homepage: https://github.com/hack3ric/mimic
 Rules-Requires-Root: no
