@@ -97,11 +97,12 @@ static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF) {
   return key;
 }
 
-static __always_inline struct connection* get_conn(struct conn_tuple* key,
-                                                   struct filter_settings* settings) {
+static inline struct connection* get_conn(struct conn_tuple* key,
+                                          struct filter_settings* settings) {
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, key);
   if (!conn) {
-    struct connection conn_value = {.cwnd = INIT_CWND, .settings = *settings};
+    struct connection conn_value = {.cwnd = INIT_CWND};
+    __builtin_memcpy(&conn_value.settings, settings, sizeof(*settings));
     if (bpf_map_update_elem(&mimic_conns, key, &conn_value, BPF_ANY)) return NULL;
     conn = bpf_map_lookup_elem(&mimic_conns, key);
     if (!conn) return NULL;
@@ -109,16 +110,25 @@ static __always_inline struct connection* get_conn(struct conn_tuple* key,
   return conn;
 }
 
-int log_any(enum log_level level, enum log_type type, union log_info* info);
-
-static inline int log_conn(enum log_level level, enum log_type type, struct conn_tuple* conn) {
-  if (!conn || log_verbosity < level) return -1;
-  return log_any(level, type, &(union log_info){.conn = *conn});
+static void log_any(enum log_level level, enum log_type type, union log_info* info) {
+  if (log_verbosity < level || !info) return;
+  struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
+  if (!item) return;
+  item->type = RB_ITEM_LOG_EVENT;
+  item->log_event = (struct log_event){.level = level, .type = type};
+  __builtin_memcpy(&item->log_event.info, info, sizeof(*info));
+  bpf_ringbuf_submit(item, 0);
+  return;
 }
 
-static inline int log_tcp(enum log_level level, bool recv, struct conn_tuple* conn,
-                          struct tcphdr* tcp, __u16 len) {
-  if (!conn || log_verbosity < level) return -1;
+static inline void log_conn(enum log_level level, enum log_type type, struct conn_tuple* conn) {
+  if (!conn || log_verbosity < level) return;
+  log_any(level, type, &(union log_info){.conn = *conn});
+}
+
+static inline void log_tcp(enum log_level level, bool recv, struct conn_tuple* conn,
+                           struct tcphdr* tcp, __u16 len) {
+  if (!conn || log_verbosity < level) return;
   union log_info info = {
     .conn = *conn,
     .len = len,
@@ -129,10 +139,10 @@ static inline int log_tcp(enum log_level level, bool recv, struct conn_tuple* co
   return log_any(level, recv ? LOG_PKT_RECV_TCP : LOG_PKT_SEND_TCP, &info);
 }
 
-static inline int log_destroy(enum log_level level, struct conn_tuple* conn,
-                              enum destroy_type type) {
-  if (!conn || log_verbosity < level) return -1;
-  return log_any(level, LOG_CONN_DESTROY, &(union log_info){.conn = *conn, .destroy_type = type});
+static inline void log_destroy(enum log_level level, struct conn_tuple* conn,
+                               enum destroy_type type) {
+  if (!conn || log_verbosity < level) return;
+  log_any(level, LOG_CONN_DESTROY, &(union log_info){.conn = *conn, .destroy_type = type});
 }
 
 static __always_inline void change_cwnd(__u16* cwnd, __u32 r1, __u32 r2, __u32 r3, __u32 r4) {

@@ -47,42 +47,6 @@ void log_conn(int level, struct conn_tuple* conn, const char* fmt, ...) {
   va_end(ap);
 }
 
-int libbpf_print_fn(enum libbpf_print_level bpf_level, const char* format, va_list args) {
-  int ret = 0;
-  if (bpf_level == LIBBPF_WARN && LOG_ALLOW_WARN) {
-    // Get rid of harmless warning when tc qdisc already exists
-    // This is dirty, but there is no other way to filter it
-    // See https://www.spinics.net/lists/bpf/msg44842.html
-    va_list backup_args;
-    va_copy(backup_args, args);
-    char buf[128];
-    ret = vsnprintf(buf, sizeof(buf), format, backup_args);
-    if (ret < 0) return ret;
-    if (strstr(buf, "Exclusivity flag on, cannot modify")) return 0;
-  }
-  if ((bpf_level == LIBBPF_WARN && LOG_ALLOW_WARN) ||
-      (bpf_level == LIBBPF_INFO && LOG_ALLOW_INFO) ||
-      (bpf_level == LIBBPF_DEBUG && LOG_ALLOW_TRACE)) {
-    int level;
-    switch (bpf_level) {
-      case LIBBPF_WARN:
-        level = LOG_WARN;
-        break;
-      case LIBBPF_INFO:
-        level = LOG_INFO;
-        break;
-      case LIBBPF_DEBUG:
-        level = LOG_TRACE;
-        break;
-    }
-    ret = fprintf(stderr, "%s%s " RESET, _log_prefixes[level][0], gettext(_log_prefixes[level][1]));
-    if (level >= LOG_TRACE) ret = ret < 0 ? ret : fprintf(stderr, GRAY);
-    ret = ret < 0 ? ret : vfprintf(stderr, format, args);
-    if (level >= LOG_TRACE) ret = ret < 0 ? ret : fprintf(stderr, RESET);
-  }
-  return ret < 0 ? ret : 0;
-}
-
 static void _log_tcp(enum log_level level, bool recv, struct conn_tuple* conn, __u16 len,
                      __u16 flags, __u32 seq, __u32 ack_seq) {
   if (log_verbosity < level) return;
@@ -120,6 +84,42 @@ void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_typ
       break;
   }
   log_conn(level, conn, _("connection destroyed (%s)"), reason);
+}
+
+int libbpf_print_fn(enum libbpf_print_level bpf_level, const char* format, va_list args) {
+  int ret = 0;
+  if (bpf_level == LIBBPF_WARN && LOG_ALLOW_WARN) {
+    // Get rid of harmless warning when tc qdisc already exists
+    // This is dirty, but there is no other way to filter it
+    // See https://www.spinics.net/lists/bpf/msg44842.html
+    va_list backup_args;
+    va_copy(backup_args, args);
+    char buf[128];
+    ret = vsnprintf(buf, sizeof(buf), format, backup_args);
+    if (ret < 0) return ret;
+    if (strstr(buf, "Exclusivity flag on, cannot modify")) return 0;
+  }
+  if ((bpf_level == LIBBPF_WARN && LOG_ALLOW_WARN) ||
+      (bpf_level == LIBBPF_INFO && LOG_ALLOW_INFO) ||
+      (bpf_level == LIBBPF_DEBUG && LOG_ALLOW_TRACE)) {
+    int level;
+    switch (bpf_level) {
+      case LIBBPF_WARN:
+        level = LOG_WARN;
+        break;
+      case LIBBPF_INFO:
+        level = LOG_INFO;
+        break;
+      case LIBBPF_DEBUG:
+        level = LOG_TRACE;
+        break;
+    }
+    ret = fprintf(stderr, "%s%s " RESET, _log_prefixes[level][0], gettext(_log_prefixes[level][1]));
+    if (level >= LOG_TRACE) ret = ret < 0 ? ret : fprintf(stderr, GRAY);
+    ret = ret < 0 ? ret : vfprintf(stderr, format, args);
+    if (level >= LOG_TRACE) ret = ret < 0 ? ret : fprintf(stderr, RESET);
+  }
+  return ret < 0 ? ret : 0;
 }
 
 static inline const char* log_type_to_str(enum log_type type) {

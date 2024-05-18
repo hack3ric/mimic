@@ -119,7 +119,8 @@ int ingress_handler(struct xdp_md* xdp) {
       return XDP_DROP;
     }
 
-    struct connection conn_value = {.cwnd = INIT_CWND, .settings = *settings};
+    struct connection conn_value = {.cwnd = INIT_CWND};
+    __builtin_memcpy(&conn_value.settings, settings, sizeof(*settings));
     try_drop(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
     conn = try_p_drop(bpf_map_lookup_elem(&mimic_conns, &conn_key));
   }

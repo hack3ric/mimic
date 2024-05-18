@@ -12,20 +12,6 @@ struct mimic_whitelist_map mimic_whitelist SEC(".maps");
 struct mimic_conns_map mimic_conns SEC(".maps");
 struct mimic_rb_map mimic_rb SEC(".maps");
 
-int log_any(enum log_level level, enum log_type type, union log_info* info) {
-  if (log_verbosity < level || !info) return -1;
-  struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
-  if (!item) return -1;
-  item->type = RB_ITEM_LOG_EVENT;
-  item->log_event = (struct log_event){
-    .level = level,
-    .type = type,
-    .info = *info,
-  };
-  bpf_ringbuf_submit(item, 0);
-  return 0;
-}
-
 int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_seq, __u16 cwnd) {
   if (!conn) return -1;
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
