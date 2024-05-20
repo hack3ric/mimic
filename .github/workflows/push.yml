@@ -14,7 +14,7 @@ jobs:
         run: |
           sudo apt install python3 clang llvm pahole \
             bats bc ethtool iperf3 jq socat tshark wireguard-tools \
-            libjson-c-dev libffi-dev libelf-dev
+            libffi-dev libelf-dev
       - name: Prepare libbpf
         run: |
           git clone --depth 1 --branch v1.4.0 https://github.com/libbpf/libbpf.git

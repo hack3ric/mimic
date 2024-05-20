@@ -129,7 +129,6 @@ Otherwise, the following dependencies is required:
 - Clang version >= 14, and optionally GCC (if system kernel is built using it)
 - pahole, bpftool (for generating BPF stuff)
 - libbpf 1.x: `apt install libbpf-dev` on Debian or similar
-- json-c: `apt install libjson-c-dev` on Debian or similar
 - libffi: `apt install libffi-dev` on Debian or similar
 
 `bpf-gcc` could be used, but commit [6103df1e](https://github.com/gcc-mirror/gcc/commit/6103df1e4fae5192c507484b1d32f00c42c70b54) needs to be included/backported; see Makefile for details. Note that although it did compile, it probably wouldn't pass the verifier.
