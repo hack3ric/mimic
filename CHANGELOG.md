@@ -4,6 +4,7 @@
 
 - Variable congestion window to better mimic real TCP
 - Notify supervisor when Mimic is ready (currently only systemd)
+- Add mimic(1) manpage
 
 ## 0.3.1 (2024-04-21)
 
