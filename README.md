@@ -16,7 +16,7 @@ You may want to use systemd to manage your Mimic instances. See [Usage for Syste
 
 ### Kernel Support
 
-To run Mimic, you need a fairly recent Linux kernel, compiled with BPF (`CONFIG_BPF_SYSCALL=y`), BPF JIT (`CONFIG_BPF_JIT=y`), and BTF (`CONFIG_DEBUG_INFO_BTF=y`) support. Most distros enable them on 64-bit systems by default. On single-board computers with custom kernel, recompilation with these options enabled is probably needed.
+To run Mimic, you need a fairly recent Linux kernel (>= 6.1, due to usage of [dynptrs](https://lwn.net/Articles/910873/)), compiled with BPF (`CONFIG_BPF_SYSCALL=y`), BPF JIT (`CONFIG_BPF_JIT=y`), and BTF (`CONFIG_DEBUG_INFO_BTF=y`) support. Most distros enable them on 64-bit systems by default. On single-board computers with custom kernel, recompilation with these options enabled is probably needed.
 
 To check if current kernel have these options enabled, run `` grep CONFIG_[...] /boot/config-`uname -r` `` or `zgrep CONFIG_[...] /proc/config.gz`, where `CONFIG_[...]` is one of the kernel configurations above.
 
@@ -30,7 +30,7 @@ The following is a list of kernel versions verified to work on certain architect
 
 ### Kernel Module
 
-If you are using systemd, skip this part as the systemd service already takes care of loading Mimic kernel module.
+*If you are using systemd, skip this part as the systemd service already takes care of loading Mimic kernel module.*
 
 Otherwise, first load the kernel module which provides lower-level access of network packages for eBPF programs. If you use packaged version of Mimic, DKMS should compile it against current kernel automatically:
 
@@ -53,7 +53,7 @@ $ sudo insmod out/mimic.ko
 
 ## Usage
 
-Deploying Mimic does not require changing much of your existing configuration, as it directly interacts with packets in their ingress and egress paths. You can keep the same IP and port number of the UDP sockets at both ends, and just need to make sure the binding network interface and filters are set up correctly.
+Deploying Mimic does not require changing much of your existing configuration, as it directly interacts with packets in their ingress and egress paths, acting as a transparent overlay. You can keep the same IP and port number of the UDP sockets at both ends, and just need to make sure the binding network interface and filters are set up correctly.
 
 A filter is an entry of whitelist that looks like a key-value pair: `{origin}={ip}:{port}`. Origin is either `local` or `remote`, indicating which side's IP and port is matched. For example, `remote=192.0.2.1:6000` matches the server's IP (192.0.2.1) and its listening port (6000).
 
@@ -63,6 +63,24 @@ The general command of running a Mimic instance looks like:
 
 ```console
 # mimic run -f <filter1> [-f <filter2> [...]] <interface>
+```
+
+See [mimic(1)](docs/mimic.1.md) for more information on command-line options and detailed configuration.
+
+### Examples
+
+Assume that you have a server with an IP of 192.0.2.253. It hosts an UDP service on 7777. The server's main interface (the one that this connection goes through) is `eth0`, while the client's is `enp1s0`. Root permission is *required* in order to load BPF programs.
+
+On server side, specify that all packets in and out `eth0` with that server's IP and port is processed:
+
+```console
+# mimic run -f local=192.0.2.253:7777 eth0
+```
+
+On client side, `remote` filter is used to specify the server address:
+
+```console
+# mimic run -f remote=192.0.2.253:7777 enp1s0
 ```
 
 ### Usage for Systemd
@@ -80,22 +98,6 @@ Then simply start the per-interface service:
 Due to its transparent nature (i.e. UDP applications can work seamlessly with or without Mimic running), Mimic plays nice with existing firewall rules too.
 
 However, do note that since both TC happens after netfilter's output hook, and XDP before input hook, one should treat traffic through Mimic as UDP. TCP rules have no effect on Mimic's fake TCP traffic.
-
-## Examples
-
-Assume that you have a server with an IP of 192.0.2.253. It hosts an UDP service on 7777. The server's main interface (the one that this connection goes through) is `eth0`, while the client's is `enp1s0`. Root permission is *required* in order to load BPF programs.
-
-On server side, specify that all packets in and out `eth0` with that server's IP and port is processed:
-
-```console
-# mimic run -f local=192.0.2.253:7777 eth0
-```
-
-On client side, `remote` filter is used to specify the server address:
-
-```console
-# mimic run -f remote=192.0.2.253:7777 enp1s0
-```
 
 ## Building from Source
 
@@ -120,7 +122,7 @@ Then install with:
 # apt install ../mimic_*.deb ../mimic-dkms_*.deb
 ```
 
-Debian < 12 (bullseye, buster or earlier) and Ubuntu < 23.04 (kinetic, jammy or earlier) are not supported due to outdated libbpf 0.x.
+Debian < 12 (bullseye, buster or earlier) and Ubuntu < 23.04 (kinetic, jammy or earlier) are not supported due to outdated libbpf 0.x and Linux kernel < 6.1.
 
 Otherwise, the following dependencies is required:
 
