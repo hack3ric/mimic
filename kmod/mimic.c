@@ -23,6 +23,14 @@
 #define __bpf_kfunc_end_defs() __diag_pop()
 #endif
 
+#ifndef BTF_KFUNCS_START
+#define BTF_KFUNCS_START BTF_SET8_START
+#endif
+
+#ifndef BTF_KFUNCS_END
+#define BTF_KFUNCS_END BTF_SET8_END
+#endif
+
 __bpf_kfunc_start_defs();
 
 // Inspect kernel representation of a BPF `__sk_buff`.
@@ -53,10 +61,10 @@ __bpf_kfunc int mimic_change_csum_offset(struct __sk_buff* skb_bpf, __u16 new_pr
 
 __bpf_kfunc_end_defs();
 
-BTF_SET8_START(mimic_tc_set)
+BTF_KFUNCS_START(mimic_tc_set)
 BTF_ID_FLAGS(func, mimic_inspect_skb)
 BTF_ID_FLAGS(func, mimic_change_csum_offset)
-BTF_SET8_END(mimic_tc_set)
+BTF_KFUNCS_END(mimic_tc_set)
 
 static const struct btf_kfunc_id_set mimic_tc_kfunc_set = {
   .owner = THIS_MODULE,
