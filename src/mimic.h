@@ -51,12 +51,11 @@ struct lock_content {
   int whitelist_id, conns_id;
 };
 
-int lock_write(int fd, const struct lock_content* c);
-int lock_read(FILE* file, struct lock_content* c);
-
-int parse_number_seq(char* str, int* nums, size_t len);
+int parse_int_seq(char* str, int* nums, size_t len);
 int parse_filter(char* filter_str, struct filter* filter, struct filter_settings* settings);
 int parse_config_file(FILE* file, struct run_args* args);
+int parse_lock_file(FILE* file, struct lock_content* c);
+int write_lock_file(int fd, const struct lock_content* c);
 
 struct list {
   struct list_node {

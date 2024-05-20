@@ -58,7 +58,7 @@ int subcmd_show(struct show_args* args) {
   {
     _cleanup_file FILE* lock_file =
       try_p(fopen(lock, "r"), _("failed to open lock file at %s: %s"), lock, strret);
-    try(lock_read(lock_file, &lock_content));
+    try(parse_lock_file(lock_file, &lock_content));
   }
 
   if (!args->show_process && !args->show_command) {

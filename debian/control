@@ -12,7 +12,6 @@ Build-Depends:
  bpftool,
  pandoc,
  libbpf-dev,
- libjson-c-dev,
  libffi-dev,
  linux-source,
  linux-headers-generic

@@ -62,12 +62,12 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       }
       break;
     case 'h':
-      try(parse_number_seq(arg, nums, 2));
+      try(parse_int_seq(arg, nums, 2));
       if (nums[0] >= 0) args->global_filter_settings.handshake_interval = nums[0];
       if (nums[1] >= 0) args->global_filter_settings.handshake_retry = nums[1];
       break;
     case 'k':
-      try(parse_number_seq(arg, nums, 3));
+      try(parse_int_seq(arg, nums, 3));
       if (nums[0] >= 0) args->global_filter_settings.keepalive_time = nums[0];
       if (nums[1] >= 0) args->global_filter_settings.keepalive_interval = nums[1];
       if (nums[2] >= 0) args->global_filter_settings.keepalive_retry = nums[2];
@@ -463,7 +463,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
     .conns_id = _get_map_id(mimic_conns),
   };
   _get_map_id(mimic_rb);
-  try2(lock_write(lock_fd, &lock_content));
+  try2(write_lock_file(lock_fd, &lock_content));
 
   skel->bss->log_verbosity = log_verbosity;
 
@@ -623,7 +623,7 @@ int subcmd_run(struct run_args* args) {
       _cleanup_file FILE* lock_file = fopen(lock, "r");
       if (lock_file) {
         struct lock_content lock_content;
-        if (lock_read(lock_file, &lock_content) == 0) {
+        if (parse_lock_file(lock_file, &lock_content) == 0) {
           log_error(_("hint: is another Mimic process (PID %d) running on this interface?"),
                     lock_content.pid);
         } else {

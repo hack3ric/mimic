@@ -1,5 +1,8 @@
+#include <argp.h>
 #include <arpa/inet.h>
+#include <asm-generic/errno-base.h>
 #include <errno.h>
+#include <limits.h>
 #include <linux/types.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -76,7 +79,16 @@ static int parse_ip_port(char* str, enum protocol* protocol, union ip_value* ip,
   return 0;
 }
 
-int parse_number_seq(char* str, int* nums, size_t len) {
+static int parse_int(const char* str, int* dest) {
+  char* endptr;
+  long parsed = strtol(str, &endptr, 10);
+  if (*str == '\0' || *endptr != '\0') ret(-EINVAL, _("invalid integer: '%s'"), str);
+  if (parsed > INT_MAX || parsed < INT_MIN) ret(-E2BIG, _("integer out of range: '%ld'"), parsed);
+  *dest = parsed;
+  return 0;
+}
+
+int parse_int_seq(char* str, int* nums, size_t len) {
   if (!str || !nums) return -EINVAL;
   size_t str_len = strlen(str);
   char* head = str;
@@ -86,21 +98,21 @@ int parse_number_seq(char* str, int* nums, size_t len) {
       char orig_char = str[i];
       if (nums_idx >= len) ret(-EINVAL, _("sequence length out of range: '%s'"), str);
       str[i] = '\0';
-      char* endptr = NULL;
       if (*head == '\0') {
         nums[nums_idx++] = -1;
       } else {
-        long num = strtol(head, &endptr, 10);
-        if (*endptr != '\0') ret(-EINVAL, _("invalid number: '%s'"), head);
-        if (num < 0 || num > 65535) ret(-EINVAL, _("number out of range: '%d'"), num);
+        int num;
+        try(parse_int(head, &num));
+        if (num < 0 || num > 65535) ret(-EINVAL, _("integer out of range: '%d'"), num);
         nums[nums_idx++] = num;
       }
       head = str + i + 1;
       str[i] = orig_char;
     }
   }
-  if (nums_idx != len)
-    ret(-EINVAL, _("expected %d numbers, got only %d: '%s'"), len, nums_idx, str);
+  if (nums_idx != len) {
+    ret(-EINVAL, _("expected %d integers, got only %d: '%s'"), len, nums_idx, str);
+  }
   return nums_idx;
 }
 
@@ -131,13 +143,13 @@ int parse_filter(char* filter_str, struct filter* filter, struct filter_settings
     try(parse_kv(delim, &k, &v));
     if (strcmp("handshake", k) == 0) {
       int nums[2];
-      try(parse_number_seq(v, nums, 2));
+      try(parse_int_seq(v, nums, 2));
       if (nums[0] >= 0) settings->handshake_interval = nums[0];
       if (nums[1] >= 0) settings->handshake_retry = nums[1];
 
     } else if (strcmp("keepalive", k) == 0) {
       int nums[3];
-      try(parse_number_seq(v, nums, 3));
+      try(parse_int_seq(v, nums, 3));
       if (nums[0] >= 0) settings->keepalive_time = nums[0];
       if (nums[1] >= 0) settings->keepalive_interval = nums[1];
       if (nums[2] >= 0) settings->keepalive_retry = nums[2];
@@ -186,13 +198,13 @@ int parse_config_file(FILE* file, struct run_args* args) {
 
     } else if (strcmp(k, "handshake")) {
       int nums[2];
-      try(parse_number_seq(v, nums, 2));
+      try(parse_int_seq(v, nums, 2));
       if (nums[0] >= 0) args->global_filter_settings.handshake_interval = nums[0];
       if (nums[1] >= 0) args->global_filter_settings.handshake_retry = nums[1];
 
     } else if (strcmp(k, "keepalive")) {
       int nums[3];
-      try(parse_number_seq(v, nums, 3));
+      try(parse_int_seq(v, nums, 3));
       if (nums[0] >= 0) args->global_filter_settings.keepalive_time = nums[0];
       if (nums[1] >= 0) args->global_filter_settings.keepalive_interval = nums[1];
       if (nums[2] >= 0) args->global_filter_settings.keepalive_retry = nums[2];
@@ -210,5 +222,51 @@ int parse_config_file(FILE* file, struct run_args* args) {
   }
 
   if (errno) ret(-errno, _("failed to read line: %s"), strerror(errno));
+  return 0;
+}
+
+int parse_lock_file(FILE* file, struct lock_content* c) {
+  _cleanup_malloc_str char* line = NULL;
+  size_t len = 0;
+  ssize_t read;
+  bool version_checked = false;
+
+  errno = 0;
+  while ((read = getline(&line, &len, file)) != -1) {
+    if (line[0] == '\n' || line[0] == '#') continue;
+    char *k, *v;
+    try(parse_kv(line, &k, &v));
+
+    if (strcmp(k, "version") == 0) {
+      if (strcmp(v, argp_program_version) != 0) {
+        ret(-EINVAL, _("current Mimic version is %s, but lock file's is '%s'"),
+            argp_program_version, v);
+      }
+      version_checked = true;
+    } else if (strcmp(k, "pid") == 0) {
+      try(parse_int(v, &c->pid));
+    } else if (strcmp(k, "egress_id") == 0) {
+      try(parse_int(v, &c->egress_id));
+    } else if (strcmp(k, "ingress_id") == 0) {
+      try(parse_int(v, &c->ingress_id));
+    } else if (strcmp(k, "whitelist_id") == 0) {
+      try(parse_int(v, &c->whitelist_id));
+    } else if (strcmp(k, "conns_id") == 0) {
+      try(parse_int(v, &c->conns_id));
+    } else {
+      ret(-EINVAL, _("unknown key '%s'"), k);
+    }
+  }
+  if (!version_checked) ret(-EINVAL, _("no version found in lock file"));
+  return 0;
+}
+
+int write_lock_file(int fd, const struct lock_content* c) {
+  try(dprintf(fd, "version=%s\n", argp_program_version));
+  try(dprintf(fd, "pid=%d\n", c->pid));
+  try(dprintf(fd, "egress_id=%d\n", c->egress_id));
+  try(dprintf(fd, "ingress_id=%d\n", c->ingress_id));
+  try(dprintf(fd, "whitelist_id=%d\n", c->whitelist_id));
+  try(dprintf(fd, "conns_id=%d\n", c->conns_id));
   return 0;
 }

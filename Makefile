@@ -37,7 +37,7 @@ MIMIC_BPF_HEADERS := bpf/vmlinux.h $(wildcard bpf/*.h) $(MIMIC_COMMON_HEADERS)
 MIMIC_SRCS := $(wildcard src/*.c)
 MIMIC_OBJS := $(MIMIC_SRCS:.c=.o)
 MIMIC_HEADERS := src/bpf_skel.h $(wildcard src/*.h) $(MIMIC_COMMON_HEADERS)
-MIMIC_LINK_LIBS := -lbpf -ljson-c -lffi
+MIMIC_LINK_LIBS := -lbpf -lffi
 ifneq ($(ARGP_STANDALONE),)
 MIMIC_LINK_LIBS += -largp
 endif
