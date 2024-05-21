@@ -120,20 +120,38 @@ struct filter {
 };
 
 struct filter_settings {
-  int handshake_interval, handshake_retry;
-  int keepalive_time, keepalive_interval, keepalive_retry;
+  int hi, hr;      // handshake interval, retry
+  int kt, ki, kr;  // keepalive time, interval, retry
 };
+
+#define DEFAULT_HANDSHAKE_INTERVAL 2
+#define DEFAULT_HANDSHAKE_RETRY 3
+#define DEFAULT_KEEPALIVE_TIME 30
+#define DEFAULT_KEEPALIVE_INTERVAL 2
+#define DEFAULT_KEEPALIVE_RETRY 3
+#define DEFAULT_FILTER_SETTINGS \
+  ((struct filter_settings){    \
+    DEFAULT_HANDSHAKE_INTERVAL, \
+    DEFAULT_HANDSHAKE_RETRY,    \
+    DEFAULT_KEEPALIVE_TIME,     \
+    DEFAULT_KEEPALIVE_INTERVAL, \
+    DEFAULT_KEEPALIVE_RETRY,    \
+  })
 
 #define _filter_settings_apply(_field) \
   if (local->_field < 0) local->_field = remote->_field;
 
 static inline void filter_settings_apply(struct filter_settings* local,
                                          const struct filter_settings* remote) {
-  _filter_settings_apply(handshake_interval);
-  _filter_settings_apply(handshake_retry);
-  _filter_settings_apply(keepalive_time);
-  _filter_settings_apply(keepalive_interval);
-  _filter_settings_apply(keepalive_retry);
+  _filter_settings_apply(hi);
+  _filter_settings_apply(hr);
+  _filter_settings_apply(kt);
+  _filter_settings_apply(ki);
+  _filter_settings_apply(kr);
+}
+
+static inline bool filter_settings_eq(struct filter_settings* a, struct filter_settings* b) {
+  return a->hi == b->hi && a->hr == b->hr && a->kt == b->kt && a->ki == b->ki && a->kr == b->kr;
 }
 
 struct conn_tuple {

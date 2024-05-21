@@ -45,7 +45,6 @@ static const struct argp_option options[] = {
 
 static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
   struct run_args* args = (struct run_args*)state->input;
-  int nums[3];
   switch (key) {
     case 'v':
       if (log_verbosity < 4) log_verbosity++;
@@ -54,23 +53,18 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       if (log_verbosity > 0) log_verbosity--;
       break;
     case 'f':
-      try(parse_filter(arg, &args->filters[args->filter_count],
-                       &args->filter_settings[args->filter_count]));
+      try(
+        parse_filter(arg, &args->filters[args->filter_count], &args->settings[args->filter_count]));
       if (args->filter_count++ > 8) {
         log_error(_("currently only maximum of 8 filters is supported"));
         exit(1);
       }
       break;
     case 'h':
-      try(parse_int_seq(arg, nums, 2));
-      if (nums[0] >= 0) args->global_filter_settings.handshake_interval = nums[0];
-      if (nums[1] >= 0) args->global_filter_settings.handshake_retry = nums[1];
+      try(parse_handshake(arg, &args->gsettings));
       break;
     case 'k':
-      try(parse_int_seq(arg, nums, 3));
-      if (nums[0] >= 0) args->global_filter_settings.keepalive_time = nums[0];
-      if (nums[1] >= 0) args->global_filter_settings.keepalive_interval = nums[1];
-      if (nums[2] >= 0) args->global_filter_settings.keepalive_retry = nums[2];
+      try(parse_keepalive(arg, &args->gsettings));
       break;
     case 'F':
       args->file = arg;
@@ -338,8 +332,7 @@ static int do_routine(int conns_fd, const char* ifname) {
     int retry_secs = time_diff_sec(tstamp, conn.retry_tstamp);
     switch (conn.state) {
       case CONN_ESTABLISHED:
-        if (conn.settings.keepalive_time > 0 && conn.settings.keepalive_interval > 0 &&
-            retry_secs >= conn.settings.keepalive_time) {
+        if (conn.settings.kt > 0 && conn.settings.ki > 0 && retry_secs >= conn.settings.kt) {
           if (conn.retry_tstamp >= conn.reset_tstamp) {
             log_conn(LOG_DEBUG, &key, _("sending keepalive"));
             conn.reset_tstamp = tstamp;
@@ -348,10 +341,9 @@ static int do_routine(int conns_fd, const char* ifname) {
             bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
           } else {
             int reset_secs = time_diff_sec(tstamp, conn.reset_tstamp);
-            if (reset_secs >=
-                (conn.settings.keepalive_retry + 1) * conn.settings.keepalive_interval) {
+            if (reset_secs >= conn.settings.kr * conn.settings.ki) {
               reset = true;
-            } else if (reset_secs % conn.settings.keepalive_interval == 0) {
+            } else if (reset_secs % conn.settings.ki == 0) {
               log_conn(LOG_DEBUG, &key, _("sending keepalive"));
               send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
             }
@@ -359,9 +351,9 @@ static int do_routine(int conns_fd, const char* ifname) {
         }
         break;
       case CONN_SYN_SENT:
-        if (retry_secs >= (conn.settings.handshake_retry + 1) * conn.settings.handshake_interval) {
+        if (retry_secs >= (conn.settings.hr + 1) * conn.settings.hi) {
           reset = true;
-        } else if (retry_secs != 0 && retry_secs % conn.settings.handshake_interval == 0) {
+        } else if (retry_secs != 0 && retry_secs % conn.settings.hi == 0) {
           log_conn(LOG_INFO, &key, _("retry sending SYN"));
           send_ctrl_packet(&key, SYN, conn.seq - 1, 0, 0xffff, ifname);
           // pktbuf_drain((struct pktbuf*)conn.pktbuf);
@@ -369,7 +361,7 @@ static int do_routine(int conns_fd, const char* ifname) {
         break;
       case CONN_SYN_RECV:
         // TODO: timeout send ACK/SYN+ACK again
-        if (retry_secs >= 6) reset = true;
+        if (retry_secs >= (conn.settings.hr + 1) * conn.settings.hi) reset = true;
         break;
       default:
         break;
@@ -461,6 +453,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
     .ingress_id = _get_prog_id(ingress_handler),
     .whitelist_id = _get_map_id(mimic_whitelist),
     .conns_id = _get_map_id(mimic_conns),
+    .settings = args->gsettings,
   };
   _get_map_id(mimic_rb);
   try2(write_lock_file(lock_fd, &lock_content));
@@ -468,10 +461,10 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   skel->bss->log_verbosity = log_verbosity;
 
   for (int i = 0; i < args->filter_count; i++) {
-    filter_settings_apply(&args->filter_settings[i], &args->global_filter_settings);
+    filter_settings_apply(&args->settings[i], &args->gsettings);
     retcode =
       bpf_map__update_elem(skel->maps.mimic_whitelist, &args->filters[i], sizeof(struct filter),
-                           &args->filter_settings[i], sizeof(struct filter_settings), BPF_NOEXIST);
+                           &args->settings[i], sizeof(struct filter_settings), BPF_NOEXIST);
     if (retcode || LOG_ALLOW_TRACE) {
       char fmt[FILTER_FMT_MAX_LEN];
       filter_fmt(&args->filters[i], fmt);

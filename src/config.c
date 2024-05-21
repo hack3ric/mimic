@@ -88,7 +88,7 @@ static int parse_int(const char* str, int* dest) {
   return 0;
 }
 
-int parse_int_seq(char* str, int* nums, size_t len) {
+static int parse_int_seq(char* str, int* nums, size_t len) {
   if (!str || !nums) return -EINVAL;
   size_t str_len = strlen(str);
   char* head = str;
@@ -114,6 +114,23 @@ int parse_int_seq(char* str, int* nums, size_t len) {
     ret(-EINVAL, _("expected %d integers, got only %d: '%s'"), len, nums_idx, str);
   }
   return nums_idx;
+}
+
+int parse_handshake(char* str, struct filter_settings* settings) {
+  int nums[2];
+  try(parse_int_seq(str, nums, 2));
+  if (nums[0] >= 0) settings->hi = nums[0];
+  if (nums[1] >= 0) settings->hr = nums[1];
+  return 0;
+}
+
+int parse_keepalive(char* str, struct filter_settings* settings) {
+  int nums[3];
+  try(parse_int_seq(str, nums, 3));
+  if (nums[0] >= 0) settings->kt = nums[0];
+  if (nums[1] >= 0) settings->ki = nums[1];
+  if (nums[2] >= 0) settings->kr = nums[2];
+  return 0;
 }
 
 int parse_filter(char* filter_str, struct filter* filter, struct filter_settings* settings) {
@@ -142,18 +159,9 @@ int parse_filter(char* filter_str, struct filter* filter, struct filter_settings
 
     try(parse_kv(delim, &k, &v));
     if (strcmp("handshake", k) == 0) {
-      int nums[2];
-      try(parse_int_seq(v, nums, 2));
-      if (nums[0] >= 0) settings->handshake_interval = nums[0];
-      if (nums[1] >= 0) settings->handshake_retry = nums[1];
-
+      try(parse_handshake(v, settings));
     } else if (strcmp("keepalive", k) == 0) {
-      int nums[3];
-      try(parse_int_seq(v, nums, 3));
-      if (nums[0] >= 0) settings->keepalive_time = nums[0];
-      if (nums[1] >= 0) settings->keepalive_interval = nums[1];
-      if (nums[2] >= 0) settings->keepalive_retry = nums[2];
-
+      try(parse_keepalive(v, settings));
     } else {
       ret(-EINVAL, _("unsupported option type: '%s'"), k);
     }
@@ -197,21 +205,11 @@ int parse_config_file(FILE* file, struct run_args* args) {
       log_verbosity = parsed;
 
     } else if (strcmp(k, "handshake")) {
-      int nums[2];
-      try(parse_int_seq(v, nums, 2));
-      if (nums[0] >= 0) args->global_filter_settings.handshake_interval = nums[0];
-      if (nums[1] >= 0) args->global_filter_settings.handshake_retry = nums[1];
-
+      try(parse_handshake(v, &args->gsettings));
     } else if (strcmp(k, "keepalive")) {
-      int nums[3];
-      try(parse_int_seq(v, nums, 3));
-      if (nums[0] >= 0) args->global_filter_settings.keepalive_time = nums[0];
-      if (nums[1] >= 0) args->global_filter_settings.keepalive_interval = nums[1];
-      if (nums[2] >= 0) args->global_filter_settings.keepalive_retry = nums[2];
-
+      try(parse_keepalive(v, &args->gsettings));
     } else if (strcmp(k, "filter") == 0) {
-      try(parse_filter(v, &args->filters[args->filter_count],
-                       &args->filter_settings[args->filter_count]));
+      try(parse_filter(v, &args->filters[args->filter_count], &args->settings[args->filter_count]));
       if (args->filter_count++ > 8) {
         ret(-E2BIG, _("currently only maximum of 8 filters is supported"));
       }
@@ -229,9 +227,11 @@ int parse_lock_file(FILE* file, struct lock_content* c) {
   _cleanup_malloc_str char* line = NULL;
   size_t len = 0;
   ssize_t read;
-  bool version_checked = false;
 
+  bool version_checked = false;
+  c->settings = DEFAULT_FILTER_SETTINGS;
   errno = 0;
+
   while ((read = getline(&line, &len, file)) != -1) {
     if (line[0] == '\n' || line[0] == '#') continue;
     char *k, *v;
@@ -253,6 +253,10 @@ int parse_lock_file(FILE* file, struct lock_content* c) {
       try(parse_int(v, &c->whitelist_id));
     } else if (strcmp(k, "conns_id") == 0) {
       try(parse_int(v, &c->conns_id));
+    } else if (strcmp(k, "handshake") == 0) {
+      try(parse_handshake(v, &c->settings));
+    } else if (strcmp(k, "keepalive") == 0) {
+      try(parse_keepalive(v, &c->settings));
     } else {
       ret(-EINVAL, _("unknown key '%s'"), k);
     }
@@ -268,5 +272,7 @@ int write_lock_file(int fd, const struct lock_content* c) {
   try(dprintf(fd, "ingress_id=%d\n", c->ingress_id));
   try(dprintf(fd, "whitelist_id=%d\n", c->whitelist_id));
   try(dprintf(fd, "conns_id=%d\n", c->conns_id));
+  try(dprintf(fd, "handshake=%d:%d\n", c->settings.hi, c->settings.hr));
+  try(dprintf(fd, "keepalive=%d:%d:%d\n", c->settings.kt, c->settings.ki, c->settings.kr));
   return 0;
 }

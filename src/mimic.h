@@ -28,7 +28,7 @@ struct args {
     struct run_args {
       const char *ifname, *file;
       struct filter filters[8];
-      struct filter_settings filter_settings[8], global_filter_settings;
+      struct filter_settings settings[8], gsettings;
       unsigned int filter_count;
     } run;
     struct show_args {
@@ -49,9 +49,11 @@ struct lock_content {
   pid_t pid;
   int egress_id, ingress_id;
   int whitelist_id, conns_id;
+  struct filter_settings settings;
 };
 
-int parse_int_seq(char* str, int* nums, size_t len);
+int parse_handshake(char* str, struct filter_settings* settings);
+int parse_keepalive(char* str, struct filter_settings* settings);
 int parse_filter(char* filter_str, struct filter* filter, struct filter_settings* settings);
 int parse_config_file(FILE* file, struct run_args* args);
 int parse_lock_file(FILE* file, struct lock_content* c);
