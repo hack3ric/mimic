@@ -4,6 +4,8 @@
 
 - Variable congestion window to better mimic real TCP
 - Notify supervisor when Mimic is ready (currently only systemd)
+- Drop json-c dependency, lock file now uses key=value pair
+- Add handshake and keepalive mechanism, as well as its settings, both global and filter-specific
 - Add mimic(1) manpage
 
 ## 0.3.1 (2024-04-21)
