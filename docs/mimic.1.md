@@ -71,7 +71,7 @@ Handshake and keepalive parameters are both specified using unsigned numbers sep
 
 Handshake parameters **`interval:retry`** specifies duration between each handshake (SYN) retry, and the maximum retry count before giving up.
 
-Keepalive parameters **`time:interval:retry`** specifies duration between last peer activity (i.e. receiving packets) and sending keepalive, duration between keepalive attempt without peer acknowledgement, and the maximum retry count before giving up. **`time`** of 0 turns off keepalive mechanism.
+Keepalive parameters **`time:interval:retry`** specifies duration between last peer activity (i.e. receiving packets) and sending keepalive, duration between keepalive attempt without peer acknowledgement, and the maximum retry count before giving up. **`time`** of 0 turns off keepalive mechanism. **`interval`** of 0 disables keepalive and resets immediately after **`time`** has passed.
 
 Numbers can be left out to fall back to default or global respective values:
 

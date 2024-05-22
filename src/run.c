@@ -332,8 +332,10 @@ static int do_routine(int conns_fd, const char* ifname) {
     int retry_secs = time_diff_sec(tstamp, conn.retry_tstamp);
     switch (conn.state) {
       case CONN_ESTABLISHED:
-        if (conn.settings.kt > 0 && conn.settings.ki > 0 && retry_secs >= conn.settings.kt) {
-          if (conn.retry_tstamp >= conn.reset_tstamp) {
+        if (conn.settings.kt > 0 && retry_secs >= conn.settings.kt) {
+          if (conn.settings.ki <= 0) {
+            reset = true;
+          } else if (conn.retry_tstamp >= conn.reset_tstamp) {
             log_conn(LOG_DEBUG, &key, _("sending keepalive"));
             conn.reset_tstamp = tstamp;
             conn.keepalive_sent = true;
