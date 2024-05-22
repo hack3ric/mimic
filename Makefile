@@ -92,7 +92,7 @@ out/mimic.ko: .FORCE
 
 out/mimic.1.gz: docs/mimic.1.md
 	$(MKDIR_P)
-	pandoc -s -t man $< | gzip -c > $@
+	ronn -r --pipe $< | gzip -c > $@
 
 out/mimic.pot:
 	$(MKDIR_P)

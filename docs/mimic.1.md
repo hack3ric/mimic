@@ -1,120 +1,121 @@
-% mimic(1) | Mimic Manual
+# mimic - eBPF TCP -> UDP obfuscator
 
-# NAME
+## SYNOPSIS
 
-mimic - eBPF TCP -> UDP obfuscator
+`mimic run` [OPTION...] <interface><br>
+`mimic show` [OPTION...] <interface><br>
 
-# SYNOPSIS
+## OPTIONS
 
-| `mimic run [OPTION...] <interface>`
-| `mimic show [OPTION...] <interface>`
-
-# OPTIONS
-
-**`-?, --help`**
+`-?, --help`
 : Give this help list
 
-**`--usage`**
+`--usage`
 : Give a short usage message
 
-**`-V, --version`**
+`-V, --version`
 : Print program version
 
-## mimic run
+### mimic run
 
-**`-q, --quiet`**
+`-q, --quiet`
 : Output less information
 
-**`-v, --verbose`**
+`-v, --verbose`
 : Output more information
 
-**`-f, --filter=FILTER`**
+`-f, --filter=FILTER`
 : Specify what packets to process. This may be specified for multiple times. (see [**CONFIGURATION/Filters**](#filters))
 
-**`-h, --handshake`**
+`-h, --handshake`
 : Controls retry behaviour of initiating connection (see [**CONFIGURATION/Handshake and Keepalive Parameters**](#handshake-and-keepalive-parameters))
 
-**`-k, --keepalive`**
+`-k, --keepalive`
 : Controls keepalive mechanism (see [**CONFIGURATION/Handshake and Keepalive Parameters**](#handshake-and-keepalive-parameters))
 
-**`-F, --file=PATH`**
+`-F, --file=PATH`
 : Load configuration from file
 
-## mimic show
+### mimic show
 
-**`-c, --connections`**
+`-c, --connections`
 : Show connections
 
-**`-p, --process`**
+`-p, --process`
 : Show process information
 
-# CONFIGURATION
+## CONFIGURATION
 
 Mimic allows configuration from both command line and configuration file.
 
-## Filters
+### Filters
 
-A filter is an entry of whitelist that looks like a key-value pair: **`{origin}={ip}:{port}`**. Origin is either **local** or **remote**, indicating which side's IP and port is matched. For example, **`remote=192.0.2.1:6000`** matches the server's IP (192.0.2.1) and its listening port (6000).
+A filter is an entry of whitelist that looks like a key-value pair: `{origin}={ip}:{port}`. Origin is either **local** or **remote**, indicating which side's IP and port is matched. For example, `remote=192.0.2.1:6000` matches the server's IP (192.0.2.1) and its listening port (6000).
 
-For IPv6, the IP field needs to be surrounded by square brackets: **`local=[2001:db8::cafe]:7000`**. This means packets originated from or sending to the local machine using that IP and port is processed.
+For IPv6, the IP field needs to be surrounded by square brackets: `local=[2001:db8::cafe]:7000`. This means packets originated from or sending to the local machine using that IP and port is processed.
 
 Additionally, settings that overrides global ones can be appended to the back of a filter, such as handshake and keepalive parameters (see [**Handshake and Keepalive Parameters**](#handshake-and-keepalive-parameters)):
 
-```
-local=[fd42:d42:d42:d42::1]:20001,keepalive=60:1:3
-remote=169.254.42.1:11451,handshake=3:3,keepalive=:1:
-```
+    local=[fd42:d42:d42:d42::1]:20001,keepalive=60:1:3
+    remote=169.254.42.1:11451,handshake=3:3,keepalive=:1:
 
-## Handshake and Keepalive Parameters
+### Handshake and Keepalive Parameters
 
-Handshake and keepalive parameters are both specified using unsigned numbers separated by colons (**`:`**). Duration fields are specified in seconds.
+Handshake and keepalive parameters are both specified using unsigned numbers separated by colons (`:`). Duration fields are specified **in seconds**.
 
-Handshake parameters **`interval:retry`** specifies duration between each handshake (SYN) retry, and the maximum retry count before giving up.
+Handshake parameters `interval:retry` specifies:
 
-Keepalive parameters **`time:interval:retry`** specifies duration between last peer activity (i.e. receiving packets) and sending keepalive, duration between keepalive attempt without peer acknowledgement, and the maximum retry count before giving up. **`time`** of 0 turns off keepalive mechanism. **`interval`** of 0 disables keepalive and resets immediately after **`time`** has passed.
+* `interval`: Duration between each handshake (SYN) retry. Defaults to 2. `interval` of 0 makes handshake fails as soon as possible.
+
+* `retry`: Maximum retry count before giving up. Defaults to 3. `retry` of 0 means connection resets after first handshake packet does not have response in `interval` seconds.
+
+Keepalive parameters `time:interval:retry` specifies:
+
+* `time`: Duration between last peer activity (i.e. receiving packets) and sending keepalive. Defaults to 30. `time` of 0 turns off keepalive mechanism. If underlying UDP protocol implements keepalive (e.g. tunnel protocols like WireGuard), it is advised to set this value higher than the protocol's keepalive time.
+
+* `interval`: Duration between keepalive attempt without peer acknowledgement. Defaults to 2. `interval` of 0 disables keepalive and resets immediately after `time` has passed.
+
+* `retry`: Maximum retry count before giving up. Defaults to 3. `retry` of 0 means connection resets after first keepalive packet does not have response in `interval` seconds.
+
 
 Numbers can be left out to fall back to default or global respective values:
 
-```
-handshake=:0     # give up immediately after default interval value and do not retry
-keepalive=60::   # set keepalive time to 60s only, keeping default values of other fields
-```
+    handshake=:0     # give up immediately after default interval value and do not retry
+    keepalive=60::   # set keepalive time to 60s only, keeping default values of other fields
 
-## Configuration File
+### Configuration File
 
-Configuration file passed using the **`--file`** contains lines of key-value pair in the format of **`{key}={value}`**. There might be spaces between key, **`=`** and value. Each pair should be contained in one line:
+Configuration file passed using the `--file` contains lines of key-value pair in the format of `{key}={value}`. There might be spaces between key, `=` and value. Each pair should be contained in one line:
 
-```
-# Print more information because we can
-log.verbosity = trace
+    # Print more information because we can
+    log.verbosity = trace
 
-# Keep it more alive!
-keepalive = 15::
+    # Keep it more alive!
+    keepalive = 15::
 
-# You only shake hands once
-filter = local=192.0.2.1:6789,handshake=5:0
-```
+    # You only shake hands once
+    filter = local=192.0.2.1:6789,handshake=5:0
 
 See **/etc/mimic/eth0.conf.example** for detailed examples.
 
-### Available Keys
+### Available Configuration Keys
 
-**`log.verbosity`**
-:     Controls how much information should be printed. Log level equal to or higher (in number) than log verbosity will be discarded. Both number and string matching log levels are accepted. Number must be greater than or equal to 0. Defaults to info (2).
+`log.verbosity`
+: Controls how much information should be printed. Log level equal to or higher (in number) than log verbosity will be discarded. Both number and string matching log levels are accepted. Number must be greater than or equal to 0. Defaults to info (2).
 
-    | Available levels are:
-    |     0 - error (cannot be discarded)
-    |     1 - warn
-    |     2 - info
-    |     3 - debug
-    |     4 - trace
+Available levels are:
+- 0 - error (cannot be discarded)
+- 1 - warn
+- 2 - info
+- 3 - debug
+- 4 - trace
 
-**`handshake`, `keepalive`**
+`handshake`, `keepalive`
 : See [**Handshake and Keepalive Parameters**](#handshake-and-keepalive-parameters).
 
-**`filter`**
+`filter`
 : See [**Filters**](#filters). This option may be specified more than once.
 
-# LICENSE
+## LICENSE
 
 The project is licensed under GNU General Public License version 2 only (GPL-2.0-only).

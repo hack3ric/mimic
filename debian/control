@@ -10,7 +10,7 @@ Build-Depends:
  llvm,
  python3,
  bpftool,
- pandoc,
+ ronn,
  libbpf-dev,
  libffi-dev,
  linux-source,
