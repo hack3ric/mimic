@@ -56,8 +56,8 @@ For IPv6, the IP field needs to be surrounded by square brackets: `local=[2001:d
 
 Additionally, settings that overrides global ones can be appended to the back of a filter, such as handshake and keepalive parameters (see [**Handshake and Keepalive Parameters**](#handshake-and-keepalive-parameters)):
 
-    local=[fd42:d42:d42:d42::1]:20001,keepalive=60:1:3
-    remote=169.254.42.1:11451,handshake=3:3,keepalive=:1:
+    local=[fd42:d42:d42:d42::1]:20001,keepalive=60:1:3:1000
+    remote=169.254.42.1:11451,handshake=3:3,keepalive=:1::
 
 ### Handshake and Keepalive Parameters
 
@@ -82,7 +82,7 @@ Keepalive parameters `time:interval:retry:stale` specifies:
 Numbers can be left out to fall back to default or global respective values:
 
     handshake=:0     # give up immediately after default interval value and do not retry
-    keepalive=60::   # set keepalive time to 60s only, keeping default values of other fields
+    keepalive=60:::  # set keepalive time to 60s only, keeping default values of other fields
 
 ### Configuration File
 
@@ -92,7 +92,7 @@ Configuration file passed using the `--file` contains lines of key-value pair in
     log.verbosity = trace
 
     # Keep it more alive!
-    keepalive = 15::
+    keepalive = 15:::
 
     # You only shake hands once
     filter = local=192.0.2.1:6789,handshake=5:0
@@ -102,14 +102,7 @@ See **/etc/mimic/eth0.conf.example** for detailed examples.
 ### Available Configuration Keys
 
 `log.verbosity`
-: Controls how much information should be printed. Log level equal to or higher (in number) than log verbosity will be discarded. Both number and string matching log levels are accepted. Number must be greater than or equal to 0. Defaults to info (2).
-
-Available levels are:
-- 0 - error (cannot be discarded)
-- 1 - warn
-- 2 - info
-- 3 - debug
-- 4 - trace
+: Controls how much information should be printed. Log level equal to or higher (in number) than log verbosity will be discarded. Both number and string matching log levels are accepted. Number must be greater than or equal to 0. Defaults to info (2). Available levels are: 0 - error (cannot be discarded), 1 - warn, 2 - info, 3 - debug, 4 - trace.
 
 `handshake`, `keepalive`
 : See [**Handshake and Keepalive Parameters**](#handshake-and-keepalive-parameters).
