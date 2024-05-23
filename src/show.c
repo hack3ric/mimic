@@ -68,8 +68,8 @@ int subcmd_show(struct show_args* args) {
   if (args->show_process) {
     printf(_("%sMimic%s running on %s\n"), BOLD GREEN, RESET, args->ifname);
     printf(_("  %spid:%s %d\n"), BOLD, RESET, c.pid);
-    printf(_("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d\n"), BOLD, RESET, c.settings.hi,
-           c.settings.hr, c.settings.kt, c.settings.ki, c.settings.kr);
+    printf(_("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d\n"), BOLD, RESET, c.settings.hi,
+           c.settings.hr, c.settings.kt, c.settings.ki, c.settings.kr, c.settings.ks);
 
     _cleanup_fd int whitelist_fd =
       try(bpf_map_get_fd_by_id(c.whitelist_id), _("failed to get fd of map '%s': %s"),
@@ -88,8 +88,8 @@ int subcmd_show(struct show_args* args) {
       if (filter_settings_eq(&settings, &c.settings)) {
         printf("\n");
       } else {
-        printf(_(" %s(handshake %d:%d, keepalive %d:%d:%d)%s\n"), GRAY, settings.hi, settings.hr,
-               settings.kt, settings.ki, settings.kr, RESET);
+        printf(_(" %s(handshake %d:%d, keepalive %d:%d:%d:%d)%s\n"), GRAY, settings.hi, settings.hr,
+               settings.kt, settings.ki, settings.kr, settings.ks, RESET);
       }
     }
     if (!iter.has_key) printf(_("  %sno active filter%s\n"), BOLD, RESET);

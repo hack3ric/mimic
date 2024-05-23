@@ -125,12 +125,12 @@ int ingress_handler(struct xdp_md* xdp) {
     conn = try_p_drop(bpf_map_lookup_elem(&mimic_conns, &conn_key));
   }
 
-  bool syn, ack, rst, will_send_ctrl_packet, will_drop, newly_estab;
+  bool syn, ack, rst, is_keepalive, will_send_ctrl_packet, will_drop, newly_estab;
   __u32 seq = 0, ack_seq = 0;
   __u16 cwnd = 0xffff;
   __u32 random = bpf_get_prandom_u32();
   __u64 tstamp = bpf_ktime_get_boot_ns();
-  syn = ack = rst = newly_estab = false;
+  syn = ack = rst = is_keepalive = newly_estab = false;
   will_send_ctrl_packet = will_drop = true;
 
   bpf_spin_lock(&conn->lock);
@@ -187,12 +187,13 @@ int ingress_handler(struct xdp_md* xdp) {
         seq = conn->seq;
       } else if (ntohl(tcp->seq) == conn->ack_seq - 1) {
         // Received keepalive; send keepalive ACK
-        ack = true;
+        ack = is_keepalive = true;
         seq = conn->seq;
         ack_seq = conn->ack_seq;
         cwnd = conn->cwnd;
       } else if (conn->keepalive_sent && payload_len == 0) {
         // Received keepalive ACK
+        is_keepalive = true;
         will_send_ctrl_packet = false;
         conn->keepalive_sent = false;
       } else {
@@ -201,6 +202,7 @@ int ingress_handler(struct xdp_md* xdp) {
       }
       break;
   }
+  if (!is_keepalive) conn->stale_tstamp = tstamp;
 
   bpf_spin_unlock(&conn->lock);
 

@@ -120,15 +120,16 @@ struct filter {
 };
 
 struct filter_settings {
-  int hi, hr;      // handshake interval, retry
-  int kt, ki, kr;  // keepalive time, interval, retry
+  int hi, hr;          // handshake interval, retry
+  int kt, ki, kr, ks;  // keepalive time, interval, retry, stale
 };
 
 #define DEFAULT_HANDSHAKE_INTERVAL 2
 #define DEFAULT_HANDSHAKE_RETRY 3
-#define DEFAULT_KEEPALIVE_TIME 30
-#define DEFAULT_KEEPALIVE_INTERVAL 2
+#define DEFAULT_KEEPALIVE_TIME 180
+#define DEFAULT_KEEPALIVE_INTERVAL 10
 #define DEFAULT_KEEPALIVE_RETRY 3
+#define DEFAULT_KEEPALIVE_STALE 600
 #define DEFAULT_FILTER_SETTINGS \
   ((struct filter_settings){    \
     DEFAULT_HANDSHAKE_INTERVAL, \
@@ -136,6 +137,7 @@ struct filter_settings {
     DEFAULT_KEEPALIVE_TIME,     \
     DEFAULT_KEEPALIVE_INTERVAL, \
     DEFAULT_KEEPALIVE_RETRY,    \
+    DEFAULT_KEEPALIVE_STALE,    \
   })
 
 #define _filter_settings_apply(_field) \
@@ -148,10 +150,12 @@ static inline void filter_settings_apply(struct filter_settings* local,
   _filter_settings_apply(kt);
   _filter_settings_apply(ki);
   _filter_settings_apply(kr);
+  _filter_settings_apply(ks);
 }
 
 static inline bool filter_settings_eq(struct filter_settings* a, struct filter_settings* b) {
-  return a->hi == b->hi && a->hr == b->hr && a->kt == b->kt && a->ki == b->ki && a->kr == b->kr;
+  return a->hi == b->hi && a->hr == b->hr && a->kt == b->kt && a->ki == b->ki && a->kr == b->kr &&
+         a->ks == b->ks;
 }
 
 struct conn_tuple {
@@ -171,7 +175,7 @@ struct connection {
   __u32 seq, ack_seq;
   uintptr_t pktbuf;
   __u16 cwnd;
-  __u64 retry_tstamp, reset_tstamp;
+  __u64 retry_tstamp, reset_tstamp, stale_tstamp;
   bool keepalive_sent;
   // TODO: filter settings
   struct filter_settings settings;

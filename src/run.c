@@ -38,7 +38,7 @@ static const struct argp_option options[] = {
   {"filter", 'f', N_("FILTER"), 0,
    N_("Specify what packets to process. This may be specified for multiple times."), 1},
   {"handshake", 'h', N_("i:r"), 0, N_("Controls retry behaviour of initiating connection"), 2},
-  {"keepalive", 'k', N_("t:i:r"), 0, N_("Controls keepalive mechanism"), 2},
+  {"keepalive", 'k', N_("t:i:r:s"), 0, N_("Controls keepalive mechanism"), 2},
   {"file", 'F', N_("PATH"), 0, N_("Load configuration from file"), 3},
   {},
 };
@@ -332,7 +332,9 @@ static int do_routine(int conns_fd, const char* ifname) {
     int retry_secs = time_diff_sec(tstamp, conn.retry_tstamp);
     switch (conn.state) {
       case CONN_ESTABLISHED:
-        if (conn.settings.kt > 0 && retry_secs >= conn.settings.kt) {
+        if (conn.settings.ks > 0 && time_diff_sec(tstamp, conn.stale_tstamp) >= conn.settings.ks) {
+          reset = true;
+        } else if (conn.settings.kt > 0 && retry_secs >= conn.settings.kt) {
           if (conn.settings.ki <= 0) {
             reset = true;
           } else if (conn.retry_tstamp >= conn.reset_tstamp) {

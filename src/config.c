@@ -117,6 +117,7 @@ static int parse_int_seq(char* str, int* nums, size_t len) {
 }
 
 int parse_handshake(char* str, struct filter_settings* settings) {
+  // TODO: block invalid
   int nums[2];
   try(parse_int_seq(str, nums, 2));
   if (nums[0] >= 0) settings->hi = nums[0];
@@ -125,11 +126,13 @@ int parse_handshake(char* str, struct filter_settings* settings) {
 }
 
 int parse_keepalive(char* str, struct filter_settings* settings) {
-  int nums[3];
-  try(parse_int_seq(str, nums, 3));
+  // TODO: block invalid
+  int nums[4];
+  try(parse_int_seq(str, nums, 4));
   if (nums[0] >= 0) settings->kt = nums[0];
   if (nums[1] >= 0) settings->ki = nums[1];
   if (nums[2] >= 0) settings->kr = nums[2];
+  if (nums[3] >= 0) settings->ks = nums[3];
   return 0;
 }
 
@@ -149,7 +152,7 @@ int parse_filter(char* filter_str, struct filter* filter, struct filter_settings
   }
   try(parse_ip_port(v, &filter->protocol, &filter->ip, &filter->port));
 
-  *settings = (struct filter_settings){-1, -1, -1, -1, -1};
+  *settings = (struct filter_settings){-1, -1, -1, -1, -1, -1};
   if (!delim) return 0;
   char* next_delim = delim;
   while (true) {
@@ -273,6 +276,7 @@ int write_lock_file(int fd, const struct lock_content* c) {
   try(dprintf(fd, "whitelist_id=%d\n", c->whitelist_id));
   try(dprintf(fd, "conns_id=%d\n", c->conns_id));
   try(dprintf(fd, "handshake=%d:%d\n", c->settings.hi, c->settings.hr));
-  try(dprintf(fd, "keepalive=%d:%d:%d\n", c->settings.kt, c->settings.ki, c->settings.kr));
+  try(dprintf(fd, "keepalive=%d:%d:%d:%d\n", c->settings.kt, c->settings.ki, c->settings.kr,
+              c->settings.ks));
   return 0;
 }

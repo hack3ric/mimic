@@ -69,14 +69,15 @@ Handshake parameters `interval:retry` specifies:
 
 * `retry`: Maximum retry count before giving up. Defaults to 3. `retry` of 0 means connection resets after first handshake packet does not have response in `interval` seconds.
 
-Keepalive parameters `time:interval:retry` specifies:
+Keepalive parameters `time:interval:retry:stale` specifies:
 
-* `time`: Duration between last peer activity (i.e. receiving packets) and sending keepalive. Defaults to 30. `time` of 0 turns off keepalive mechanism. If underlying UDP protocol implements keepalive (e.g. tunnel protocols like WireGuard), it is advised to set this value higher than the protocol's keepalive time.
+* `time`: Duration between last peer activity (i.e. receiving packets) and sending keepalive. Defaults to 180 (3 minutes). `time` of 0 turns off keepalive mechanism. If underlying UDP protocol implements keepalive (e.g. tunnel protocols like WireGuard), it is advised to set this value higher than the protocol's keepalive time.
 
-* `interval`: Duration between keepalive attempt without peer acknowledgement. Defaults to 2. `interval` of 0 disables keepalive and resets immediately after `time` has passed.
+* `interval`: Duration between keepalive attempt without peer acknowledgement. Defaults to 10. `interval` of 0 disables keepalive and resets immediately after `time` has passed.
 
 * `retry`: Maximum retry count before giving up. Defaults to 3. `retry` of 0 means connection resets after first keepalive packet does not have response in `interval` seconds.
 
+* `stale`: Duration between last underlying activity and reset, disregarding keepalive packets. Defaults to 600 (10 minutes). This is useful when using `remote` filter, and the local port changes due to service restart or connection retry, leaving previous connections captured by Mimic unused.
 
 Numbers can be left out to fall back to default or global respective values:
 
