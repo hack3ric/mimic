@@ -43,6 +43,8 @@ extern const struct argp run_argp;
 extern const struct argp show_argp;
 
 int subcmd_run(struct run_args* args);
+
+int show_overview(int whitelist_fd, struct filter_settings* gsettings, int log_verbosity);
 int subcmd_show(struct show_args* args);
 
 struct lock_content {

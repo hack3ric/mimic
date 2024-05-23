@@ -48,6 +48,54 @@ const struct argp show_argp = {
   N_("\vSee mimic(1) for detailed usage."),
 };
 
+int show_overview(int whitelist_fd, struct filter_settings* gsettings, int log_verbosity) {
+  if (log_verbosity >= 2) printf("%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
+  printf(_("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d\n"), BOLD, RESET, gsettings->hi,
+         gsettings->hr, gsettings->kt, gsettings->ki, gsettings->kr, gsettings->ks);
+
+  char buf[FILTER_FMT_MAX_LEN];
+  struct filter filter;
+  struct filter_settings settings;
+  struct bpf_map_iter iter = {.map_fd = whitelist_fd, .map_name = "mimic_whitelist"};
+
+  while (try(bpf_map_iter_next(&iter, &filter))) {
+    filter_fmt(&filter, buf);
+    try(bpf_map_lookup_elem(whitelist_fd, &filter, &settings),
+        _("failed to get value from map '%s': %s"), "mimic_whitelist", strret);
+    if (log_verbosity >= 2) printf("%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
+    printf(_("  %sfilter:%s %s"), BOLD, RESET, buf);
+
+    struct filter_settings *a = &settings, *b = gsettings;
+    bool heq = a->hi == b->hi && a->hr == b->hr;
+    bool keq = a->kt == b->kt && a->ki == b->ki && a->kr == b->kr && a->ks == b->ks;
+    if (heq && keq) {
+      printf("\n");
+    } else {
+      printf(" " GRAY "(");
+      if (!heq) {
+        printf(_("handshake "));
+        if (a->hi != b->hi) printf("%d", settings.hi);
+        printf(":");
+        if (a->hr != b->hr) printf("%d", settings.hr);
+      }
+      if (!heq && !keq) printf(", ");
+      if (!keq) {
+        printf(_("keepalive "));
+        if (a->kt != b->kt) printf("%d", settings.kt);
+        printf(":");
+        if (a->ki != b->ki) printf("%d", settings.ki);
+        printf(":");
+        if (a->kr != b->kr) printf("%d", settings.kr);
+        printf(":");
+        if (a->ks != b->ks) printf("%d", settings.ks);
+      }
+      printf(")" RESET "\n");
+    }
+  }
+  if (!iter.has_key) printf(_("  %sno active filter%s\n"), BOLD, RESET);
+  return 0;
+}
+
 int subcmd_show(struct show_args* args) {
   int ifindex = if_nametoindex(args->ifname);
   if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
@@ -68,31 +116,10 @@ int subcmd_show(struct show_args* args) {
   if (args->show_process) {
     printf(_("%sMimic%s running on %s\n"), BOLD GREEN, RESET, args->ifname);
     printf(_("  %spid:%s %d\n"), BOLD, RESET, c.pid);
-    printf(_("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d\n"), BOLD, RESET, c.settings.hi,
-           c.settings.hr, c.settings.kt, c.settings.ki, c.settings.kr, c.settings.ks);
-
     _cleanup_fd int whitelist_fd =
       try(bpf_map_get_fd_by_id(c.whitelist_id), _("failed to get fd of map '%s': %s"),
           "mimic_whitelist", strret);
-
-    char buf[FILTER_FMT_MAX_LEN];
-    struct filter filter;
-    struct filter_settings settings;
-    struct bpf_map_iter iter = {.map_fd = whitelist_fd, .map_name = "mimic_whitelist"};
-
-    while (try(bpf_map_iter_next(&iter, &filter))) {
-      filter_fmt(&filter, buf);
-      try(bpf_map_lookup_elem(whitelist_fd, &filter, &settings),
-          _("failed to get value from map '%s': %s"), "mimic_whitelist", strret);
-      printf(_("  %sfilter:%s %s"), BOLD, RESET, buf);
-      if (filter_settings_eq(&settings, &c.settings)) {
-        printf("\n");
-      } else {
-        printf(_(" %s(handshake %d:%d, keepalive %d:%d:%d:%d)%s\n"), GRAY, settings.hi, settings.hr,
-               settings.kt, settings.ki, settings.kr, settings.ks, RESET);
-      }
-    }
-    if (!iter.has_key) printf(_("  %sno active filter%s\n"), BOLD, RESET);
+    show_overview(whitelist_fd, &c.settings, -1);
     printf("\n");
   }
 

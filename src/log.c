@@ -10,7 +10,7 @@
 #include "log.h"
 #include "mimic.h"
 
-static const char* _log_prefixes[][2] = {
+const char* log_prefixes[][2] = {
   {BOLD RED, N_("Error")},  {BOLD YELLOW, N_(" Warn")}, {BOLD GREEN, N_(" Info")},
   {BOLD BLUE, N_("Debug")}, {BOLD GRAY, N_("Trace")},
 };
@@ -21,7 +21,7 @@ void log_any(int level, const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   if (log_verbosity >= level) {
-    fprintf(stderr, "%s%s " RESET, _log_prefixes[level][0], gettext(_log_prefixes[level][1]));
+    fprintf(stderr, "%s%s " RESET, log_prefixes[level][0], gettext(log_prefixes[level][1]));
     if (level >= LOG_TRACE) fprintf(stderr, GRAY);
     vfprintf(stderr, fmt, ap);
     if (level >= LOG_TRACE) fprintf(stderr, RESET);
@@ -37,7 +37,7 @@ void log_conn(int level, struct conn_tuple* conn, const char* fmt, ...) {
     char from[IP_PORT_MAX_LEN], to[IP_PORT_MAX_LEN];
     ip_port_fmt(conn->protocol, conn->local, conn->local_port, from);
     ip_port_fmt(conn->protocol, conn->remote, conn->remote_port, to);
-    fprintf(stderr, "%s%s " RESET, _log_prefixes[level][0], gettext(_log_prefixes[level][1]));
+    fprintf(stderr, "%s%s " RESET, log_prefixes[level][0], gettext(log_prefixes[level][1]));
     if (level >= LOG_TRACE) fprintf(stderr, GRAY);
     fprintf(stderr, "%s => %s :: ", from, to);
     vfprintf(stderr, fmt, ap);
@@ -114,7 +114,7 @@ int libbpf_print_fn(enum libbpf_print_level bpf_level, const char* format, va_li
         level = LOG_TRACE;
         break;
     }
-    ret = fprintf(stderr, "%s%s " RESET, _log_prefixes[level][0], gettext(_log_prefixes[level][1]));
+    ret = fprintf(stderr, "%s%s " RESET, log_prefixes[level][0], gettext(log_prefixes[level][1]));
     if (level >= LOG_TRACE) ret = ret < 0 ? ret : fprintf(stderr, GRAY);
     ret = ret < 0 ? ret : vfprintf(stderr, format, args);
     if (level >= LOG_TRACE) ret = ret < 0 ? ret : fprintf(stderr, RESET);

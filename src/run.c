@@ -501,16 +501,11 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   } else if (retcode) {
     log_trace(_("notified supervisor we are ready"));
   }
+  log_info(_("Mimic successfully deployed on %s"), args->ifname);
   if (args->filter_count <= 0) {
-    log_info(_("Mimic successfully deployed on %s"), args->ifname);
     log_warn(_("no filter specified"));
   } else {
-    log_info(_("Mimic successfully deployed on %s with filters:"), args->ifname);
-    for (int i = 0; i < args->filter_count; i++) {
-      char fmt[FILTER_FMT_MAX_LEN];
-      filter_fmt(&args->filters[i], fmt);
-      log_info("  %s", fmt);
-    }
+    show_overview(mimic_whitelist_fd, &args->gsettings, log_verbosity);
   }
 
   struct epoll_event ev;

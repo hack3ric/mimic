@@ -7,6 +7,7 @@
 
 #include "../common/defs.h"
 
+extern const char* log_prefixes[][2];
 extern int log_verbosity;
 
 #define RED "\x1B[31m"

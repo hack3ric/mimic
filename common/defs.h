@@ -153,11 +153,6 @@ static inline void filter_settings_apply(struct filter_settings* local,
   _filter_settings_apply(ks);
 }
 
-static inline bool filter_settings_eq(struct filter_settings* a, struct filter_settings* b) {
-  return a->hi == b->hi && a->hr == b->hr && a->kt == b->kt && a->ki == b->ki && a->kr == b->kr &&
-         a->ks == b->ks;
-}
-
 struct conn_tuple {
   enum protocol protocol;
   __u16 local_port, remote_port;
