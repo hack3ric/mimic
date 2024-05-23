@@ -1,4 +1,4 @@
-mimic (0.4.0-1) UNRELEASED; urgency=medium
+mimic (0.4.0-1) unstable; urgency=medium
 
   * New upstream release.
   * Add manpage mimic(1)
