@@ -141,7 +141,8 @@ int subcmd_show(struct show_args* args) {
           _("failed to get value from map '%s': %s"), "mimic_conns", strret);
 
       printf(_("  %sstate:%s %s\n"), BOLD, RESET, gettext(conn_state_to_str(conn.state)));
-      printf(_("  %ssequence:%s seq=%08x, ack=%08x\n"), BOLD, RESET, conn.seq, conn.ack_seq);
+      printf(_("  %ssequence:%s seq %08x, ack %08x\n"), BOLD, RESET, conn.seq, conn.ack_seq);
+      printf("\n");
     }
     if (!iter.has_key) printf(_("%sConnection%s no active connection\n"), BOLD YELLOW, RESET);
     printf("\n");
