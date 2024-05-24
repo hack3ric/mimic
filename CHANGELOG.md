@@ -1,5 +1,10 @@
 # Changelog for Mimic
 
+## 0.4.2 (2024-05-24)
+
+- Fix systemd service file, adding missing \[Install\] section
+- Fix version display in Mimic CLI
+
 ## 0.4.1 (2024-05-24)
 
 - Fix configuration file parsing
