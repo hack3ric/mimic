@@ -1,5 +1,10 @@
 # Changelog for Mimic
 
+## 0.4.1 (2024-05-24)
+
+- Fix configuration file parsing
+- Make trace output more visible on certain terminals
+
 ## 0.4.0 (2024-05-24)
 
 - Variable congestion window to better mimic real TCP
