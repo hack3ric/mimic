@@ -14,7 +14,7 @@ extern int log_verbosity;
 #define YELLOW "\x1B[33m"
 #define GREEN "\x1B[32m"
 #define BLUE "\x1B[34m"
-#define GRAY "\x1B[30m"
+#define GRAY "\x1B[90m"
 #define BOLD "\x1B[1m"
 #define RESET "\x1B[0m"
 

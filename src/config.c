@@ -207,9 +207,9 @@ int parse_config_file(FILE* file, struct run_args* args) {
       }
       log_verbosity = parsed;
 
-    } else if (strcmp(k, "handshake")) {
+    } else if (strcmp(k, "handshake") == 0) {
       try(parse_handshake(v, &args->gsettings));
-    } else if (strcmp(k, "keepalive")) {
+    } else if (strcmp(k, "keepalive") == 0) {
       try(parse_keepalive(v, &args->gsettings));
     } else if (strcmp(k, "filter") == 0) {
       try(parse_filter(v, &args->filters[args->filter_count], &args->settings[args->filter_count]));
