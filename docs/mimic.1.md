@@ -65,7 +65,7 @@ Handshake and keepalive parameters are both specified using unsigned numbers sep
 
 Handshake parameters `interval:retry` specifies:
 
-* `interval`: Duration between each handshake (SYN) retry. Defaults to 2. `interval` of 0 makes handshake fails as soon as possible.
+* `interval`: Duration between each handshake (SYN) retry. Defaults to 2. `interval` of 0 makes all connections through this filter passive, i.e. Mimic will not initiate connection on this side.
 
 * `retry`: Maximum retry count before giving up. Defaults to 3. `retry` of 0 means connection resets after first handshake packet does not have response in `interval` seconds.
 

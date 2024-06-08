@@ -144,8 +144,7 @@ int subcmd_show(struct show_args* args) {
       printf(_("  %ssequence:%s seq %08x, ack %08x\n"), BOLD, RESET, conn.seq, conn.ack_seq);
       printf("\n");
     }
-    if (!iter.has_key) printf(_("%sConnection%s no active connection\n"), BOLD YELLOW, RESET);
-    printf("\n");
+    if (!iter.has_key) printf(_("%sConnection%s no active connection\n\n"), BOLD YELLOW, RESET);
   }
 
   return 0;

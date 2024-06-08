@@ -96,6 +96,9 @@ int egress_handler(struct __sk_buff* skb) {
     seq = conn->seq;
     ack_seq = conn->ack_seq;
     conn->seq += payload_len;
+  } else if (conn->settings.hi == 0) {
+    bpf_spin_unlock(&conn->lock);
+    return TC_ACT_STOLEN;
   } else {
     switch (conn->state) {
       case CONN_IDLE:
