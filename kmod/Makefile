@@ -26,7 +26,7 @@ endif
 all:
 ifdef DEBIAN_HACK_RESOLVE_BTFIDS_PATH
 	cp -rL $(SYSTEM_BUILD_DIR) $(BUILD) || true
-	[ -f $(BUILD)/vmlinux ] || cp /sys/kernel/btf/vmlinux $(BUILD)
+	[ -f $(BUILD)/vmlinux ] || /usr/lib/mimic/extract-vmlinux /boot/vmlinuz-$(KERNEL_UNAME) > $(BUILD)/vmlinux
 	if [ ! -f $(BUILD)/tools/bpf/resolve_btfids/resolve_btfids ]; then \
 		install -Dm755 $(DEBIAN_HACK_RESOLVE_BTFIDS_PATH) $(BUILD)/tools/bpf/resolve_btfids/resolve_btfids; \
 	fi

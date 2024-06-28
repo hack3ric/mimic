@@ -3,14 +3,13 @@ BPFTOOL ?= /usr/sbin/bpftool
 
 # -g is required (by Clang) to generate BTF
 # for bpf-gcc, use -mcpu=v3 -gbtf -mco-re -O2
-BPF_CFLAGS ?= --target=bpf -mcpu=v3 -g -O2
+BPF_CFLAGS += --target=bpf -mcpu=v3 -g -O2
 MODE ?= debug
 
 ifeq ($(MODE), debug)
-CFLAGS ?= -O0
-CFLAGS += -g
+CFLAGS += -O0 -g
 else ifeq ($(MODE), release)
-CFLAGS ?= -O2
+CFLAGS += -O2
 endif
 
 BPF_CFLAGS += -Wall -std=gnu99
@@ -66,6 +65,8 @@ generate-pot: out/mimic.pot
 
 MKDIR_P = mkdir -p $(@D)
 
+# Generating vmlinux.h using current kernel's vmlinux hurts (byte-by-byte) reproducibility in
+# packaging for distros. Consider bundle it with the project.
 bpf/vmlinux.h:
 	$(BPFTOOL) btf dump file $(KERNEL_VMLINUX) format c > $@
 
