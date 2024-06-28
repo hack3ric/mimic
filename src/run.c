@@ -167,12 +167,15 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
     __u16 mss =
       s->conn.protocol == AF_INET ? max(ifr.ifr_mtu, 576) - 40 : max(ifr.ifr_mtu, 1280) - 60;
 
+    // Specify TCP options. `1`s at the front of arrays are NOP paddings.
+    struct _tlv_be16 {
+      __u8 t, l;
+      __be16 v;
+    };
     __u8* opt = (__u8*)(tcp + 1);
-    // clang-format off
-    memcpy(opt, &(struct { __u8 t, l; __be16 v; }){2, 4, htons(mss)}, 4);
-    // clang-format on
-    memcpy(opt += 4, (__u8[]){1, 3, 3, 7}, 4);
-    memcpy(opt += 4, (__u8[]){1, 1, 4, 2}, 4);
+    memcpy(opt, &(struct _tlv_be16){2, 4, htons(mss)}, 4);  // MSS
+    memcpy(opt += 4, (__u8[]){1, 3, 3, 7}, 4);              // window scaling (2^7 = 128)
+    memcpy(opt += 4, (__u8[]){1, 1, 4, 2}, 4);              // SACK permitted
   }
 
   csum += calc_csum(buf, buf_len);
