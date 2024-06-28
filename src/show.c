@@ -50,8 +50,10 @@ const struct argp show_argp = {
 
 int show_overview(int whitelist_fd, struct filter_settings* gsettings, int log_verbosity) {
   if (log_verbosity >= 2) printf("%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
-  printf(_("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d\n"), BOLD, RESET, gsettings->hi,
+  printf(_("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d"), BOLD, RESET, gsettings->hi,
          gsettings->hr, gsettings->kt, gsettings->ki, gsettings->kr, gsettings->ks);
+  if (gsettings->hi == 0) printf(_(", passive"));
+  printf("\n");
 
   char buf[FILTER_FMT_MAX_LEN];
   struct filter filter;
@@ -89,10 +91,15 @@ int show_overview(int whitelist_fd, struct filter_settings* gsettings, int log_v
         printf(":");
         if (a->ks != b->ks) printf("%d", settings.ks);
       }
+      if (a->hi == 0 && b->hi != 0) {
+        printf(_(", passive"));
+      } else if (a->hi != 0 && b->hi == 0) {
+        printf(_(", active"));
+      }
       printf(")" RESET "\n");
     }
   }
-  if (!iter.has_key) printf(_("  %sno active filter%s\n"), BOLD, RESET);
+  if (!iter.has_key) printf(_("  %sfilter:%s none\n"), BOLD, RESET);
   return 0;
 }
 

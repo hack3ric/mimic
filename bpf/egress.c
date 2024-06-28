@@ -77,7 +77,14 @@ int egress_handler(struct __sk_buff* skb) {
   struct filter_settings* settings = matches_whitelist(QUARTET_UDP);
   if (!settings) return TC_ACT_OK;
   struct conn_tuple conn_key = gen_conn_key(QUARTET_UDP);
-  struct connection* conn = try_p_shot(get_conn(&conn_key, settings));
+  struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
+  if (!conn) {
+    if (settings->hi == 0) return TC_ACT_STOLEN;
+    struct connection conn_value = {.cwnd = INIT_CWND};
+    __builtin_memcpy(&conn_value.settings, settings, sizeof(*settings));
+    try_shot(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
+    conn = try_p_shot(bpf_map_lookup_elem(&mimic_conns, &conn_key));
+  }
 
   struct udphdr old_udp = *udp;
   old_udp.check = 0;
@@ -96,9 +103,6 @@ int egress_handler(struct __sk_buff* skb) {
     seq = conn->seq;
     ack_seq = conn->ack_seq;
     conn->seq += payload_len;
-  } else if (conn->settings.hi == 0) {
-    bpf_spin_unlock(&conn->lock);
-    return TC_ACT_STOLEN;
   } else {
     switch (conn->state) {
       case CONN_IDLE:

@@ -116,6 +116,17 @@ static int parse_int_seq(char* str, int* nums, size_t len) {
   return nums_idx;
 }
 
+static int parse_bool(const char* str, bool* result) {
+  if (strcmp("true", str) == 0 || strcmp("1", str) == 0) {
+    *result = true;
+  } else if (strcmp("false", str) == 0 || strcmp("0", str) == 0) {
+    *result = false;
+  } else {
+    ret(-EINVAL, _("invalid boolean value: '%s'"), str);
+  }
+  return 0;
+}
+
 int parse_handshake(char* str, struct filter_settings* settings) {
   // TODO: block invalid
   int nums[2];
@@ -165,6 +176,10 @@ int parse_filter(char* filter_str, struct filter* filter, struct filter_settings
       try(parse_handshake(v, settings));
     } else if (strcmp("keepalive", k) == 0) {
       try(parse_keepalive(v, settings));
+    } else if (strcmp("passive", k) == 0) {
+      bool passive;
+      try(parse_bool(v, &passive));
+      if (passive) settings->hi = 0;
     } else {
       ret(-EINVAL, _("unsupported option type: '%s'"), k);
     }
