@@ -65,12 +65,19 @@ generate-pot: out/mimic.pot
 
 MKDIR_P = mkdir -p $(@D)
 
+CHECK_OPTIONS := out/.options.$(shell echo $(BPF_CC) $(CC) $(BPFTOOL) $(BPF_CFLAGS) $(CFLAGS) | sha256sum | awk '{ print $$1 }')
+
+out/.options.%:
+	$(MKDIR_P)
+	rm out/.options.* || :
+	touch $@
+
 # Generating vmlinux.h using current kernel's vmlinux hurts (byte-by-byte) reproducibility in
 # packaging for distros. Consider bundle it with the project.
 bpf/vmlinux.h:
 	$(BPFTOOL) btf dump file $(KERNEL_VMLINUX) format c > $@
 
-$(filter bpf/%.o, $(MIMIC_BPF_OBJS)): bpf/%.o: bpf/%.c $(MIMIC_BPF_HEADERS)
+$(filter bpf/%.o, $(MIMIC_BPF_OBJS)): bpf/%.o: bpf/%.c $(MIMIC_BPF_HEADERS) $(CHECK_OPTIONS)
 	$(BPF_CC) $(BPF_CFLAGS) -D_MIMIC_BPF -c -o $@ $<
 
 out/mimic.bpf.o: $(MIMIC_BPF_OBJS)
@@ -80,7 +87,7 @@ out/mimic.bpf.o: $(MIMIC_BPF_OBJS)
 src/bpf_skel.h: out/mimic.bpf.o
 	$(BPFTOOL) gen skeleton out/mimic.bpf.o > $@
 
-$(filter src/%.o, $(MIMIC_OBJS)): src/%.o: $(MIMIC_HEADERS)
+$(filter src/%.o, $(MIMIC_OBJS)): src/%.o: $(MIMIC_HEADERS) $(CHECK_OPTIONS)
 
 out/mimic: $(MIMIC_OBJS)
 	$(MKDIR_P)
