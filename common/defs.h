@@ -89,11 +89,8 @@
 // Used for reading packet data in bulk
 #define SEGMENT_SIZE 256
 
-#define INIT_CWND 200
-#define MIN_CWND 50
-#define MAX_CWND 350
-#define CWND_STEP 1
-#define STABLE_FACTOR 0.2
+#define INIT_CWND 0xffff
+#define CWND_SCALE 7
 
 #define SECOND 1000000000ul
 
@@ -169,7 +166,7 @@ struct connection {
   } state;
   __u32 seq, ack_seq;
   uintptr_t pktbuf;
-  __u16 cwnd;
+  __u32 cwnd;
   __u64 retry_tstamp, reset_tstamp, stale_tstamp;
   bool keepalive_sent;
   // TODO: filter settings
@@ -180,7 +177,7 @@ struct send_options {
   struct conn_tuple conn;
   bool syn, ack, rst;
   __u32 seq, ack_seq;
-  __u16 cwnd;
+  __u32 cwnd;
 };
 
 // need to define `log_verbosity` besides including this file.

@@ -160,7 +160,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
     .syn = s->syn,
     .ack = s->ack,
     .rst = s->rst,
-    .window = htons(s->cwnd),
+    .window = htons(s->syn ? s->cwnd : (s->cwnd >> CWND_SCALE)),
     .check = 0,
     .urg_ptr = 0,
   };
@@ -180,7 +180,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
     };
     __u8* opt = (__u8*)(tcp + 1);
     memcpy(opt, &(struct _tlv_be16){2, 4, htons(mss)}, 4);  // MSS
-    memcpy(opt += 4, (__u8[]){1, 3, 3, 7}, 4);              // window scaling (2^7 = 128)
+    memcpy(opt += 4, (__u8[]){1, 3, 3, CWND_SCALE}, 4);     // window scaling
     memcpy(opt += 4, (__u8[]){1, 1, 4, 2}, 4);              // SACK permitted
   }
 
@@ -194,7 +194,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
 }
 
 static inline int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_seq,
-                                   __u16 cwnd, const char* ifname) {
+                                   __u32 cwnd, const char* ifname) {
   struct send_options s = {
     .conn = *conn,
     .syn = flags & SYN,

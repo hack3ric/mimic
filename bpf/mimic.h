@@ -145,19 +145,7 @@ static inline void log_destroy(enum log_level level, struct conn_tuple* conn,
   log_any(level, LOG_CONN_DESTROY, &(union log_info){.conn = *conn, .destroy_type = type});
 }
 
-static __always_inline void change_cwnd(__u16* cwnd, __u32 r1, __u32 r2, __u32 r3, __u32 r4) {
-  if (r4 > (__u32)(-1) * STABLE_FACTOR) {
-    // Assuming r1, r2, r3 ~ U(0, U32_MAX), this performs Bernoulli trial 96 times, p = 1/2
-    __s16 x = __builtin_popcount(r1) + __builtin_popcount(r2) + __builtin_popcount(r3) -
-              3 * (sizeof(__u32) * 8) / 2;
-    __u16 new = *cwnd + (x * CWND_STEP);
-    if ((new >= MIN_CWND) && (new <= MAX_CWND)) {
-      *cwnd = new;
-    }
-  }
-}
-
-int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_seq, __u16 cwnd);
+int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_seq, __u32 cwnd);
 int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key);
 int use_pktbuf(enum rb_item_type type, uintptr_t buf);
 

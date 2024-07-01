@@ -33,12 +33,12 @@ static int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_diff) {
 }
 
 static inline void update_tcp_header(struct tcphdr* tcp, __u16 udp_len, __u32 seq, __u32 ack_seq,
-                                     __u16 cwnd) {
+                                     __u32 cwnd) {
   tcp->seq = htonl(seq);
   tcp->ack_seq = htonl(ack_seq);
   tcp_flag_word(tcp) = 0;
   tcp->doff = 5;
-  tcp->window = htons(cwnd);
+  tcp->window = htons(cwnd >> CWND_SCALE);
   tcp->ack = true;
   tcp->urg_ptr = 0;
 }
@@ -95,7 +95,6 @@ int egress_handler(struct __sk_buff* skb) {
 
   __u32 seq = 0, ack_seq = 0, conn_cwnd;
   __u32 random = bpf_get_prandom_u32();
-  __u32 r1 = bpf_get_prandom_u32(), r2 = bpf_get_prandom_u32(), r3 = bpf_get_prandom_u32();
   __u64 tstamp = bpf_ktime_get_boot_ns();
 
   bpf_spin_lock(&conn->lock);
@@ -121,7 +120,6 @@ int egress_handler(struct __sk_buff* skb) {
     }
     return store_packet(skb, ip_end, &conn_key);
   }
-  change_cwnd(&conn->cwnd, r1, r2, r3, random);
   conn_cwnd = conn->cwnd;
   bpf_spin_unlock(&conn->lock);
 

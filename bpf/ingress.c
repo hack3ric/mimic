@@ -126,8 +126,7 @@ int ingress_handler(struct xdp_md* xdp) {
   }
 
   bool syn, ack, rst, is_keepalive, will_send_ctrl_packet, will_drop, newly_estab;
-  __u32 seq = 0, ack_seq = 0;
-  __u16 cwnd = 0xffff;
+  __u32 seq = 0, ack_seq = 0, cwnd = 0xffff;
   __u32 random = bpf_get_prandom_u32();
   __u64 tstamp = bpf_ktime_get_boot_ns();
   syn = ack = rst = is_keepalive = newly_estab = false;
@@ -160,7 +159,7 @@ int ingress_handler(struct xdp_md* xdp) {
     case CONN_SYN_SENT:
       if (tcp->syn) {
         ack = true;
-        conn->cwnd += random % 31 - 15;
+        // TODO: alter window for the first time
         cwnd = conn->cwnd;
         if (tcp->ack) {
           // 3-way handshake
@@ -199,6 +198,8 @@ int ingress_handler(struct xdp_md* xdp) {
       } else {
         will_send_ctrl_packet = will_drop = false;
         conn->ack_seq += payload_len;
+        // TODO: decrement window and refresh it to a high level with probability function; the
+        // smaller the window size, the more likely it will be updated.
       }
       break;
   }
