@@ -92,25 +92,31 @@ const struct argp run_argp = {
   N_("\vSee mimic(1) for detailed usage."),
 };
 
-static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts,
-                                      const struct bpf_program* prog, char* name) {
-  int result = bpf_tc_hook_create(hook);
-
-  // EEXIST causes libbpf_print_fn to log harmless 'libbpf: Kernel error message: Exclusivity flag
-  // on, cannot modify'
-  if (result && result != -EEXIST) {
-    ret(result, "failed to create TC %s hook: %s", name, strerror(-result));
-  }
-
-  opts->prog_fd = bpf_program__fd(prog);
-  try_e(bpf_tc_attach(hook, opts), _("failed to attach to TC %s hook: %s"), name, strret);
-  return 0;
-}
-
 static inline int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts) {
   opts->flags = opts->prog_fd = opts->prog_id = 0;
   int ret = bpf_tc_detach(hook, opts);
   return ret ?: bpf_tc_hook_destroy(hook);
+}
+
+static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts,
+                                      const struct bpf_program* prog) {
+  // EEXIST causes libbpf_print_fn to log harmless 'libbpf: Kernel error message: Exclusivity flag
+  // on, cannot modify'
+  int retcode = bpf_tc_hook_create(hook);
+  if (retcode && retcode != -EEXIST) {
+    ret(retcode, "failed to create TC egress hook: %s", strerror(-retcode));
+  }
+  opts->prog_fd = bpf_program__fd(prog);
+  struct bpf_tc_opts opts2 = *opts;
+  if ((retcode = bpf_tc_attach(hook, opts)) < 0) {
+    if (retcode == -EEXIST) {
+      tc_hook_cleanup(hook, opts);
+      *opts = opts2;
+      retcode = bpf_tc_attach(hook, opts);
+    }
+  }
+  try(retcode, _("failed to attach to TC egress hook: %s"), strret);
+  return 0;
 }
 
 // This function is somewhat heavy (see comments below), and is called often. Probably does
@@ -494,7 +500,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   tc_opts_egress =
     (typeof(tc_opts_egress)){.sz = sizeof(tc_opts_egress), .handle = 1, .priority = 1};
   tc_hook_created = true;
-  try2(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler, "egress"));
+  try2(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler));
   xdp_ingress = try2_p(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
                        _("failed to attach XDP program: %s"), strret);
 
@@ -572,7 +578,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
 
   retcode = 0;
 cleanup:
-  log_info("cleaning up");
+  log_info(_("cleaning up"));
   sigprocmask(SIG_SETMASK, NULL, NULL);
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
   if (xdp_ingress) bpf_link__destroy(xdp_ingress);
@@ -580,6 +586,46 @@ cleanup:
   if (closure) ffi_closure_free(closure);
   if (skel) mimic_bpf__destroy(skel);
   return retcode;
+}
+
+static inline int _lock(const char* restrict lock_path, const char* restrict ifname, bool retry) {
+  int lock_fd = open(lock_path, O_CREAT | O_EXCL | O_WRONLY, 0644);
+  if (lock_fd >= 0) return lock_fd;
+
+  int orig_errno = errno;
+  bool check_lock = false, check_process = false;
+  struct lock_content lock_content;
+  if (errno == EEXIST) {
+    _cleanup_file FILE* lock_file = fopen(lock_path, "r");
+    if (lock_file) {
+      if (parse_lock_file(lock_file, &lock_content) == 0) {
+        char proc_path[32];
+        sprintf(proc_path, "/proc/%d", lock_content.pid);
+        if (access(proc_path, F_OK) < 0) {
+          try_e(unlink(lock_path), _("failed to remove %s: %s"), lock_path, strret);
+          if (retry) return _lock(lock_path, ifname, false);
+        } else {
+          check_process = true;
+        }
+      } else {
+        check_lock = true;
+      }
+    } else {
+      check_lock = true;
+    }
+  }
+
+  log_error(_("failed to lock on %s at %s: %s"), ifname, lock_path, strerror(orig_errno));
+  if (check_lock) log_error(_("hint: check %s"), lock_path);
+  if (check_process) {
+    log_error(_("hint: is another Mimic process (PID %d) running on this interface?"),
+              lock_content.pid);
+  }
+  return -orig_errno;
+}
+
+static inline int lock(const char* restrict lock_path, const char* restrict ifname) {
+  return _lock(lock_path, ifname, true);
 }
 
 int subcmd_run(struct run_args* args) {
@@ -599,41 +645,22 @@ int subcmd_run(struct run_args* args) {
     }
   }
 
-  struct stat st = {};
-  if (stat(MIMIC_RUNTIME_DIR, &st) < 0) {
+  if (access(MIMIC_RUNTIME_DIR, R_OK | W_OK) < 0) {
     if (errno == ENOENT) {
       try_e(mkdir(MIMIC_RUNTIME_DIR, 0755), _("failed to create directory %s: %s"),
             MIMIC_RUNTIME_DIR, strret);
     } else {
-      ret(-errno, _("failed to stat %s: %s"), MIMIC_RUNTIME_DIR, strerror(errno));
+      ret(-errno, _("failed to access %s: %s"), MIMIC_RUNTIME_DIR, strerror(errno));
     }
   }
 
-  char lock[64];
-  get_lock_file_name(lock, sizeof(lock), ifindex);
-  int lock_fd = open(lock, O_CREAT | O_EXCL | O_WRONLY, 0644);
-  if (lock_fd < 0) {
-    log_error(_("failed to lock on %s at %s: %s"), args->ifname, lock, strerror(errno));
-    if (errno == EEXIST) {
-      _cleanup_file FILE* lock_file = fopen(lock, "r");
-      if (lock_file) {
-        struct lock_content lock_content;
-        if (parse_lock_file(lock_file, &lock_content) == 0) {
-          log_error(_("hint: is another Mimic process (PID %d) running on this interface?"),
-                    lock_content.pid);
-        } else {
-          log_error(_("hint: check %s"), lock);
-        }
-      } else {
-        log_error(_("hint: check %s"), lock);
-      }
-    }
-    return -errno;
-  }
+  char lock_path[64];
+  get_lock_file_name(lock_path, sizeof(lock_path), ifindex);
+  int lock_fd = try(lock(lock_path, args->ifname));
 
   libbpf_set_print(libbpf_print_fn);
   retcode = run_bpf(args, lock_fd, args->ifname, ifindex);
   close(lock_fd);
-  remove(lock);
+  unlink(lock_path);
   return retcode;
 }
