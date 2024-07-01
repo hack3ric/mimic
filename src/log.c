@@ -79,6 +79,9 @@ void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_typ
     case DESTROY_TIMED_OUT:
       reason = _("timed out");
       break;
+    case DESTROY_INVALID:
+      reason = _("invalid TCP state");
+      break;
     default:
       reason = _("unknown");
       break;
