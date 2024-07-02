@@ -32,14 +32,15 @@ static int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_diff) {
   return TC_ACT_OK;
 }
 
-static inline void update_tcp_header(struct tcphdr* tcp, __u16 udp_len, __u32 seq, __u32 ack_seq,
-                                     __u32 cwnd) {
+static inline void update_tcp_header(struct tcphdr* tcp, __u16 payload_len, __u32 seq,
+                                     __u32 ack_seq, __u32 cwnd) {
   tcp->seq = htonl(seq);
   tcp->ack_seq = htonl(ack_seq);
   tcp_flag_word(tcp) = 0;
   tcp->doff = 5;
   tcp->window = htons(cwnd >> CWND_SCALE);
   tcp->ack = true;
+  if (payload_len == 0) tcp->psh = true;
   tcp->urg_ptr = 0;
 }
 
@@ -140,7 +141,7 @@ int egress_handler(struct __sk_buff* skb) {
   __be32 csum_diff = 0;
   try_tc(mangle_data(skb, ip_end + sizeof(*udp), &csum_diff));
   decl_shot(struct tcphdr, tcp, ip_end, skb);
-  update_tcp_header(tcp, udp_len, seq, ack_seq, conn_cwnd);
+  update_tcp_header(tcp, payload_len, seq, ack_seq, conn_cwnd);
 
   __u32 csum_off = ip_end + offsetof(struct tcphdr, check);
   redecl_shot(struct tcphdr, tcp, ip_end, skb);

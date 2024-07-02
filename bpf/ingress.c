@@ -36,22 +36,8 @@ static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, 
   return XDP_PASS;
 }
 
-static __always_inline __u32 new_ack_seq(struct tcphdr* tcp, __u16 payload_len) {
+static __always_inline __u32 next_ack_seq(struct tcphdr* tcp, __u16 payload_len) {
   return ntohl(tcp->seq) + payload_len + tcp->syn;
-}
-
-static __always_inline void pre_syn_ack(__u32* seq, __u32* ack_seq, struct connection* conn,
-                                        struct tcphdr* tcp, __u16 payload_len, __u32 random) {
-  conn->state = CONN_SYN_RECV;
-  *seq = conn->seq = random;
-  *ack_seq = conn->ack_seq = new_ack_seq(tcp, payload_len);
-  conn->seq += 1;
-}
-
-static __always_inline void pre_ack(__u32* seq, __u32* ack_seq, struct connection* conn,
-                                    struct tcphdr* tcp, __u16 payload_len) {
-  *seq = conn->seq;
-  *ack_seq = conn->ack_seq = new_ack_seq(tcp, payload_len);
 }
 
 SEC("xdp")
@@ -139,20 +125,32 @@ int ingress_handler(struct xdp_md* xdp) {
 
   switch (conn->state) {
     case CONN_IDLE:
+      if (tcp->syn && !tcp->ack) {
+        conn->state = CONN_SYN_RECV;
+        syn = ack = true;
+        seq = conn->seq = random;
+        ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
+        conn->seq += 1;
+      } else {
+        goto fsm_error;
+      }
+      break;
+
     case CONN_SYN_RECV:
       if (tcp->syn && !tcp->ack) {
+        __u32 new_ack_seq = next_ack_seq(tcp, payload_len);
+        if (new_ack_seq != conn->ack_seq) goto fsm_error;
         syn = ack = true;
-        pre_syn_ack(&seq, &ack_seq, conn, tcp, payload_len, random);
-      } else if (conn->state == CONN_SYN_RECV && !tcp->syn && tcp->ack) {
+        seq = conn->seq++;
+        ack_seq = new_ack_seq;
+      } else if (!tcp->syn && tcp->ack) {
         will_send_ctrl_packet = false;
         conn->state = CONN_ESTABLISHED;
-        conn->ack_seq = new_ack_seq(tcp, payload_len);
+        conn->ack_seq = next_ack_seq(tcp, payload_len);
         newly_estab = true;
         swap(pktbuf, conn->pktbuf);
       } else {
-        rst = true;
-        swap(pktbuf, conn->pktbuf);
-        seq = conn->seq;
+        goto fsm_error;
       }
       break;
 
@@ -166,24 +164,20 @@ int ingress_handler(struct xdp_md* xdp) {
           conn->state = CONN_ESTABLISHED;
           newly_estab = true;
           swap(pktbuf, conn->pktbuf);
-          pre_ack(&seq, &ack_seq, conn, tcp, payload_len);
         } else {
           // Simultaneous open a.k.a. 4-way handshake
           conn->state = CONN_SYN_RECV;
-          pre_ack(&seq, &ack_seq, conn, tcp, payload_len);
         }
-      } else {
-        rst = true;
-        swap(pktbuf, conn->pktbuf);
         seq = conn->seq;
+        ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
+      } else {
+        goto fsm_error;
       }
       break;
 
     case CONN_ESTABLISHED:
       if (tcp->syn) {
-        rst = true;
-        swap(pktbuf, conn->pktbuf);
-        seq = conn->seq;
+        goto fsm_error;
       } else if (ntohl(tcp->seq) == conn->ack_seq - 1) {
         // Received keepalive; send keepalive ACK
         ack = is_keepalive = true;
@@ -192,15 +186,31 @@ int ingress_handler(struct xdp_md* xdp) {
         cwnd = conn->cwnd;
       } else if (conn->keepalive_sent && payload_len == 0) {
         // Received keepalive ACK
-        is_keepalive = true;
         will_send_ctrl_packet = false;
+        is_keepalive = true;
         conn->keepalive_sent = false;
+      } else if (!tcp->psh && payload_len == 0) {
+        // Empty segment without PSH will be treated as control packet
+        will_send_ctrl_packet = false;
       } else {
         will_send_ctrl_packet = will_drop = false;
         conn->ack_seq += payload_len;
-        // TODO: decrement window and refresh it to a high level with probability function; the
-        // smaller the window size, the more likely it will be updated.
+        // TODO: store remote MSS to determine the lower bound of random number
+        if (random % 30000 + 3000 >= conn->cwnd) {
+          will_send_ctrl_packet = ack = true;
+          seq = conn->seq;
+          ack_seq = conn->ack_seq;
+          conn->cwnd = cwnd = INIT_CWND;
+        }
+        conn->cwnd -= payload_len;
       }
+      break;
+
+    default:
+    fsm_error:
+      rst = true;
+      swap(pktbuf, conn->pktbuf);
+      seq = conn->seq;
       break;
   }
   if (!is_keepalive) conn->stale_tstamp = tstamp;
