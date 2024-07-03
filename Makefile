@@ -63,6 +63,19 @@ generate-vmlinux: bpf/vmlinux.h
 generate-manpage: out/mimic.1.gz
 generate-pot: out/mimic.pot
 
+test: build-cli
+	bats tests
+
+bench: build-cli
+	tests/bench.bash
+
+clean:
+	$(MAKE) -C kmod $@
+	rm -rf out/
+	find . -type f -name *.o -delete
+	rm -f src/bpf_skel.h
+	rm -f bpf/vmlinux.h
+
 MKDIR_P = mkdir -p $(@D)
 
 CHECK_OPTIONS := out/.options.$(shell echo $(BPF_CC) $(CC) $(BPFTOOL) $(BPF_CFLAGS) $(CFLAGS) | sha256sum | awk '{ print $$1 }')
@@ -105,16 +118,3 @@ out/mimic.1.gz: docs/mimic.1.md
 out/mimic.pot:
 	$(MKDIR_P)
 	find src -type f -regex '.*\.[ch]' | xargs xgettext -k_ -kN_ -o $@ --
-
-test: build-cli
-	bats tests
-
-bench: build-cli
-	tests/bench.bash
-
-clean:
-	$(MAKE) -C kmod $@
-	rm -rf out/
-	find . -type f -name *.o -delete
-	rm -f src/bpf_skel.h
-	rm -f bpf/vmlinux.h
