@@ -166,22 +166,22 @@ int use_pktbuf(enum rb_item_type type, uintptr_t buf);
     struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);                 \
     if (item) {                                                                              \
       item->log_event.level = (_l);                                                          \
-      item->log_event.type = LOG_TYPE_QUICK_MSG;                                             \
+      item->log_event.type = LOG_MSG;                                             \
       _log_f(item->log_event.info.msg, sizeof(item->log_event.info.msg), _fmt, __VA_ARGS__); \
       bpf_ringbuf_submit(item, 0);                                                           \
     }                                                                                        \
   })
 
 #define log_error(fmt, ...) \
-  if (LOG_ALLOW_ERROR) _log_rbprintf(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_ERROR) _log_rbprintf(LOG_ERROR, fmt, ##__VA_ARGS__)
 #define log_warn(fmt, ...) \
-  if (LOG_ALLOW_WARN) _log_rbprintf(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_WARN) _log_rbprintf(LOG_WARN, fmt, ##__VA_ARGS__)
 #define log_info(fmt, ...) \
-  if (LOG_ALLOW_INFO) _log_rbprintf(LOG_LEVEL_INFO, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_INFO) _log_rbprintf(LOG_INFO, fmt, ##__VA_ARGS__)
 #define log_debug(fmt, ...) \
-  if (LOG_ALLOW_DEBUG) _log_rbprintf(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_DEBUG) _log_rbprintf(LOG_DEBUG, fmt, ##__VA_ARGS__)
 #define log_trace(fmt, ...) \
-  if (LOG_ALLOW_TRACE) _log_rbprintf(LOG_LEVEL_TRACE, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_TRACE) _log_rbprintf(LOG_TRACE, fmt, ##__VA_ARGS__)
 
 static inline bool ipv6_is_ext(__u8 nexthdr) {
   switch (nexthdr) {
