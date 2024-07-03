@@ -40,6 +40,48 @@ static __always_inline __u32 next_ack_seq(struct tcphdr* tcp, __u16 payload_len)
   return ntohl(tcp->seq) + payload_len + tcp->syn;
 }
 
+struct tcp_options {
+  __u16 mss;
+  // TODO: more fields
+};
+
+static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32 ip_end,
+                                   struct tcp_options* opt) {
+  __u8 opt_buf[128] = {};
+  size_t len = (tcp->doff << 2) - sizeof(*tcp);
+  if (len > sizeof(opt_buf)) {  // TCP options too large
+    return XDP_DROP;
+  } else if (len > 0) {  // prevent zero-sized read
+    bpf_xdp_load_bytes(xdp, ip_end + sizeof(*tcp), opt_buf, len);
+  } else {
+    return 0;
+  }
+
+  for (int i = 0; i < len; i++) {
+    switch (opt_buf[i]) {
+      case 0:  // end of option list
+      case 1:  // no-op
+        break;
+      case 2:;  // MSS
+        // HACK: check *all* indexes that will be used to persuade the verifier
+        if (i + 1 >= len || i + 2 >= len || i + 3 >= len) return -1;
+        if (opt_buf[i + 1] != 4) return -1;
+        opt->mss = (opt_buf[i + 2] << 8) + opt_buf[i + 3];
+        i += 3;
+        break;
+      default:
+        if (i + 1 >= len) return -1;
+        __u8 l = opt_buf[i + 1];
+        if (l < 2) return -1;
+        if (i + l >= len) return -1;
+        i += l - 1;
+        break;
+    }
+  }
+
+  return 0;
+}
+
 SEC("xdp")
 int ingress_handler(struct xdp_md* xdp) {
   decl_pass(struct ethhdr, eth, 0, xdp);
@@ -78,6 +120,9 @@ int ingress_handler(struct xdp_md* xdp) {
   __u32 payload_len = buf_len - ip_end - (tcp->doff << 2);
   log_tcp(LOG_TRACE, true, &conn_key, tcp, payload_len);
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
+
+  struct tcp_options opt = {};
+  if (tcp->syn) read_tcp_options(xdp, tcp, ip_end, &opt);
 
   // TODO: verify checksum (probably not needed?)
 
@@ -131,6 +176,7 @@ int ingress_handler(struct xdp_md* xdp) {
         seq = conn->seq = random;
         ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
         conn->seq += 1;
+        conn->peer_mss = opt.mss;
       } else {
         goto fsm_error;
       }
@@ -143,6 +189,7 @@ int ingress_handler(struct xdp_md* xdp) {
         syn = ack = true;
         seq = conn->seq++;
         ack_seq = new_ack_seq;
+        conn->peer_mss = opt.mss;
       } else if (!tcp->syn && tcp->ack) {
         will_send_ctrl_packet = false;
         conn->state = CONN_ESTABLISHED;
@@ -170,6 +217,7 @@ int ingress_handler(struct xdp_md* xdp) {
         }
         seq = conn->seq;
         ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
+        conn->peer_mss = opt.mss;
       } else {
         goto fsm_error;
       }
@@ -195,7 +243,7 @@ int ingress_handler(struct xdp_md* xdp) {
       } else {
         will_send_ctrl_packet = will_drop = false;
         conn->ack_seq += payload_len;
-        // TODO: store remote MSS to determine the lower bound of random number
+        // TODO: use MSS to determine the lower bound of random number
         if (random % 30000 + 3000 >= conn->cwnd) {
           will_send_ctrl_packet = ack = true;
           seq = conn->seq;

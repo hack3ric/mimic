@@ -169,7 +169,7 @@ struct connection {
   __u32 cwnd;
   __u64 retry_tstamp, reset_tstamp, stale_tstamp;
   bool keepalive_sent;
-  // TODO: filter settings
+  __u16 peer_mss;
   struct filter_settings settings;
 };
 
