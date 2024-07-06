@@ -47,33 +47,34 @@ struct tcp_options {
 
 static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32 ip_end,
                                    struct tcp_options* opt) {
-  __u8 opt_buf[128] = {};
+  __u8 opt_buf[64] = {};
   size_t len = (tcp->doff << 2) - sizeof(*tcp);
-  if (len > sizeof(opt_buf)) {  // TCP options too large
-    return XDP_DROP;
-  } else if (len > 0) {  // prevent zero-sized read
+  if (len > 64) {
+    // TCP options too large
+    return -1;
+  } else if (len > 0) {
+    // prevent zero-sized read
     bpf_xdp_load_bytes(xdp, ip_end + sizeof(*tcp), opt_buf, len);
   } else {
     return 0;
   }
 
   for (int i = 0; i < len; i++) {
+    if (i > 64 - 1) return -1;
     switch (opt_buf[i]) {
       case 0:  // end of option list
       case 1:  // no-op
         break;
-      case 2:;  // MSS
-        // HACK: check *all* indexes that will be used to persuade the verifier
-        if (i + 1 >= len || i + 2 >= len || i + 3 >= len) return -1;
+      case 2:  // MSS
+        if (i > 64 - 4) return -1;
         if (opt_buf[i + 1] != 4) return -1;
         opt->mss = (opt_buf[i + 2] << 8) + opt_buf[i + 3];
         i += 3;
         break;
       default:
-        if (i + 1 >= len) return -1;
+        if (i > 64 - 2) return -1;
         __u8 l = opt_buf[i + 1];
-        if (l < 2) return -1;
-        if (i + l >= len) return -1;
+        if (l < 2 || i + l >= len) return -1;
         i += l - 1;
         break;
     }
@@ -122,7 +123,7 @@ int ingress_handler(struct xdp_md* xdp) {
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
 
   struct tcp_options opt = {};
-  if (tcp->syn) read_tcp_options(xdp, tcp, ip_end, &opt);
+  if (tcp->syn) try_drop(read_tcp_options(xdp, tcp, ip_end, &opt));
 
   // TODO: verify checksum (probably not needed?)
 
