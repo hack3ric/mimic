@@ -128,7 +128,7 @@ Otherwise, the following dependencies is required:
 
 - Linux kernel, [as previously mentioned](#kernel-support), along with its headers: `` apt install linux-{image,headers}-`uname -r` `` on Debian or similar
 - GNU make
-- Clang version >= 14, and optionally GCC (if system kernel is built using it)
+- Clang version >= 15, and optionally GCC (if system kernel is built using it)
 - pahole, bpftool (for generating BPF stuff)
 - libbpf 1.x: `apt install libbpf-dev` on Debian or similar
 - libffi: `apt install libffi-dev` on Debian or similar

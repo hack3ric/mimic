@@ -6,7 +6,7 @@ Build-Depends:
  debhelper-compat (= 13),
  dh-sequence-dkms,
  dh-exec,
- clang,
+ clang-16,
  llvm,
  python3,
  bpftool,

@@ -24,9 +24,14 @@ ifeq ($(IS_UBUNTU), 0)
 	# Ubuntu's bpftool relies on current kernel, which is both inconsistent
 	# with Debian and sbuild-unfriendly. Build from kernel source instead.
 	make -C linux-source-*/tools/bpf/bpftool
-	dh_auto_build -- build-cli generate-manpage MODE=release BPFTOOL=linux-source-*/tools/bpf/bpftool/bpftool
+	dh_auto_build -- build-cli generate-manpage \
+		MODE=release \
+		BPF_CC=clang-16 \
+		BPFTOOL=linux-source-*/tools/bpf/bpftool/bpftool
 else
-	dh_auto_build -- build-cli generate-manpage MODE=release
+	dh_auto_build -- build-cli generate-manpage \
+		MODE=release \
+		BPF_CC=clang-16
 endif
 	make -C linux-source-*/tools/bpf/resolve_btfids
 
