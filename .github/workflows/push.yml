@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Install dependencies
         run: |
-          sudo apt install python3 clang llvm pahole \
+          sudo apt install python3 clang-15 pahole \
             bats bc ethtool iperf3 jq socat tshark wireguard-tools \
             libffi-dev libelf-dev
       - name: Prepare libbpf
@@ -24,7 +24,7 @@ jobs:
       - name: Build
         run: |
           sudo cp /sys/kernel/btf/vmlinux /lib/modules/`uname -r`/build
-          make -j
+          make -j BPF_CC=clang-15
       - name: Test
         run: |
           sudo nft delete table filter  # Docker's nftables rule drops IPv4 packets in tests
