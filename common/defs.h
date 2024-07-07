@@ -84,7 +84,7 @@
 #define RST (1 << 2)
 
 // Mainly used for limiting loop counts
-#define MAX_PACKET_SIZE 9000
+#define MAX_PACKET_SIZE 10000
 
 // Used for reading packet data in bulk
 #define SEGMENT_SIZE 256

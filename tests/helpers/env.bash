@@ -35,14 +35,17 @@ test_env_setup() {
   done
 
   ip link add $br type bridge
+  # ip link set $br mtu 9000
   ip link set $br up
 
   for _i in `seq 0 $max`; do
     ip netns add ${netns[$_i]}
     ip link add ${veth[$_i]} type veth peer ${veth[$_i]} netns ${netns[$_i]}
     ip link set ${veth[$_i]} master $br
+    # ip link set ${veth[$_i]} mtu 9000
     ip -n ${netns[$_i]} addr add dev ${veth[$_i]} ${veth_ipv4[$_i]}
     ip -n ${netns[$_i]} addr add dev ${veth[$_i]} ${veth_ipv6[$_i]}
+    # ip -n ${netns[$_i]} link set ${veth[$_i]} mtu 9000
     ip link set ${veth[$_i]} up
     [ "$no_offload" != true ] || ip netns exec ${netns[$_i]} ethtool -K ${veth[$_i]} tx off
     ip -n ${netns[$_i]} link set ${veth[$_i]} up
