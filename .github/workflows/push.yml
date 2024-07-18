@@ -13,7 +13,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt install python3 clang-15 pahole \
-            bats bc ethtool iperf3 jq socat tshark wireguard-tools \
+            bats bc conntrack ethtool iperf3 jq socat tshark wireguard-tools \
             libffi-dev libelf-dev
       - name: Prepare libbpf
         run: |
