@@ -2,10 +2,10 @@
 set -e
 
 _curdir=$(dirname $(realpath "${BASH_SOURCE[0]}"))
-source "$_curdir/helpers/env.bash"
+source "$_curdir/env/switch.bash"
 
 setup() {
-  test_env_setup --wg --wg-v6 --wg-mtu=1408
+  switch_env_setup --wg --wg-v6 --wg-mtu=1408
 
   if [ "$1" = "mimic" ]; then
     for _i in `seq 0 $max`; do
@@ -40,7 +40,7 @@ cleanup() (
   if [ -n "$_iperf3_pid_tmp" ]; then
     kill `cat $_iperf3_pid_tmp`
   fi
-  test_env_cleanup
+  switch_env_cleanup
 )
 
 case "$1" in

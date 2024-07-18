@@ -9,7 +9,7 @@ if [ "$SLEEP_MULTIPLIER" -lt 1 ]; then
   exit 1
 fi
 
-load helpers/env
+load env/switch
 
 pcap_file="$BATS_RUN_TMPDIR/general.pcapng"
 pcap_file_dest="$BATS_TEST_DIRNAME/../out/general.pcapng"
@@ -21,7 +21,7 @@ mimic_pid=()
 
 setup_file() {
   [ "$UID" -eq 0 ] || skip
-  test_env_setup --no-offload
+  switch_env_setup --no-offload
 
   # Wait for netns to take effect, otherwise tests will probably hang
   sleep $(( 2 * SLEEP_MULTIPLIER ))
@@ -31,7 +31,7 @@ setup_file() {
 }
 
 teardown_file() {
-  test_env_cleanup
+  switch_env_cleanup
   cp "$pcap_file" "$pcap_file_dest"
   chmod +r "$pcap_file_dest"
 }

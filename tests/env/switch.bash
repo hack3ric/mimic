@@ -1,10 +1,9 @@
 #!/bin/bash
-[ "${BASH_SOURCE[0]}" = "$0" ] && set -e
 
-br=br-mimic-bench
-netns=(mimic-bench-{1..2})
+br=br-mimicsw
+netns=(mimicsw{1..2})
 
-veth=(veth-mimic-{1..2})
+veth=(vethmimicsw{1..2})
 veth_ipv4_range=169.254.100.0/24
 veth_ipv4=(169.254.100.{1..2}/24)
 veth_ipv6_range=fc10::/64
@@ -22,32 +21,39 @@ strip_ip_cidr() {
   sed 's/\/[0-9]\+$//' <(echo "$1")
 }
 
-test_env_setup() {
+switch_env_setup() {
   for _i in "$@"; do
     case "$_i" in
+      --mtu=*) local mtu="${_i#*=}";;
+      --no-offload) local no_offload=true;;
       --wg) local wg=1;;
       --wg-v4) local wg_ip_kind=v4;;
       --wg-v6) local wg_ip_kind=v6;;
       --wg-mtu=*) local wg_mtu="${_i#*=}";;
-      --no-offload) local no_offload=true;;
       *) ;;
     esac
   done
 
   ip link add $br type bridge
-  # ip link set $br mtu 9000
+  [ -z "$mtu" ] || ip link set $br mtu "$mtu"
   ip link set $br up
 
   for _i in `seq 0 $max`; do
     ip netns add ${netns[$_i]}
     ip link add ${veth[$_i]} type veth peer ${veth[$_i]} netns ${netns[$_i]}
     ip link set ${veth[$_i]} master $br
-    # ip link set ${veth[$_i]} mtu 9000
+
     ip -n ${netns[$_i]} addr add dev ${veth[$_i]} ${veth_ipv4[$_i]}
     ip -n ${netns[$_i]} addr add dev ${veth[$_i]} ${veth_ipv6[$_i]}
-    # ip -n ${netns[$_i]} link set ${veth[$_i]} mtu 9000
-    ip link set ${veth[$_i]} up
     [ "$no_offload" != true ] || ip netns exec ${netns[$_i]} ethtool -K ${veth[$_i]} tx off
+
+    if [ -n "$mtu" ]; then
+      ip link set ${veth[$_i]} mtu "$mtu"
+      ip -n ${netns[$_i]} link set ${veth[$_i]} mtu "$mtu"
+    fi
+
+    ip link set ${veth[$_i]} up
+    ip -n ${netns[$_i]} link set lo up
     ip -n ${netns[$_i]} link set ${veth[$_i]} up
   done
 
@@ -76,17 +82,13 @@ test_env_setup() {
           endpoint $_endpoint:${wg_port[$_j]}
       done
 
-      if [ -n "$wg_mtu" ]; then
-      echo set mtu to $wg_mtu
-        ip -n ${netns[$_i]} link set wg-${veth[$_i]} mtu "$wg_mtu"
-      fi
-
+      [ -z "$wg_mtu" ] || ip -n ${netns[$_i]} link set wg-${veth[$_i]} mtu "$wg_mtu"
       ip -n ${netns[$_i]} link set wg-${veth[$_i]} up
     done
   fi
 }
 
-test_env_cleanup() (
+switch_env_cleanup() (
   set +e
   ip link del $br
   for _i in `seq 0 $max`; do
@@ -96,14 +98,15 @@ test_env_cleanup() (
 )
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  set -e
   case "$1" in
     setup)
       shift
-      test_env_setup $@
+      switch_env_setup $@
       ;;
     clean)
       shift
-      test_env_cleanup $@
+      switch_env_cleanup $@
       ;;
     *)
       >&2 echo "expected 'setup' or 'clean'"
