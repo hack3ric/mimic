@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
 void get_lock_file_name(char* dest, size_t dest_len, int ifindex) {
   int ret;
   struct stat st;
-  __ino_t netns;
+  ino_t netns;
   if ((ret = stat("/proc/self/ns/net", &st)) < 0) {
     log_debug("fail to get current netns: %s", strerror(-ret));
     netns = 0;
