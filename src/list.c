@@ -9,9 +9,9 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#include "../common/checksum.h"
-#include "../common/defs.h"
-#include "../common/try.h"
+#include "common/checksum.h"
+#include "common/defs.h"
+#include "common/try.h"
 #include "log.h"
 #include "mimic.h"
 

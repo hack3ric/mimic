@@ -5,7 +5,7 @@
 #         |   bridge1                  bridge2   |
 #         \-----++-----------------------++------/
 # /----------\  ||  /-----------------\  ||  /----------\
-# |     veth1+==++==+veth2       veth3+==++==+veth4     |
+# |    veth1 +==++==+ veth2     veth3 +==++==+ veth4    |
 # |  netns1  |      | netns2 (router) |      |  netns3  |
 # \----------/      \-----------------/      \----------/
 
@@ -13,8 +13,8 @@ br=(brmimicrt{1..2})
 netns_internal=(mimicrt{1..3})
 
 veth_internal=(vethmimicrt{1..2}{1..2})
-veth_ipv4_range=(169.254.101.{0,128}/25)
-veth_ipv4_internal=(169.254.101.{1,2,129,130}/25)
+veth_ipv4_range=(169.254.10{1..2}.0/24)
+veth_ipv4_internal=(169.254.10{1..2}.{1..2}/24)
 veth_ipv6_range=(fc11:{1..2}::/64)
 veth_ipv6_internal=(fc11:{1..2}::{1..2}/64)
 

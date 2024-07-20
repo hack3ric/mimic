@@ -5,7 +5,7 @@
 
 #include <bpf/bpf_helpers.h>
 
-#include "../common/defs.h"
+#include "common/defs.h"
 
 extern int log_verbosity;
 

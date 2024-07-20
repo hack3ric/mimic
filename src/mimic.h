@@ -11,8 +11,8 @@
 #include <strings.h>
 #include <unistd.h>
 
-#include "../common/defs.h"
-#include "../common/try.h"
+#include "common/defs.h"
+#include "common/try.h"
 
 #ifndef MIMIC_RUNTIME_DIR
 #define MIMIC_RUNTIME_DIR "/run/mimic"
