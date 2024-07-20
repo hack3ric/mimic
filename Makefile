@@ -12,8 +12,8 @@ else ifeq ($(MODE), release)
 CFLAGS += -O2
 endif
 
-BPF_CFLAGS += -Wall -std=gnu99
-CFLAGS += -Wall -std=gnu99
+BPF_CFLAGS += -iquote. -Wall -std=gnu99
+CFLAGS += -iquote. -Wall -std=gnu99
 
 ifeq ($(KERNEL_UNAME),)
 KERNEL_VMLINUX := /sys/kernel/btf/vmlinux

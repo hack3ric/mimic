@@ -5,7 +5,7 @@
 #include <linux/tcp.h>
 #include <stdarg.h>
 
-#include "../common/defs.h"
+#include "common/defs.h"
 
 extern const char* log_prefixes[][2];
 extern int log_verbosity;
