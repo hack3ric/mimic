@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "common/defs.h"
+#include "../common/defs.h"
 #include "log.h"
 #include "mimic.h"
 

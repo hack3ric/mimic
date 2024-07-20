@@ -5,8 +5,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "common/defs.h"
-#include "common/try.h"
+#include "../common/defs.h"
+#include "../common/try.h"
 #include "log.h"
 #include "mimic.h"
 

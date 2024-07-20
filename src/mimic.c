@@ -6,8 +6,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "common/defs.h"
-#include "common/try.h"
+#include "../common/defs.h"
+#include "../common/try.h"
 #include "log.h"
 #include "mimic.h"
 

@@ -12,8 +12,8 @@ else ifeq ($(MODE), release)
 CFLAGS += -O2
 endif
 
-BPF_CFLAGS += -I. -Wall -std=gnu99
-CFLAGS += -I. -Wall -std=gnu99
+BPF_CFLAGS += -Wall -std=gnu99
+CFLAGS += -Wall -std=gnu99
 
 ifeq ($(KERNEL_UNAME),)
 KERNEL_VMLINUX := /sys/kernel/btf/vmlinux
@@ -50,41 +50,35 @@ ifneq ($(RUNTIME_DIR),)
 CFLAGS += -DMIMIC_RUNTIME_DIR="\"$(RUNTIME_DIR)\""
 endif
 
-MKDIR_P = mkdir -p $(@D)
-CHECK_OPTIONS := out/.options.$(shell echo $(BPF_CC) $(CC) $(BPFTOOL) $(BPF_CFLAGS) $(CFLAGS) | sha256sum | awk '{ print $$1 }')
-
-.PHONY: .FORCE
+.PHONY: build build-cli build-kmod generate generate-skel generate-vmlinux generate-manpage generate-pot test bench clean .FORCE
 .FORCE:
 
 all: build
-
-.PHONY: build build-cli build-kmod
 build: build-cli build-kmod
 build-cli: out/mimic
 build-kmod: out/mimic.ko
-
-.PHONY: generate generate-skel generate-vmlinux generate-manpage generate-pot
 generate: generate-skel generate-vmlinux
 generate-skel: src/bpf_skel.h
 generate-vmlinux: bpf/vmlinux.h
 generate-manpage: out/mimic.1.gz
 generate-pot: out/mimic.pot
 
-.PHONY: test
 test: build-cli
 	bats tests
 
-.PHONY: bench
 bench: build-cli
 	tests/bench.bash
 
-.PHONY: clean
 clean:
 	$(MAKE) -C kmod $@
 	rm -rf out/
 	find . -type f -name *.o -delete
 	rm -f src/bpf_skel.h
 	rm -f bpf/vmlinux.h
+
+MKDIR_P = mkdir -p $(@D)
+
+CHECK_OPTIONS := out/.options.$(shell echo $(BPF_CC) $(CC) $(BPFTOOL) $(BPF_CFLAGS) $(CFLAGS) | sha256sum | awk '{ print $$1 }')
 
 out/.options.%:
 	$(MKDIR_P)
