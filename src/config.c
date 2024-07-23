@@ -1,9 +1,7 @@
 #include <argp.h>
 #include <arpa/inet.h>
-#include <asm-generic/errno-base.h>
 #include <errno.h>
 #include <limits.h>
-#include <linux/types.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>

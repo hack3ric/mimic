@@ -3,8 +3,10 @@
 #include <assert.h>
 #include <linux/btf.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
+#include "common/defs.h"
 #include "common/log.h"
 #include "common/log_impl.h"  // IWYU pragma: export
 #include "common/try.h"
@@ -31,10 +33,8 @@ int main(int argc, char** argv) {
   char* buf _cleanup_malloc_str = try_p(malloc(size), "cannot malloc: %s", strret);
   try_e(fread(buf, 1, size, file), "failed to read file content: %s", strret);
 
-  struct {
-    struct btf_header* hdr;
-    char *type, *str;
-  } cur_btf = {};
+  struct btf_header* btf_hdr = NULL;
+  char *btf_type, *btf_str;
 
   char *search_ptr, *old_search_ptr = buf;
   size_t remain;
@@ -58,11 +58,11 @@ int main(int argc, char** argv) {
              search_ptr - buf, hdr->flags, hdr->type_len, hdr->type_off, hdr->str_len,
              hdr->str_off);
 
-    if (!cur_btf.hdr ||
-        cur_btf.hdr->type_len + cur_btf.hdr->str_len < hdr->type_len + hdr->str_len) {
-      cur_btf.hdr = hdr;
-      cur_btf.type = type;
-      cur_btf.str = str;
+    // Select largest BTF blob found, as it is most likely to be vmlinux's
+    if (!btf_hdr || btf_hdr->type_len + btf_hdr->str_len < hdr->type_len + hdr->str_len) {
+      btf_hdr = hdr;
+      btf_type = type;
+      btf_str = str;
     }
 
   cont:
@@ -70,11 +70,11 @@ int main(int argc, char** argv) {
   }
 
   // Stitch three parts together
-  cur_btf.hdr->type_off = 0;
-  cur_btf.hdr->str_off = cur_btf.hdr->type_len;
-  fwrite(cur_btf.hdr, 1, sizeof(*cur_btf.hdr), stdout);
-  fwrite(cur_btf.type, 1, cur_btf.hdr->type_len, stdout);
-  fwrite(cur_btf.str, 1, cur_btf.hdr->str_len, stdout);
+  btf_hdr->type_off = 0;
+  btf_hdr->str_off = btf_hdr->type_len;
+  fwrite(btf_hdr, 1, sizeof(*btf_hdr), stdout);
+  fwrite(btf_type, 1, btf_hdr->type_len, stdout);
+  fwrite(btf_str, 1, btf_hdr->str_len, stdout);
 
   return 0;
 }
