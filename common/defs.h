@@ -12,7 +12,10 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/socket.h>
+#include <unistd.h>
 #endif
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
@@ -71,6 +74,26 @@
 #define IPPROTO_NONE 59
 #define IPPROTO_DSTOPTS 60
 #define IPPROTO_MH 135
+
+#else
+
+// Cleanup utilities
+
+static inline void cleanup_fd(int* fd) {
+  if (*fd >= 0) close(*fd);
+}
+static inline void cleanup_file(FILE** file) {
+  if (*file) fclose(*file);
+}
+static inline void cleanup_malloc(void** ptr) {
+  if (*ptr) free(*ptr);
+}
+static inline void cleanup_malloc_str(char** ptr) { cleanup_malloc((void*)ptr); }
+
+#define _cleanup_fd __attribute__((__cleanup__(cleanup_fd)))
+#define _cleanup_file __attribute__((__cleanup__(cleanup_file)))
+#define _cleanup_malloc __attribute__((__cleanup__(cleanup_malloc)))
+#define _cleanup_malloc_str __attribute__((__cleanup__(cleanup_malloc_str)))
 
 #endif  // _MIMIC_BPF
 

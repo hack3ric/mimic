@@ -1,15 +1,13 @@
 #ifndef _MIMIC_MIMIC_H
 #define _MIMIC_MIMIC_H
 
-#include <argp.h>
 #include <bpf/bpf.h>
 #include <errno.h>
 #include <linux/types.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <strings.h>
-#include <unistd.h>
+#include <string.h>
+#include <sys/types.h>
 
 #include "common/defs.h"
 #include "common/try.h"
@@ -117,23 +115,5 @@ static inline int bpf_map_iter_next(struct bpf_map_iter* iter, void* key) {
     return 1;
   }
 }
-
-// Cleanup utilities
-
-static inline void cleanup_fd(int* fd) {
-  if (*fd >= 0) close(*fd);
-}
-static inline void cleanup_file(FILE** file) {
-  if (*file) fclose(*file);
-}
-static inline void cleanup_malloc(void** ptr) {
-  if (*ptr) free(*ptr);
-}
-static inline void cleanup_malloc_str(char** ptr) { cleanup_malloc((void*)ptr); }
-
-#define _cleanup_fd __attribute__((__cleanup__(cleanup_fd)))
-#define _cleanup_file __attribute__((__cleanup__(cleanup_file)))
-#define _cleanup_malloc __attribute__((__cleanup__(cleanup_malloc)))
-#define _cleanup_malloc_str __attribute__((__cleanup__(cleanup_malloc_str)))
 
 #endif  // _MIMIC_MIMIC_H
