@@ -60,7 +60,7 @@
 // Tests int return value from a function. Used for functions that returns non-zero error.
 #define try(expr, ...)                      \
   ({                                        \
-    int _ret = (expr);                      \
+    long _ret = (expr);                      \
     if (_ret < 0) ret(_ret, ##__VA_ARGS__); \
     _ret;                                   \
   })
@@ -68,7 +68,7 @@
 // Same as `try` with one arguments, but runs XDP subroutine
 #define try_tc(expr)                    \
   ({                                    \
-    int _ret = (expr);                  \
+    long _ret = (expr);                  \
     if (_ret != TC_ACT_OK) return _ret; \
     _ret;                               \
   })
@@ -76,7 +76,7 @@
 // Same as `try` with one arguments, but runs XDP subroutine
 #define try_xdp(expr)                  \
   ({                                   \
-    int _ret = (expr);                 \
+    long _ret = (expr);                 \
     if (_ret != XDP_PASS) return _ret; \
     _ret;                              \
   })
@@ -84,7 +84,7 @@
 // `try` but `cleanup`.
 #define try2(expr, ...)                         \
   ({                                            \
-    int _ret = (expr);                          \
+    long _ret = (expr);                          \
     if (_ret < 0) cleanup(_ret, ##__VA_ARGS__); \
     _ret;                                       \
   })
@@ -95,7 +95,7 @@
 // Same as `try`, but returns -errno
 #define try_e(expr, ...)          \
   ({                              \
-    int _ret = (expr);            \
+    long _ret = (expr);            \
     if (_ret < 0) {               \
       _ret = -errno;              \
       ret(-errno, ##__VA_ARGS__); \
@@ -106,7 +106,7 @@
 // `try_e` but `cleanup`.
 #define try2_e(expr, ...)           \
   ({                                \
-    int _ret = (expr);              \
+    long _ret = (expr);              \
     if (_ret < 0) {                 \
       _ret = -errno;                \
       cleanup(_ret, ##__VA_ARGS__); \
@@ -119,7 +119,7 @@
   ({                            \
     void* _ptr = (expr);        \
     if (!_ptr) {                \
-      int _ret = -errno;        \
+      long _ret = -errno;        \
       ret(_ret, ##__VA_ARGS__); \
     }                           \
     _ptr;                       \
@@ -130,7 +130,7 @@
   ({                                \
     void* _ptr = (expr);            \
     if (!_ptr) {                    \
-      int _ret = -errno;            \
+      long _ret = -errno;            \
       cleanup(_ret, ##__VA_ARGS__); \
     }                               \
     _ptr;                           \
