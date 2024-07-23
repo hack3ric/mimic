@@ -42,6 +42,7 @@ Conflicts: mimic-modules
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
+ binutils,
  pahole
 Description: eBPF UDP -> TCP obfuscator
  Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP
