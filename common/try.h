@@ -4,7 +4,7 @@
 #ifdef _MIMIC_BPF
 #else
 #include <errno.h>
-#include "../src/log.h"
+#include "common/log.h"
 #endif
 
 #define redecl(_type, _name, _off, _ctx, _ret)                              \

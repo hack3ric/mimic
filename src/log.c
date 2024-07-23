@@ -7,28 +7,9 @@
 #include <string.h>
 
 #include "common/defs.h"
+#include "common/log_impl.h"
 #include "log.h"
 #include "mimic.h"
-
-const char* log_prefixes[][2] = {
-  {BOLD RED, N_("Error")},  {BOLD YELLOW, N_(" Warn")}, {BOLD GREEN, N_(" Info")},
-  {BOLD BLUE, N_("Debug")}, {BOLD GRAY, N_("Trace")},
-};
-
-int log_verbosity = 2;
-
-void log_any(int level, const char* fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  if (log_verbosity >= level) {
-    fprintf(stderr, "%s%s " RESET, log_prefixes[level][0], gettext(log_prefixes[level][1]));
-    if (level >= LOG_TRACE) fprintf(stderr, GRAY);
-    vfprintf(stderr, fmt, ap);
-    if (level >= LOG_TRACE) fprintf(stderr, RESET);
-    fprintf(stderr, "\n");
-  }
-  va_end(ap);
-}
 
 void log_conn(int level, struct conn_tuple* conn, const char* fmt, ...) {
   va_list ap;
