@@ -1,5 +1,7 @@
 // Try to extract BTF blob from non-ELF Linux kernel image.
 
+#define _GNU_SOURCE
+
 #include <assert.h>
 #include <errno.h>
 #include <linux/btf.h>
