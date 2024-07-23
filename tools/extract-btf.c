@@ -1,6 +1,7 @@
-// Trying to extract BTF blob from non-ELF Linux kernel image.
+// Try to extract BTF blob from non-ELF Linux kernel image.
 
 #include <assert.h>
+#include <errno.h>
 #include <linux/btf.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -68,6 +69,8 @@ int main(int argc, char** argv) {
   cont:
     old_search_ptr = search_ptr + sizeof(__u16);
   }
+
+  if (!btf_hdr) ret(-ENOENT, "no BTF blob found");
 
   // Stitch three parts together
   btf_hdr->type_off = 0;
