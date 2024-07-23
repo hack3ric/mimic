@@ -47,9 +47,9 @@ struct tcp_options {
 
 static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32 ip_end,
                                    struct tcp_options* opt) {
-  __u8 opt_buf[64] = {};
+  __u8 opt_buf[80] = {};
   __u32 len = (tcp->doff << 2) - sizeof(*tcp);
-  if (len > 64) {  // TCP options too large
+  if (len > 80) {  // TCP options too large
     return XDP_DROP;
   } else if (len == 0) {  // prevent zero-sized read
     return XDP_PASS;
@@ -59,18 +59,20 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
   }
 
   for (__u32 i = 0; i < len; i++) {
-    if (i > 64 - 1) return XDP_DROP;
+    if (i > 80 - 1) return XDP_DROP;
     switch (opt_buf[i]) {
       case 0:  // end of option list
       case 1:  // no-op
         break;
       case 2:  // MSS
-        if (i > 64 - 4 || opt_buf[i + 1] != 4) return XDP_DROP;
+        if (i > 80 - 4 || opt_buf[i + 1] != 4) return XDP_DROP;
         opt->mss = (opt_buf[i + 2] << 8) + opt_buf[i + 3];
         i += 3;
         break;
       default:
-        if (i > 64 - 2) return XDP_DROP;
+        // HACK: `80 - 2` -> `80 - 3`
+        // mimic.bpf.o compiled with LLVM 18 failed eBPF verifier in Linux 6.6 or lower.
+        if (i > 80 - 3) return XDP_DROP;
         __u8 l = opt_buf[i + 1];
         if (l < 2 || i + l > len) return XDP_DROP;
         i += l - 1;
