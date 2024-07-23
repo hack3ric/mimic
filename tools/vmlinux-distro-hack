@@ -1,0 +1,35 @@
+#!/bin/sh
+#
+# Extract vmlinux (either ELF with .BTF section or entirely BTF blob) when
+# distributions do not provide it in its module path.
+#
+# See kmod/Makefile for usage with automatic kernel building tool e.g. DKMS.
+
+module_dir="$1"
+: "${VMLINUX_SUFFIX:=-$(uname -r)}"
+: "${EXTRACT_VMLINUX:="$module_dir/scripts/extract-vmlinux"}"
+: "${EXTRACT_BTF:="out/extract-btf"}"
+
+if [ ! -f "$module_dir/vmlinux" ]; then
+  if [ -f "/boot/vmlinuz$VMLINUX_SUFFIX" ]; then
+    "$EXTRACT_VMLINUX" "/boot/vmlinuz$VMLINUX_SUFFIX" >"$module_dir/vmlinux"
+    [ $? -eq 0 ] || "$EXTRACT_BTF" "/boot/vmlinuz$VMLINUX_SUFFIX" >"$module_dir/vmlinux"
+    if [ $? -ne 0 ]; then
+      >&2 echo "ERROR: cannot extract BTF from '/boot/vmlinuz$VMLINUX_SUFFIX'"
+      exit 1
+    fi
+  elif [ -f "/boot/vmlinux$VMLINUX_SUFFIX" ]; then
+    if readelf -h "/boot/vmlinux$VMLINUX_SUFFIX" >/dev/null 2>/dev/null; then
+      cp "/boot/vmlinux$VMLINUX_SUFFIX" "$module_dir/vmlinux"
+    else
+      "$EXTRACT_BTF" "/boot/vmlinux$VMLINUX_SUFFIX" >"$module_dir/vmlinux"
+      if [ $? -ne 0 ]; then
+        >&2 echo "ERROR: cannot extract BTF from '/boot/vmlinux$VMLINUX_SUFFIX'"
+        exit 1
+      fi
+    fi
+  else
+    >&2 echo "ERROR: no boot image found"
+    exit 1
+  fi
+fi
