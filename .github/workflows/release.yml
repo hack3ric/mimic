@@ -40,6 +40,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd debian/artifacts
-          for _f in mimic*.deb; do sudo mv "$_f" "Ubuntu-24.04_$_f"; done
+          for _f in mimic*.deb mimic*.ddeb; do sudo mv "$_f" "Ubuntu-24.04_$_f"; done
           gh release upload $(sed 's|refs/tags/||' <(echo ${{ github.ref }})) *.deb
 

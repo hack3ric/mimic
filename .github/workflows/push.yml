@@ -65,4 +65,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: noble
-          path: debian/artifacts/*.deb
+          path: |
+            debian/artifacts/*.deb
+            debian/artifacts/*.ddeb
