@@ -97,19 +97,6 @@ static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF) {
   return key;
 }
 
-static inline struct connection* get_conn(struct conn_tuple* key,
-                                          struct filter_settings* settings) {
-  struct connection* conn = bpf_map_lookup_elem(&mimic_conns, key);
-  if (!conn) {
-    struct connection conn_value = {.cwnd = INIT_CWND};
-    __builtin_memcpy(&conn_value.settings, settings, sizeof(*settings));
-    if (bpf_map_update_elem(&mimic_conns, key, &conn_value, BPF_ANY)) return NULL;
-    conn = bpf_map_lookup_elem(&mimic_conns, key);
-    if (!conn) return NULL;
-  }
-  return conn;
-}
-
 static void log_any(enum log_level level, enum log_type type, union log_info* info) {
   if (log_verbosity < level || !info) return;
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
