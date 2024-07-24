@@ -9,7 +9,7 @@
 #include "mimic.h"
 
 // Extend socket buffer and move n bytes from front to back.
-static __always_inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_diff) {
+static int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_diff) {
   __u16 data_len = skb->len - offset;
   try_shot(bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0));
   __u8 buf[TCP_UDP_HEADER_DIFF + 4] = {};
@@ -32,8 +32,8 @@ static __always_inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be
   return TC_ACT_OK;
 }
 
-static __always_inline void update_tcp_header(struct tcphdr* tcp, __u16 payload_len, __u32 seq,
-                                              __u32 ack_seq, __u32 cwnd) {
+static inline void update_tcp_header(struct tcphdr* tcp, __u16 payload_len, __u32 seq,
+                                     __u32 ack_seq, __u32 cwnd) {
   tcp->seq = htonl(seq);
   tcp->ack_seq = htonl(ack_seq);
   tcp_flag_word(tcp) = 0;

@@ -30,12 +30,9 @@ KERNEL_VMLINUX := /lib/modules/$(KERNEL_UNAME)/build/vmlinux
 else
 $(error vmlinux file not found)
 endif
+
 else
 BPF_CFLAGS += -D_MIMIC_BPF_TARGET_ARCH_$(shell uname -m)
-endif
-
-ifneq ($(findstring $(shell uname -m),i386 i486 i586 i686),)
-BPF_CFLAGS += -D_MIMIC_BPF_INLINE_ALL_FUNCS
 endif
 
 mimic_common_headers := $(wildcard common/*.h)

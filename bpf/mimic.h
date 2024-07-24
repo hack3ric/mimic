@@ -153,7 +153,7 @@ int use_pktbuf(enum rb_item_type type, uintptr_t buf);
     struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);                 \
     if (item) {                                                                              \
       item->log_event.level = (_l);                                                          \
-      item->log_event.type = LOG_MSG;                                                        \
+      item->log_event.type = LOG_MSG;                                             \
       _log_f(item->log_event.info.msg, sizeof(item->log_event.info.msg), _fmt, __VA_ARGS__); \
       bpf_ringbuf_submit(item, 0);                                                           \
     }                                                                                        \
@@ -182,12 +182,5 @@ static inline bool ipv6_is_ext(__u8 nexthdr) {
       return false;
   }
 }
-
-#ifdef _MIMIC_BPF_INLINE_ALL_FUNCS
-#define _mimic_maybe_static_inline static __always_inline
-#include "mimic-impl.h"  // IWYU pragma: export
-#else
-#define _mimic_maybe_static_inline
-#endif
 
 #endif  // _MIMIC_BPF_MIMIC_H

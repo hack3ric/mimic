@@ -15,7 +15,7 @@
 // applied to every data packet. For the same reason, middleboxes probably only append options like
 // MSS on handshake packets since there is no data at the end to move, so not finishing this TODO is
 // probably going to be fine.
-static __always_inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, __be32* csum_diff) {
+static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, __be32* csum_diff) {
   __u8 buf[TCP_UDP_HEADER_DIFF + 4] = {};
   __u16 data_len = buf_len - offset;
   __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
@@ -45,7 +45,7 @@ struct tcp_options {
   // TODO: more fields
 };
 
-static __always_inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32 ip_end,
+static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32 ip_end,
                                    struct tcp_options* opt) {
   __u8 opt_buf[80] = {};
   __u32 len = (tcp->doff << 2) - sizeof(*tcp);
