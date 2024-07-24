@@ -24,7 +24,7 @@ ifdef DISTRO_HACK
 
 build_dir := build
 
-VMLINUX_DISTRO_HACK ?= /usr/lib/mimic/vmlinux-distro-hack
+VMLINUX_TO_BTF ?= /usr/lib/mimic/vmlinux-to-btf
 RESOLVE_BTFIDS ?= /usr/lib/mimic/resolve_btfids
 
 export EXTRACT_VMLINUX ?= /usr/lib/mimic/extract-vmlinux
@@ -38,7 +38,7 @@ endif
 all:
 ifdef DISTRO_HACK
 	cp -rL $(SYSTEM_BUILD_DIR) $(build_dir) || true
-	$(VMLINUX_DISTRO_HACK) $(build_dir)
+	$(VMLINUX_TO_BTF) $(build_dir)
 	if [ ! -f $(build_dir)/tools/bpf/resolve_btfids/resolve_btfids ]; then \
 		install -Dm755 $(RESOLVE_BTFIDS) $(build_dir)/tools/bpf/resolve_btfids/resolve_btfids; \
 	fi
