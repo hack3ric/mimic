@@ -15,6 +15,10 @@ endif
 BPF_CFLAGS += -iquote. -Wall -std=gnu99
 CFLAGS += -iquote. -Wall -std=gnu99
 
+ifneq ($(BPF_USE_SYSTEM_VMLINUX),)
+BPF_CFLAGS += -D_MIMIC_BPF_USE_SYSTEM_VMLINUX
+use_system_vmlinux_req := bpf/vmlinux/system.h
+
 ifeq ($(KERNEL_UNAME),)
 KERNEL_VMLINUX := /sys/kernel/btf/vmlinux
 else ifeq ($(KERNEL_UNAME),$(shell uname -r))
@@ -25,6 +29,10 @@ else ifneq ($(wildcard /lib/modules/$(KERNEL_UNAME)/build/vmlinux),)
 KERNEL_VMLINUX := /lib/modules/$(KERNEL_UNAME)/build/vmlinux
 else
 $(error vmlinux file not found)
+endif
+
+else
+BPF_CFLAGS += -D_MIMIC_BPF_TARGET_ARCH_$(shell uname -m)
 endif
 
 mimic_common_headers := $(wildcard common/*.h)
@@ -66,10 +74,9 @@ build-cli: out/mimic
 build-kmod: out/mimic.ko
 build-tools: $(patsubst %,out/%,$(mimic_tools))
 
-.PHONY: generate generate-skel generate-vmlinux generate-manpage generate-pot generate-compile-commands
+.PHONY: generate generate-skel generate-manpage generate-pot generate-compile-commands
 generate: generate-skel generate-vmlinux
 generate-skel: src/bpf_skel.h
-generate-vmlinux: bpf/vmlinux.h
 generate-manpage: out/mimic.1.gz
 generate-pot: out/mimic.pot
 generate-compile-commands: compile_commands.json
@@ -88,19 +95,17 @@ clean:
 	rm -rf out/
 	find . -type f -name *.o -delete
 	rm -f src/bpf_skel.h
-	rm -f bpf/vmlinux.h
+	rm -f bpf/vmlinux/system.h
 
 out/.options.%:
 	$(mkdir_p)
 	rm out/.options.* || :
 	touch $@
 
-# Generating vmlinux.h using current kernel's vmlinux hurts (byte-by-byte) reproducibility in
-# packaging for distros. Consider bundle it with the project.
-bpf/vmlinux.h:
+bpf/vmlinux/system.h:
 	$(BPFTOOL) btf dump file $(KERNEL_VMLINUX) format c > $@
 
-$(filter bpf/%.o, $(mimic_bpf_obj)): bpf/%.o: bpf/%.c $(mimic_bpf_headers) $(check_options)
+$(filter bpf/%.o, $(mimic_bpf_obj)): bpf/%.o: bpf/%.c $(mimic_bpf_headers) $(use_system_vmlinux_req) $(check_options)
 	$(BPF_CC) $(BPF_CFLAGS) -D_MIMIC_BPF -c -o $@ $<
 
 out/mimic.bpf.o: $(mimic_bpf_obj)

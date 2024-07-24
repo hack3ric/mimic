@@ -1,17 +1,39 @@
 #!/bin/sh
 set -e
 
-uname_ver=6.9.10
+# Pick a version from Debian sid
+uname_r_ver=6.9.10
 ver=6.9.10-1
-: ${DEBIAN_MIRROR:="http://deb.debian.org/debian"}
+: ${DEBIAN_MIRROR:="http://deb.debian.org"}
 
-do_thing() {
+linux_image_filename() {
+  local debian_arch="$1"
+  local uname_r_variant="$2"
+  local suffix="$3"
+
+  if [ -z "$uname_r_variant" ]; then
+    echo "linux-image-${uname_r_ver}-*_${ver}_*.deb"
+  else
+    echo "linux-image-${uname_r_ver}-${uname_r_variant}${suffix}_${ver}_${debian_arch}.deb"
+  fi
+}
+
+do_vendor() {
   local arch="$1"
   local debian_arch="$2"
-  local uname_variant="$3"
+  local uname_r_variant="$3"
   local suffix="$4"
-  local arch_macro="$5"
-  local url="$DEBIAN_MIRROR/pool/main/l/linux/linux-image-${uname_ver}-${uname_variant}${suffix}_${ver}_${debian_arch}.deb"
+  local is_ports="$5"
+
+  if [ "$is_ports" = "ports" ]; then
+    local debian_dir=debian-ports
+    local pool_dir="pool-$debian_arch"
+  else
+    local debian_dir=debian
+    local pool_dir=pool
+  fi
+  local filename="$(linux_image_filename "$2" "$3" "$4")"
+  local url="$DEBIAN_MIRROR/$debian_dir/$pool_dir/main/l/linux/$filename"
 
   echo $url
   mkdir -p "out/$debian_arch"
@@ -23,14 +45,52 @@ do_thing() {
   )
 
   # TODO: extract vmlinux.h
-  BOOT_DIR="out/$debian_arch/boot" VMLINUX_SUFFIX="-${uname_ver}-${uname_variant}" \
+  BOOT_DIR="out/$debian_arch/boot" VMLINUX_SUFFIX="-${uname_r_ver}-${uname_r_variant}" \
     tools/vmlinux-to-btf "out/$debian_arch"
 
-  /usr/sbin/bpftool btf dump file "out/$debian_arch/vmlinux" format c >"out/$debian_arch/vmlinux.h"
+  mkdir -p bpf/vmlinux
+
+  cat >"bpf/vmlinux/$arch.h" <<EOF
+// Generated using tools/vendor-vmlinux-h from Debian $filename
+// Do not edit!
+
+EOF
+  /usr/sbin/bpftool btf dump file "out/$debian_arch/vmlinux" format c >>"bpf/vmlinux/$arch.h"
+
+  cat >>bpf/vmlinux.h <<EOF
+#elif defined(_MIMIC_BPF_TARGET_ARCH_$arch)
+#include "vmlinux/$arch.h"  // IWYU pragma: export
+EOF
 }
 
 echo $ver_rel $ver
-do_thing x86_64 amd64 amd64 "-unsigned" "defined(__x86_64__)"
-do_thing aarch64 arm64 arm64 "-unsigned" "defined(__aarch64__)"
-do_thing riscv64 riscv64 riscv64 "" "defined(__riscv__) && __riscv_xlen == 64"
-do_thing ppc64el ppc64el powerpc64le "" "defined(__powerpc64__) && defined(__LITTLE_ENDIAN__)"
+
+cat >bpf/vmlinux.h <<EOF
+// Generated using tools/vendor-vmlinux-h, do not edit!
+
+#ifndef _BPF_VMLINUX_H
+#define _BPF_VMLINUX_H
+
+#if defined(_MIMIC_BPF_USE_SYSTEM_VMLINUX)
+#include "vmlinux/system.h"  // IWYU pragma: export
+EOF
+
+do_vendor x86_64 amd64 amd64 "-unsigned"
+do_vendor aarch64 arm64 arm64 "-unsigned"
+do_vendor ppc64le ppc64el powerpc64le ""
+do_vendor riscv64 riscv64 riscv64 ""
+
+# Debian does not currently enable BTF on these architectures
+# do_vendor i686 i386 686-pae ""
+# do_vendor armv7l armhf armmp ""
+# do_vendor mips64 mips64el mips64r2el ""
+# do_vendor loongarch64 loong64 loong64 "" ports
+
+# Yet to find out a method to extract BTF from s390x boot image
+# do_vendor s390x s390x s390x ""
+
+cat >>bpf/vmlinux.h <<EOF
+#endif
+
+#endif  // _BPF_VMLINUX_H
+EOF

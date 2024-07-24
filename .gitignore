@@ -52,7 +52,7 @@ Mkfile.old
 
 /.vscode/
 /src/bpf_skel.h
-/bpf/vmlinux.h
+/bpf/vmlinux/system.h
 /out/
 /.cache
 compile_commands.json
