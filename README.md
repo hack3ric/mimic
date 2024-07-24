@@ -22,11 +22,14 @@ To check if current kernel have these options enabled, run `` grep CONFIG_[...] 
 
 BPF support varies depending on architecture, kernel version and distro configurations. Be ready if installed kernel won't load eBPF programs JITed even when enabled, or JIT does not support calling kernel function.
 
-The following is a list of kernel versions verified to work on certain architectures, or reasons why it will not work; feel free to test out and contribute to the list!
+#### Platform Support
 
 - x86_64, aarch64: >= v6.1
-- riscv64: >= v6.7
+- riscv64: [>= v6.4](https://github.com/torvalds/linux/commit/d40c3847b485acc3522b62b020f77dcd38ca357f)
 - i386: JIT will fail with `** NOT YET **: opcode 85` in kernel output
+  - This means [eBPF on i386 does not implement BPF_PSEUDO_CALL](https://github.com/torvalds/linux/blob/786c8248dbd33a5a7a07f7c6e55a7bfc68d2ca48/arch/x86/net/bpf_jit_comp32.c#L2092). This can be worked around by making all functions (except handlers) `__always_inline`.
+- arm: Does not support kfunc call
+  - There are [patches](https://lwn.net/ml/linux-kernel/20221126094530.226629-1-yangjihong1@huawei.com/) to implement this, but not merged
 
 ### Kernel Module
 
