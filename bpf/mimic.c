@@ -2,6 +2,8 @@
 
 #include <bpf/bpf_helpers.h>
 
+#include "mimic.h"
+
 int log_verbosity = 0;
 
 struct mimic_whitelist_map mimic_whitelist SEC(".maps");

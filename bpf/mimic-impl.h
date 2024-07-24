@@ -1,3 +1,6 @@
+#ifndef _MIMIC_BPF_MIMIC_IMPL_H
+#define _MIMIC_BPF_MIMIC_IMPL_H
+
 #include "vmlinux.h"
 
 #include <bpf/bpf_helpers.h>
@@ -82,3 +85,5 @@ _mimic_maybe_static_inline int use_pktbuf(enum rb_item_type type, uintptr_t buf)
   bpf_ringbuf_submit(item, 0);
   return 0;
 }
+
+#endif

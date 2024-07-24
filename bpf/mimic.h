@@ -132,10 +132,6 @@ static inline void log_destroy(enum log_level level, struct conn_tuple* conn,
   log_any(level, LOG_CONN_DESTROY, &(union log_info){.conn = *conn, .destroy_type = type});
 }
 
-int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_seq, __u32 cwnd);
-int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key);
-int use_pktbuf(enum rb_item_type type, uintptr_t buf);
-
 #define _log_a(_0, _1, _2, _3, N, ...) _##N
 #define _log_b_0() (__u64[0]){}, 0
 #define _log_b_1(_a) (__u64[1]){(__u64)(_a)}, sizeof(__u64)
@@ -189,5 +185,9 @@ static inline bool ipv6_is_ext(__u8 nexthdr) {
 #else
 #define _mimic_maybe_static_inline
 #endif
+
+_mimic_maybe_static_inline int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_seq, __u32 cwnd);
+_mimic_maybe_static_inline int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key);
+_mimic_maybe_static_inline int use_pktbuf(enum rb_item_type type, uintptr_t buf);
 
 #endif  // _MIMIC_BPF_MIMIC_H

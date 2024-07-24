@@ -1,0 +1,4 @@
+Diagnostics:
+  # mimic.h and mimic-impl.h includes each other when `_MIMIC_BPF_INLINE_ALL_
+  # FUNCS` is defined. Hacky but compiler will accept it.
+  Suppress: pp_including_mainfile_in_preamble
