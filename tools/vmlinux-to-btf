@@ -6,6 +6,7 @@
 # See kmod/Makefile for usage with automatic kernel building tool e.g. DKMS.
 
 module_dir="$1"
+endianness="$2"
 : "${VMLINUX_SUFFIX:=-$(uname -r)}"
 : "${EXTRACT_VMLINUX:="tools/extract-vmlinux"}"
 : "${EXTRACT_BTF:="out/extract-btf"}"
@@ -14,7 +15,7 @@ module_dir="$1"
 if [ ! -f "$module_dir/vmlinux" ]; then
   if [ -f "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" ]; then
     "$EXTRACT_VMLINUX" "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" >"$module_dir/vmlinux"
-    [ $? -eq 0 ] || "$EXTRACT_BTF" "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" >"$module_dir/vmlinux"
+    [ $? -eq 0 ] || "$EXTRACT_BTF" "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" "$endianness" >"$module_dir/vmlinux"
     if [ $? -ne 0 ]; then
       >&2 echo "ERROR: cannot extract BTF from '$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX'"
       exit 1
@@ -23,7 +24,7 @@ if [ ! -f "$module_dir/vmlinux" ]; then
     if readelf -h "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" >/dev/null 2>/dev/null; then
       cp "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" "$module_dir/vmlinux"
     else
-      "$EXTRACT_BTF" "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" >"$module_dir/vmlinux"
+      "$EXTRACT_BTF" "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" "$endianness" >"$module_dir/vmlinux"
       if [ $? -ne 0 ]; then
         >&2 echo "ERROR: cannot extract BTF from '$BOOT_DIR/vmlinux$VMLINUX_SUFFIX'"
         exit 1

@@ -9,10 +9,14 @@
 #include "vmlinux/x86_64.h"  // IWYU pragma: export
 #elif defined(_MIMIC_BPF_TARGET_ARCH_aarch64)
 #include "vmlinux/aarch64.h"  // IWYU pragma: export
-#elif defined(_MIMIC_BPF_TARGET_ARCH_ppc64le)
-#include "vmlinux/ppc64le.h"  // IWYU pragma: export
 #elif defined(_MIMIC_BPF_TARGET_ARCH_riscv64)
 #include "vmlinux/riscv64.h"  // IWYU pragma: export
+#elif defined(_MIMIC_BPF_TARGET_ARCH_ppc)
+#include "vmlinux/ppc.h"  // IWYU pragma: export
+#elif defined(_MIMIC_BPF_TARGET_ARCH_ppc64)
+#include "vmlinux/ppc64.h"  // IWYU pragma: export
+#elif defined(_MIMIC_BPF_TARGET_ARCH_ppc64le)
+#include "vmlinux/ppc64le.h"  // IWYU pragma: export
 #endif
 
 #endif  // _BPF_VMLINUX_H
