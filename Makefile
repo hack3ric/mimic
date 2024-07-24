@@ -66,12 +66,13 @@ build-cli: out/mimic
 build-kmod: out/mimic.ko
 build-tools: $(patsubst %,out/%,$(mimic_tools))
 
-.PHONY: generate generate-skel generate-vmlinux generate-manpage generate-pot
+.PHONY: generate generate-skel generate-vmlinux generate-manpage generate-pot generate-compile-commands
 generate: generate-skel generate-vmlinux
 generate-skel: src/bpf_skel.h
 generate-vmlinux: bpf/vmlinux.h
 generate-manpage: out/mimic.1.gz
 generate-pot: out/mimic.pot
+generate-compile-commands: compile_commands.json
 
 .PHONY: test
 test: build-cli
@@ -134,3 +135,6 @@ out/mimic.1.gz: docs/mimic.1.md
 out/mimic.pot:
 	$(mkdir_p)
 	find src -type f -regex '.*\.[ch]' | xargs xgettext -k_ -kN_ -o $@ --
+
+compile_commands.json: clean
+	bear -- $(MAKE)
