@@ -40,7 +40,7 @@ do_vendor() {
   (
     cd "out/$debian_arch"
     [ -f "$debian_arch.deb" ] || curl -Lf "$url" >"$debian_arch.deb"
-    ar xf "$debian_arch.deb"
+    ar x "$debian_arch.deb"
     tar xf data.*
   )
 
