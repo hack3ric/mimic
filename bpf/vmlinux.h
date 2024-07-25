@@ -17,6 +17,8 @@
 #include "vmlinux/ppc64.h"  // IWYU pragma: export
 #elif defined(_MIMIC_BPF_TARGET_ARCH_ppc64le)
 #include "vmlinux/ppc64le.h"  // IWYU pragma: export
+#else
+#include "vmlinux/system.h"  // IWYU pragma: export
 #endif
 
 #endif  // _BPF_VMLINUX_H

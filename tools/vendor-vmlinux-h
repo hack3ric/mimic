@@ -91,6 +91,8 @@ do_vendor ppc64le ppc64el powerpc64le "" le
 # do_vendor s390x s390x s390x "" be
 
 cat >>bpf/vmlinux.h <<EOF
+#else
+#include "vmlinux/system.h"  // IWYU pragma: export
 #endif
 
 #endif  // _BPF_VMLINUX_H
