@@ -27,6 +27,7 @@ try_decompress()
 	# "grep" that report the byte offset of the line instead of the pattern.
 
 	# Try to find the header ($1) and decompress from here
+	# XXX: Busybox grep is not supported since it does not have -b option
 	for	pos in `tr "$1\n$2" "\n$2=" < "$img" | grep -abo "^$2"`
 	do
 		pos=${pos%%:*}
@@ -45,7 +46,7 @@ then
 fi
 
 # Prepare temp files:
-tmp=$(mktemp /tmp/vmlinux-XXX)
+tmp=$(mktemp /tmp/vmlinux-XXXXXX)
 trap "rm -f $tmp" 0
 
 # That didn't work, so retry after decompression.
