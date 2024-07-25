@@ -45,9 +45,11 @@ mimic_src := $(wildcard src/*.c)
 mimic_obj := $(mimic_src:.c=.o)
 mimic_headers := src/bpf_skel.h $(wildcard src/*.h) $(mimic_common_headers)
 mimic_link_libs := -lbpf -lffi
-ifneq ($(ARGP_STANDALONE),)
+
+ifeq ($(filter "gnu libc" "glibc" "free software foundation",$(shell ldd --version 2>&1 | tr '[A-Z]' '[a-z]')),)
 mimic_link_libs += -largp
 endif
+
 ifneq ($(STATIC),)
 mimic_link_libs += -lelf -lzstd -lz
 LDFLAGS += -static
