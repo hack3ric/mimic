@@ -59,13 +59,13 @@ int parse_config_file(FILE* file, struct run_args* args);
 int parse_lock_file(FILE* file, struct lock_content* c);
 int write_lock_file(int fd, const struct lock_content* c);
 
-// TODO: track length
 struct queue {
   struct queue_node {
     struct queue_node* next;
     void* data;
     void (*data_free)(void*);
   } *head, *tail;
+  size_t len;
 };
 
 int queue_push(struct queue* q, void* data, void (*data_free)(void*));
@@ -77,6 +77,7 @@ void queue_free(struct queue* q);
 struct packet_buf {
   struct conn_tuple conn;
   struct queue queue;
+  size_t size;
 };
 
 struct packet {

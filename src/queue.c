@@ -27,6 +27,7 @@ int queue_push(struct queue* q, void* data, void (*data_free)(void*)) {
   } else {
     q->head = q->tail = node;
   }
+  q->len++;
   return 0;
 }
 
@@ -36,18 +37,19 @@ struct queue_node* queue_pop(struct queue* q) {
   q->head = q->head->next;
   result->next = NULL;
   if (!q->head) q->tail = NULL;
+  q->len--;
   return result;
 }
 
 void queue_node_free(struct queue_node* node) {
   if (!node) return;
-  queue_node_free(node->next);
   node->data_free(node->data);
   free(node);
 }
 
 void queue_free(struct queue* q) {
-  queue_node_free(q->head);
+  struct queue_node* node;
+  while ((node = queue_pop(q))) queue_node_free(node);
   q->head = q->tail = NULL;
 }
 
@@ -81,6 +83,7 @@ struct packet_buf* packet_buf_new(struct conn_tuple* conn) {
 int packet_buf_push(struct packet_buf* buf, const char* data, size_t len, bool l4_csum_partial) {
   struct packet* pkt = try_p(packet_new(data, len, l4_csum_partial));
   queue_push(&buf->queue, pkt, _packet_free_void);
+  buf->size += len;
   return 0;
 }
 
@@ -122,6 +125,7 @@ int packet_buf_consume(struct packet_buf* buf, bool* consumed) {
 void packet_buf_drain(struct packet_buf* buf) {
   if (!buf) return;
   queue_free(&buf->queue);
+  buf->size = 0;
 }
 
 void packet_buf_free(struct packet_buf* buf) {
