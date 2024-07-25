@@ -55,7 +55,7 @@ ifeq ($(vmlinux_exists),0)
 endif
 ifeq ($(resolve_btfids_exists),0)
 ifeq ($(wildcard $(RESOLVE_BTFIDS)),)
-	@echo "ERROR: `resolve_btfids` not found. Please compile it from Linux kernel source and re-run make with RESOLVE_BTFIDS=<path>."
+	@echo "ERROR: `resolve_btfids` not found; please compile it from Linux kernel source and re-run make with RESOLVE_BTFIDS=<path>"
 	@exit 1
 endif
 	install -Dm755 $(RESOLVE_BTFIDS) $(build_dir)/tools/bpf/resolve_btfids/resolve_btfids

@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
 
   const char* path = argv[1];
   FILE* file _cleanup_file =
-    try_p(fopen(path, "rb"), "failed to open file at '%s': %s", path, strret);
+    try_p(fopen(path, "rb"), "failed to open file at %s: %s", path, strret);
 
   long size = try(get_file_size(file), "failed to get file size: %s", strret);
   char* buf _cleanup_malloc_str = try_p(malloc(size), "cannot malloc: %s", strret);

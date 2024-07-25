@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include "common/defs.h"
+#include "common/log.h"
 #include "common/try.h"
 #include "log.h"
 #include "mimic.h"
@@ -107,13 +108,23 @@ int subcmd_show(struct show_args* args) {
   int ifindex = if_nametoindex(args->ifname);
   if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
 
-  char lock[64];
-  struct lock_content c;
-  get_lock_file_name(lock, sizeof(lock), ifindex);
+  char lock_path[64];
+  struct lock_content lock_content;
+  get_lock_file_name(lock_path, sizeof(lock_path), ifindex);
   {
     _cleanup_file FILE* lock_file =
-      try_p(fopen(lock, "r"), _("failed to open lock file at %s: %s"), lock, strret);
-    try(parse_lock_file(lock_file, &c));
+      try_p(fopen(lock_path, "r"), _("failed to open lock file at %s: %s"), lock_path, strret);
+    try(parse_lock_file(lock_file, &lock_content));
+  }
+
+  char proc_path[32];
+  sprintf(proc_path, "/proc/%d", lock_content.pid);
+  if (access(proc_path, F_OK) < 0) {
+    log_error(_("log file found at %s, but process with PID %d not found"), lock_path,
+              lock_content.pid);
+    log_error(_("Mimic have exited abnormally. This might be a bug. Please report to %s if it is."),
+              argp_program_bug_address);
+    return -ENOENT;
   }
 
   if (!args->show_process && !args->show_command) {
@@ -122,16 +133,16 @@ int subcmd_show(struct show_args* args) {
 
   if (args->show_process) {
     printf(_("%sMimic%s running on %s\n"), BOLD GREEN, RESET, args->ifname);
-    printf(_("  %spid:%s %d\n"), BOLD, RESET, c.pid);
+    printf(_("  %spid:%s %d\n"), BOLD, RESET, lock_content.pid);
     _cleanup_fd int whitelist_fd =
-      try(bpf_map_get_fd_by_id(c.whitelist_id), _("failed to get fd of map '%s': %s"),
+      try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
           "mimic_whitelist", strret);
-    show_overview(whitelist_fd, &c.settings, -1);
+    show_overview(whitelist_fd, &lock_content.settings, -1);
     printf("\n");
   }
 
   if (args->show_command) {
-    _cleanup_fd int conns_fd = try(bpf_map_get_fd_by_id(c.conns_id),
+    _cleanup_fd int conns_fd = try(bpf_map_get_fd_by_id(lock_content.conns_id),
                                    _("failed to get fd of map '%s': %s"), "mimic_conns", strret);
 
     char local[IP_PORT_MAX_LEN], remote[IP_PORT_MAX_LEN];

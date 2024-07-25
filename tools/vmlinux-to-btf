@@ -29,6 +29,6 @@ elif [ -f "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" ]; then
     fi
   fi
 else
-  >&2 echo "ERROR: no boot image found"
+  >&2 echo "ERROR: no boot image found; specify BOOT_DIR and VMLINUX_SUFFIX to match \$BOOT_DIR/vmlinu{x,z}\$VMLINUX_SUFFIX"
   exit 1
 fi
