@@ -4,5 +4,5 @@ built_modules="$modname.ko"
 
 build() {
   cp -r "$srcdir"/* "$builddir"
-  make $MAKEFLAGS -C "$builddir" KERNEL_UNAME="$kernel_ver" DISTRO_HACK=1
+  make $MAKEFLAGS -C "$builddir" KERNEL_UNAME="$kernel_ver"
 }

@@ -45,7 +45,7 @@ do_vendor() {
   )
 
   BOOT_DIR="out/$debian_arch/boot" VMLINUX_SUFFIX="-${uname_r_ver}-${flavor}" \
-    tools/vmlinux-to-btf "out/$debian_arch" "$endianness"
+    tools/vmlinux-to-btf "$endianness" >"out/$debian_arch/vmlinux"
 
   mkdir -p bpf/vmlinux
   cat >"bpf/vmlinux/$arch.h" <<EOF

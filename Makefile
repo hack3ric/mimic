@@ -99,7 +99,7 @@ clean:
 
 out/.options.%:
 	$(mkdir_p)
-	rm out/.options.* || :
+	rm -f out/.options.*
 	touch $@
 
 bpf/vmlinux/system.h:
@@ -121,7 +121,7 @@ out/mimic: $(mimic_obj)
 	$(mkdir_p)
 	$(CC) $(CFLAGS) $(mimic_obj) -o $@ $(LDFLAGS) $(mimic_link_libs)
 
-out/mimic.ko: .FORCE
+out/mimic.ko: .FORCE build-tools
 	$(mkdir_p)
 	$(MAKE) -C kmod
 	cp kmod/mimic.ko $@

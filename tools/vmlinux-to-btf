@@ -5,33 +5,30 @@
 #
 # See kmod/Makefile for usage with automatic kernel building tool e.g. DKMS.
 
-module_dir="$1"
-endianness="$2"
+endianness="$1"
 : "${VMLINUX_SUFFIX:=-$(uname -r)}"
 : "${EXTRACT_VMLINUX:="tools/extract-vmlinux"}"
 : "${EXTRACT_BTF:="out/extract-btf"}"
 : "${BOOT_DIR:="/boot"}"
 
-if [ ! -f "$module_dir/vmlinux" ]; then
-  if [ -f "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" ]; then
-    "$EXTRACT_VMLINUX" "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" >"$module_dir/vmlinux"
-    [ $? -eq 0 ] || "$EXTRACT_BTF" "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" "$endianness" >"$module_dir/vmlinux"
-    if [ $? -ne 0 ]; then
-      >&2 echo "ERROR: cannot extract BTF from '$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX'"
-      exit 1
-    fi
-  elif [ -f "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" ]; then
-    if readelf -h "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" >/dev/null 2>/dev/null; then
-      cp "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" "$module_dir/vmlinux"
-    else
-      "$EXTRACT_BTF" "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" "$endianness" >"$module_dir/vmlinux"
-      if [ $? -ne 0 ]; then
-        >&2 echo "ERROR: cannot extract BTF from '$BOOT_DIR/vmlinux$VMLINUX_SUFFIX'"
-        exit 1
-      fi
-    fi
-  else
-    >&2 echo "ERROR: no boot image found"
+if [ -f "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" ]; then
+  "$EXTRACT_VMLINUX" "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX"
+  [ $? -eq 0 ] || "$EXTRACT_BTF" "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" "$endianness"
+  if [ $? -ne 0 ]; then
+    >&2 echo "ERROR: cannot extract BTF from '$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX'"
     exit 1
   fi
+elif [ -f "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" ]; then
+  if readelf -h "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" >/dev/null 2>&1; then
+    cp "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" "$module_dir/vmlinux"
+  else
+    "$EXTRACT_BTF" "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" "$endianness"
+    if [ $? -ne 0 ]; then
+      >&2 echo "ERROR: cannot extract BTF from '$BOOT_DIR/vmlinux$VMLINUX_SUFFIX'"
+      exit 1
+    fi
+  fi
+else
+  >&2 echo "ERROR: no boot image found"
+  exit 1
 fi

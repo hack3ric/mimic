@@ -4,7 +4,7 @@ ccflags-y := -D_MIMIC_KMOD
 KERNEL_UNAME ?= $(shell uname -r)
 SYSTEM_BUILD_DIR := /lib/modules/$(KERNEL_UNAME)/build
 
-# Notes on distro hack:
+# Notes on hack:
 #
 # - Debian does not ship vmlinux nor resolve_btfids in
 #   linux-headers like Arch Linux does, so we need to refer to externally
@@ -20,33 +20,49 @@ SYSTEM_BUILD_DIR := /lib/modules/$(KERNEL_UNAME)/build
 # Other distributions lacking components necessary to build kernel module BTF
 # can also use the hack in packaging.
 
-ifdef DISTRO_HACK
+ifneq ($(wildcard $(SYSTEM_BUILD_DIR)/vmlinux),)
+vmlinux_exists := 1
+else
+vmlinux_exists := 0
+endif
+ifneq ($(wildcard $(SYSTEM_BUILD_DIR)/tools/bpf/resolve_btfids/resolve_btfids),)
+resolve_btfids_exists := 1
+else
+resolve_btfids_exists := 0
+endif
 
+ifeq ($(vmlinux_exists)$(resolve_btfids_exists),11)
+build_dir := $(SYSTEM_BUILD_DIR)
+else
+enable_hack := 1
 build_dir := build
 
-VMLINUX_TO_BTF ?= /usr/lib/mimic/vmlinux-to-btf
 RESOLVE_BTFIDS ?= /usr/lib/mimic/resolve_btfids
 
-export EXTRACT_VMLINUX ?= /usr/lib/mimic/extract-vmlinux
-export EXTRACT_BTF ?= /usr/lib/mimic/extract-btf
+path_extension := PATH="$$PATH:/usr/lib/mimic:$(CURDIR)/../out:$(CURDIR)/../tools"
+VMLINUX_TO_BTF ?= $(path_extension) vmlinux-to-btf
+export EXTRACT_VMLINUX ?= $(path_extension) extract-vmlinux
+export EXTRACT_BTF ?= $(path_extension) extract-btf
 export VMLINUX_SUFFIX ?= -$(KERNEL_UNAME)
 
-else
-build_dir := $(SYSTEM_BUILD_DIR)
 endif
 
 all:
-ifdef DISTRO_HACK
-	cp -rL $(SYSTEM_BUILD_DIR) $(build_dir) || true
-	$(VMLINUX_TO_BTF) $(build_dir)
-	if [ ! -f $(build_dir)/tools/bpf/resolve_btfids/resolve_btfids ]; then \
-		install -Dm755 $(RESOLVE_BTFIDS) $(build_dir)/tools/bpf/resolve_btfids/resolve_btfids; \
-	fi
+ifdef enable_hack
+	-cp -rL $(SYSTEM_BUILD_DIR) $(build_dir)
+ifeq ($(vmlinux_exists),0)
+	$(VMLINUX_TO_BTF) >$(build_dir)/vmlinux
 endif
+ifeq ($(resolve_btfids_exists),0)
+ifeq ($(wildcard $(RESOLVE_BTFIDS)),)
+	@echo "ERROR: `resolve_btfids` not found. Please compile it from Linux kernel source and re-run make with RESOLVE_BTFIDS=<path>."
+	@exit 1
+endif
+	install -Dm755 $(RESOLVE_BTFIDS) $(build_dir)/tools/bpf/resolve_btfids/resolve_btfids
+endif  # resolve_btfids_exists
+endif  # enable_hack
 	$(MAKE) -C $(build_dir) M=$(CURDIR) modules
 
 clean:
-ifdef DISTRO_HACK
-	rm -rf $(build_dir)
-endif
+	rm -rf build
 	[ ! -d $(SYSTEM_BUILD_DIR) ] || $(MAKE) -C $(SYSTEM_BUILD_DIR) M=$(CURDIR) clean
