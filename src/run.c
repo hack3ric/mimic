@@ -373,7 +373,6 @@ static int do_routine(int conns_fd, const char* ifname) {
         }
         break;
       case CONN_SYN_RECV:
-        // TODO: timeout send ACK/SYN+ACK again
         if (retry_secs >= (conn.settings.hr + 1) * conn.settings.hi) reset = true;
         break;
       default:

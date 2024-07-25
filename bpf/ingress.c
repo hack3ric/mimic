@@ -10,10 +10,10 @@
 
 // Move back n bytes, shrink socket buffer and restore data.
 //
-// TODO: handle TCP options appended by middleboxes. This requires `bpf_xdp_adjust_head` and
+// XXX: Not handling TCP options appended by middleboxes. This requires `bpf_xdp_adjust_head` and
 // `memmove`ing bytes from the start of the buffer to destination port, which is expensive when
 // applied to every data packet. For the same reason, middleboxes probably only append options like
-// MSS on handshake packets since there is no data at the end to move, so not finishing this TODO is
+// MSS on handshake packets since there is no data at the end to move, so not finishing this is
 // probably going to be fine.
 static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, __be32* csum_diff) {
   __u8 buf[TCP_UDP_HEADER_DIFF + 4] = {};
@@ -42,7 +42,7 @@ static __always_inline __u32 next_ack_seq(struct tcphdr* tcp, __u16 payload_len)
 
 struct tcp_options {
   __u16 mss;
-  // TODO: more fields
+  // more fields may be added in the future
 };
 
 static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32 ip_end,
@@ -125,7 +125,10 @@ int ingress_handler(struct xdp_md* xdp) {
   struct tcp_options opt = {};
   if (tcp->syn) try_xdp(read_tcp_options(xdp, tcp, ip_end, &opt));
 
-  // TODO: verify checksum (probably not needed?)
+  // XXX: handle matched packets regardless of their checksum. To verify checksum in XDP, loops have
+  // to be used, and it is very hard to make verifier happy with variable-length loops. So we just
+  // leave the verifying process to the kernel, since invalid packets will remain invalid after
+  // processing.
 
   uintptr_t pktbuf = 0;
 
@@ -205,8 +208,6 @@ int ingress_handler(struct xdp_md* xdp) {
     case CONN_SYN_SENT:
       if (tcp->syn) {
         ack = true;
-        // TODO: alter window for the first time
-        cwnd = conn->cwnd;
         if (tcp->ack) {
           // 3-way handshake
           conn->state = CONN_ESTABLISHED;
@@ -219,6 +220,7 @@ int ingress_handler(struct xdp_md* xdp) {
         seq = conn->seq;
         ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
         conn->peer_mss = opt.mss;
+        conn->cwnd = cwnd = 44 * opt.mss;
       } else {
         goto fsm_error;
       }
@@ -247,7 +249,6 @@ int ingress_handler(struct xdp_md* xdp) {
         __u32 peer_mss = conn->peer_mss ?: 1460;
         __u32 upper_bound = 20 * peer_mss;
         __u32 lower_bound = 2 * peer_mss;
-        // TODO: use MSS to determine the lower bound of random number
         if (random % (upper_bound - lower_bound) + lower_bound >= conn->cwnd) {
           will_send_ctrl_packet = ack = true;
           seq = conn->seq;

@@ -47,24 +47,22 @@ teardown() {
   _teardown
 }
 
-_test_random_traffic() {
+_test_random_traffic_one_sided() {
   setup_mimic_socat "$1"
   for _i in {0..499}; do
-    head -c $((SRANDOM % 1400)) /dev/urandom >>${fifo[$((RANDOM % 2))]}
+    head -c $((SRANDOM % 1400)) /dev/urandom >>${fifo[$2]}
     sleep $(echo "0.001 * $SLEEP_MULTIPLIER * ($RANDOM % 10)" | bc -l)
   done
   check_mimic_is_alive
 }
 
-@test "test Mimic against some random UDP traffic (IPv4)" {
-  _test_random_traffic v4
+@test "try to drain peer window using one-sided traffic (IPv4)" {
+  _test_random_traffic_one_sided v4 $((RANDOM % 2))
 }
 
-@test "test Mimic against some random UDP traffic (IPv6)" {
-  _test_random_traffic v6
+@test "try to drain peer window using one-sided traffic (IPv6)" {
+  _test_random_traffic_one_sided v6 $((RANDOM % 2))
 }
-
-# TODO: try to drain window using one-sided traffic
 
 @test "check conntrack status" {
   ip netns exec ${netns_internal[1]} conntrack -L >&3
