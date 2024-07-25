@@ -25,10 +25,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "bpf_skel.h"
 #include "common/checksum.h"
 #include "common/defs.h"
 #include "common/try.h"
-#include "bpf_skel.h"
 #include "log.h"
 #include "mimic.h"
 
@@ -216,8 +216,8 @@ static int store_packet(struct bpf_map* conns, struct conn_tuple* conn_key, cons
     log_warn(_("store packet event processed after connection was established"));
     return 0;
   }
-  if (!conn.pktbuf) conn.pktbuf = (uintptr_t)try2_p(pktbuf_new(conn_key));
-  try2_e(pktbuf_push((struct pktbuf*)conn.pktbuf, data, len, l4_csum_partial));
+  if (!conn.pktbuf) conn.pktbuf = (uintptr_t)try2_p(packet_buf_new(conn_key));
+  try2_e(packet_buf_push((struct packet_buf*)conn.pktbuf, data, len, l4_csum_partial));
   try2(bpf_map__update_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn),
                             BPF_EXIST | BPF_F_LOCK));
   return 0;
@@ -227,7 +227,7 @@ cleanup:
              _("connection released when attempting to store packet; freeing packet buffer"));
     retcode = 0;
   }
-  if (conn.pktbuf) pktbuf_free((struct pktbuf*)conn.pktbuf);
+  if (conn.pktbuf) packet_buf_free((struct packet_buf*)conn.pktbuf);
   return retcode;
 }
 
@@ -257,8 +257,8 @@ static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx
       break;
     case RB_ITEM_CONSUME_PKTBUF:
       name = N_("consuming packet buffer");
-      ret = pktbuf_consume((struct pktbuf*)item->pktbuf, &consumed);
-      if (!consumed) pktbuf_free((struct pktbuf*)item->pktbuf);
+      ret = packet_buf_consume((struct packet_buf*)item->pktbuf, &consumed);
+      if (!consumed) packet_buf_free((struct packet_buf*)item->pktbuf);
       if (ret < 0) {
         log_debug(_("error %s: %s"), gettext(name), strerror(-ret));
         ret = 0;
@@ -266,7 +266,7 @@ static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx
       break;
     case RB_ITEM_FREE_PKTBUF:
       name = N_("freeing packet buffer");
-      pktbuf_free((struct pktbuf*)item->pktbuf);
+      packet_buf_free((struct packet_buf*)item->pktbuf);
       break;
     default:
       name = N_("handling unknown ring buffer item");
@@ -319,7 +319,7 @@ static inline int time_diff_sec(__u64 a, __u64 b) {
 static int do_routine(int conns_fd, const char* ifname) {
   struct _conn_to_free {
     struct conn_tuple key;
-    struct pktbuf* buf;
+    struct packet_buf* buf;
   };
 
   int retcode = 0;
@@ -384,7 +384,7 @@ static int do_routine(int conns_fd, const char* ifname) {
       log_destroy(LOG_WARN, &key, DESTROY_TIMED_OUT);
       struct _conn_to_free* item = malloc(sizeof(*item));
       item->key = key;
-      item->buf = (struct pktbuf*)conn.pktbuf;
+      item->buf = (struct packet_buf*)conn.pktbuf;
       queue_push(&free_queue, item, free);
       send_ctrl_packet(&key, RST, conn.seq, 0, 0, ifname);
     }
@@ -396,7 +396,7 @@ cleanup:;
   while ((node = queue_pop(&free_queue))) {
     struct _conn_to_free* item = node->data;
     bpf_map_delete_elem(conns_fd, &item->key);
-    pktbuf_free(item->buf);
+    packet_buf_free(item->buf);
     queue_node_free(node);
   }
   return retcode;

@@ -54,7 +54,6 @@ void queue_free(struct queue* q) {
 static inline struct packet* packet_new(const char* data, size_t len, bool l4_csum_partial) {
   struct packet* result = malloc(sizeof(*result));
   if (!result) return NULL;
-  result->next = NULL;
   result->data = malloc(len);
   result->len = len;
   memcpy(result->data, data, len);
@@ -70,30 +69,26 @@ static inline void packet_free(struct packet* p) {
   free(p);
 }
 
-struct pktbuf* pktbuf_new(struct conn_tuple* conn) {
-  struct pktbuf* result = malloc(sizeof(*result));
+static inline void _packet_free_void(void* p) { packet_free(p); }
+
+struct packet_buf* packet_buf_new(struct conn_tuple* conn) {
+  struct packet_buf* result = calloc(1, sizeof(*result));
   if (!result) return NULL;
   result->conn = *conn;
-  result->head = result->tail = NULL;
   return result;
 }
 
-int pktbuf_push(struct pktbuf* buf, const char* data, size_t len, bool l4_csum_partial) {
+int packet_buf_push(struct packet_buf* buf, const char* data, size_t len, bool l4_csum_partial) {
   struct packet* pkt = try_p(packet_new(data, len, l4_csum_partial));
-  if (buf->head) {
-    buf->tail->next = pkt;
-    buf->tail = pkt;
-  } else {
-    buf->head = buf->tail = pkt;
-  }
+  queue_push(&buf->queue, pkt, _packet_free_void);
   return 0;
 }
 
-int pktbuf_consume(struct pktbuf* buf, bool* consumed) {
+int packet_buf_consume(struct packet_buf* buf, bool* consumed) {
   if (!buf) {
     *consumed = true;
     return 0;
-  } else if (!buf->head) {
+  } else if (!buf->queue.head) {
     *consumed = true;
     free(buf);
     return 0;
@@ -111,31 +106,26 @@ int pktbuf_consume(struct pktbuf* buf, bool* consumed) {
   try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)));
 
   int ret = 0;
-  for (struct packet *p = buf->head, *oldp; p;) {
+  struct queue_node* pn;
+  while ((pn = queue_pop(&buf->queue))) {
+    struct packet* p = pn->data;
     ret = ret ?: sendto(sk, p->data, p->len, 0, (struct sockaddr*)&daddr, sizeof(daddr));
     if (ret > 0) ret = 0;
-    oldp = p;
-    p = p->next;
-    packet_free(oldp);
+    queue_node_free(pn);
   }
 
   *consumed = true;
   free(buf);
-  return ret;
+  return ret < 0 ? -errno : 0;
 }
 
-void pktbuf_drain(struct pktbuf* buf) {
+void packet_buf_drain(struct packet_buf* buf) {
   if (!buf) return;
-  for (struct packet *p = buf->head, *oldp; p;) {
-    oldp = p;
-    p = p->next;
-    packet_free(oldp);
-  }
-  buf->head = buf->tail = NULL;
+  queue_free(&buf->queue);
 }
 
-void pktbuf_free(struct pktbuf* buf) {
+void packet_buf_free(struct packet_buf* buf) {
   if (!buf) return;
-  pktbuf_drain(buf);
+  packet_buf_drain(buf);
   free(buf);
 }

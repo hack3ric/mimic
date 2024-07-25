@@ -73,22 +73,22 @@ struct queue_node* queue_pop(struct queue* q);
 void queue_node_free(struct queue_node* node);
 void queue_free(struct queue* q);
 
-// TODO: use `struct queue`
 // TODO: limit stored packet count/size
-struct pktbuf {
+struct packet_buf {
   struct conn_tuple conn;
-  struct packet {
-    struct packet* next;
-    char* data;
-    size_t len;
-  } *head, *tail;
+  struct queue queue;
 };
 
-struct pktbuf* pktbuf_new(struct conn_tuple* conn);
-int pktbuf_push(struct pktbuf* buf, const char* data, size_t len, bool l4_csum_partial);
-int pktbuf_consume(struct pktbuf* buf, bool* consumed);
-void pktbuf_drain(struct pktbuf* buf);
-void pktbuf_free(struct pktbuf* buf);
+struct packet {
+  char* data;
+  size_t len;
+};
+
+struct packet_buf* packet_buf_new(struct conn_tuple* conn);
+int packet_buf_push(struct packet_buf* buf, const char* data, size_t len, bool l4_csum_partial);
+int packet_buf_consume(struct packet_buf* buf, bool* consumed);
+void packet_buf_drain(struct packet_buf* buf);
+void packet_buf_free(struct packet_buf* buf);
 
 int notify_ready();
 
