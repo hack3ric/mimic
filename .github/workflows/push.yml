@@ -12,8 +12,9 @@ jobs:
         uses: actions/checkout@v4
       - name: Install dependencies
         run: |
-          sudo apt build-dep .
-          sudo apt install clang-15 pahole
+          sudo apt install python3 clang-15 pahole \
+            bats bc conntrack ethtool iperf3 jq socat tshark wireguard-tools \
+            libffi-dev libelf-dev
       - name: Build & Test
         run: |
           export BPF_CC=clang-15
