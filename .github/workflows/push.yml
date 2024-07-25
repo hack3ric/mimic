@@ -52,7 +52,7 @@ jobs:
           name: bookworm
           path: debian/artifacts/*.deb
   build-noble:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,6 +61,9 @@ jobs:
         with:
           buildpackage-opts: -b -us -uc
           docker-image: ubuntu:noble
+      - name: Test Install
+        run: |
+          sudo apt install ./debian/artifacts/*.deb linux-headers-`uname -r`
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
