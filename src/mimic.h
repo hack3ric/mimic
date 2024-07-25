@@ -59,19 +59,22 @@ int parse_config_file(FILE* file, struct run_args* args);
 int parse_lock_file(FILE* file, struct lock_content* c);
 int write_lock_file(int fd, const struct lock_content* c);
 
-struct list {
-  struct list_node {
-    struct list_node* next;
+// TODO: track length
+struct queue {
+  struct queue_node {
+    struct queue_node* next;
     void* data;
     void (*data_free)(void*);
   } *head, *tail;
 };
 
-int list_push(struct list* list, void* data, void (*data_free)(void*));
-struct list_node* list_drain(struct list* list);
-void list_node_free(struct list_node* node);
-void list_free(struct list* list);
+int queue_push(struct queue* q, void* data, void (*data_free)(void*));
+struct queue_node* queue_pop(struct queue* q);
+void queue_node_free(struct queue_node* node);
+void queue_free(struct queue* q);
 
+// TODO: use `struct queue`
+// TODO: limit stored packet count/size
 struct pktbuf {
   struct conn_tuple conn;
   struct packet {

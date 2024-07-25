@@ -15,40 +15,40 @@
 #include "log.h"
 #include "mimic.h"
 
-int list_push(struct list* list, void* data, void (*data_free)(void*)) {
-  struct list_node* node = malloc(sizeof(*node));
+int queue_push(struct queue* q, void* data, void (*data_free)(void*)) {
+  struct queue_node* node = malloc(sizeof(*node));
   if (!node) return -errno;
   node->next = NULL;
   node->data = data;
   node->data_free = data_free;
-  if (list->head) {
-    list->tail->next = node;
-    list->tail = node;
+  if (q->head) {
+    q->tail->next = node;
+    q->tail = node;
   } else {
-    list->head = list->tail = node;
+    q->head = q->tail = node;
   }
   return 0;
 }
 
-struct list_node* list_drain(struct list* list) {
-  if (!list || !list->head) return NULL;
-  struct list_node* result = list->head;
-  list->head = list->head->next;
+struct queue_node* queue_pop(struct queue* q) {
+  if (!q || !q->head) return NULL;
+  struct queue_node* result = q->head;
+  q->head = q->head->next;
   result->next = NULL;
-  if (!list->head) list->tail = NULL;
+  if (!q->head) q->tail = NULL;
   return result;
 }
 
-void list_node_free(struct list_node* node) {
+void queue_node_free(struct queue_node* node) {
   if (!node) return;
-  list_node_free(node->next);
+  queue_node_free(node->next);
   node->data_free(node->data);
   free(node);
 }
 
-void list_free(struct list* list) {
-  list_node_free(list->head);
-  list->head = list->tail = NULL;
+void queue_free(struct queue* q) {
+  queue_node_free(q->head);
+  q->head = q->tail = NULL;
 }
 
 static inline struct packet* packet_new(const char* data, size_t len, bool l4_csum_partial) {

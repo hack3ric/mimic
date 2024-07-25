@@ -328,7 +328,7 @@ static int do_routine(int conns_fd, const char* ifname) {
   clock_gettime(CLOCK_BOOTTIME, &ts);
   __u64 tstamp = ts.tv_sec * SECOND + ts.tv_nsec;
 
-  struct list free_list = {};
+  struct queue free_queue = {};
   struct conn_tuple key;
   struct connection conn;
   struct bpf_map_iter iter = {.map_fd = conns_fd, .map_name = "mimic_conns"};
@@ -385,19 +385,19 @@ static int do_routine(int conns_fd, const char* ifname) {
       struct _conn_to_free* item = malloc(sizeof(*item));
       item->key = key;
       item->buf = (struct pktbuf*)conn.pktbuf;
-      list_push(&free_list, item, free);
+      queue_push(&free_queue, item, free);
       send_ctrl_packet(&key, RST, conn.seq, 0, 0, ifname);
     }
   }
 
   retcode = 0;
 cleanup:;
-  struct list_node* node;
-  while ((node = list_drain(&free_list))) {
+  struct queue_node* node;
+  while ((node = queue_pop(&free_queue))) {
     struct _conn_to_free* item = node->data;
     bpf_map_delete_elem(conns_fd, &item->key);
     pktbuf_free(item->buf);
-    list_node_free(node);
+    queue_node_free(node);
   }
   return retcode;
 }
