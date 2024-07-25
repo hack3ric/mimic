@@ -1,3 +1,8 @@
 modname=mimic
 modver=0.4.2
 built_modules="$modname.ko"
+
+build() {
+  cp -r "$srcdir"/* "$builddir"
+  make $MAKEFLAGS -C "$builddir" KERNEL_UNAME="$kernel_ver" DISTRO_HACK=1
+}
