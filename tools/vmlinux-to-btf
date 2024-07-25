@@ -12,17 +12,17 @@ endianness="$1"
 : "${BOOT_DIR:="/boot"}"
 
 if [ -f "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" ]; then
-  $EXTRACT_VMLINUX "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX"
-  [ $? -eq 0 ] || $EXTRACT_BTF "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" "$endianness"
+  eval $EXTRACT_VMLINUX "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX"
+  [ $? -eq 0 ] || eval $EXTRACT_BTF "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" "$endianness"
   if [ $? -ne 0 ]; then
     >&2 echo "ERROR: cannot extract BTF from '$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX'"
     exit 1
   fi
 elif [ -f "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" ]; then
   if readelf -h "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" >/dev/null 2>&1; then
-    cp "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" "$module_dir/vmlinux"
+    cat "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX"
   else
-    $EXTRACT_BTF "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" "$endianness"
+    eval $EXTRACT_BTF "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" "$endianness"
     if [ $? -ne 0 ]; then
       >&2 echo "ERROR: cannot extract BTF from '$BOOT_DIR/vmlinux$VMLINUX_SUFFIX'"
       exit 1
