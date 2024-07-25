@@ -13,16 +13,15 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt build-dep .
-          sudo apt install clang-15
-      - name: Build
+          sudo apt install clang-15 pahole
+      - name: Build & Test
         run: |
+          export BPF_CC=clang-15
           sudo cp /sys/kernel/btf/vmlinux /lib/modules/`uname -r`/build
-          make -j BPF_CC=clang-15
-      - name: Test
-        run: |
+          make -j
           sudo nft delete table filter  # Docker's nftables rule drops IPv4 packets in tests
           sudo insmod out/mimic.ko
-          sudo make test BPF_CC=clang-15
+          sudo make test
       - name: Upload captured packets
         uses: actions/upload-artifact@v4
         if: always()
