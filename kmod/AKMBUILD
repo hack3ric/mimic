@@ -1,0 +1,3 @@
+modname=mimic
+modver=0.4.2
+built_modules="$modname.ko"
