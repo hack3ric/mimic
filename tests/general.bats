@@ -14,8 +14,8 @@ load util
 
 pcap_file="$BATS_RUN_TMPDIR/general.pcapng"
 pcap_file_dest="$BATS_TEST_DIRNAME/../out/general.pcapng"
-fifo=("$BATS_RUN_TMPDIR/"{1..2}.pipe)
-output=("$BATS_RUN_TMPDIR/"{1..2}.output)
+fifo=("$BATS_RUN_TMPDIR/"general-{1..2}.pipe)
+output=("$BATS_RUN_TMPDIR/"general-{1..2}.output)
 fifo_pid=()
 socat_pid=()
 mimic_pid=()
