@@ -64,7 +64,8 @@ _test_random_traffic_one_sided() {
   _test_random_traffic_one_sided v6 $((RANDOM % 2))
 }
 
-@test "check conntrack status" {
-  ip netns exec ${netns_internal[1]} conntrack -L >&3
-  # TODO: parse output
+@test "check if TCP connections are contiguous" {
+  for _file in "${pcap_file[@]}"; do
+    [ "$(tshark -r "$_file" -T json -Y tcp.flags.reset==1 | jq length)" -eq 0 ]
+  done
 }

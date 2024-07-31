@@ -83,9 +83,10 @@ router_env_setup() {
   # Enable conntrack in router
   ip netns exec ${netns_internal[1]} nft -f - <<EOF
 table inet filter {
-  chain input {
-    type filter hook input priority 0; policy accept;
-    ct state established accept
+  chain forward {
+    type filter hook forward priority filter; policy accept;
+    ct state established,related accept
+    ip protocol tcp ct state invalid reject with tcp reset
   }
 }
 EOF
