@@ -1,5 +1,11 @@
 # Changelog for Mimic
 
+## 0.5.0 (2024-08-05)
+
+- Track TCP window size and send window change packets to prevent conntrack failure
+- (distro packages) Tries to extract vmlinux from boot image if vmlinux is not available in module build directory
+- Add passive mode, i.e. "do not initiate handshake", enabled by setting handshake interval to 0
+
 ## 0.4.2 (2024-05-24)
 
 - Fix systemd service file, adding missing \[Install\] section

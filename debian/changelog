@@ -1,3 +1,9 @@
+mimic (0.5.0-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Eric Long <i@hack3r.moe>  Mon, 05 Aug 2024 20:40:01 +0800
+
 mimic (0.4.2-1) unstable; urgency=medium
 
   * New upstream release.
