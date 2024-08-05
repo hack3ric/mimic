@@ -173,10 +173,6 @@ int parse_filter(char* filter_str, struct filter* filter, struct filter_settings
       try(parse_handshake(v, settings));
     } else if (strcmp("keepalive", k) == 0) {
       try(parse_keepalive(v, settings));
-    } else if (strcmp("passive", k) == 0) {
-      bool passive;
-      try(parse_bool(v, &passive));
-      if (passive) settings->hi = 0;
     } else {
       ret(-EINVAL, _("unsupported option type: '%s'"), k);
     }
