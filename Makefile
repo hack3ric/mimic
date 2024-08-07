@@ -32,7 +32,7 @@ $(error vmlinux file not found)
 endif
 
 else
-BPF_CFLAGS += -D_MIMIC_BPF_TARGET_ARCH_$(shell uname -m)
+BPF_CFLAGS += -D_MIMIC_BPF_TARGET_ARCH_$(shell $(CC) -dumpmachine | sed 's/-.*//')
 endif
 
 mimic_common_headers := $(wildcard common/*.h)
