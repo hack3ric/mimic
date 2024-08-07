@@ -90,11 +90,12 @@ int ingress_handler(struct xdp_md* xdp) {
 
   struct iphdr* ipv4 = NULL;
   struct ipv6hdr* ipv6 = NULL;
-  __u32 ip_end, nexthdr = 0;
+  __u32 ip_end, ip_payload_len, nexthdr = 0;
 
   if (eth_proto == ETH_P_IP) {
     redecl_drop(struct iphdr, ipv4, ETH_HLEN, xdp);
     ip_end = ETH_HLEN + (ipv4->ihl << 2);
+    ip_payload_len = ntohs(ipv4->tot_len) - (ipv4->ihl << 2);
   } else if (eth_proto == ETH_P_IPV6) {
     redecl_drop(struct ipv6hdr, ipv6, ETH_HLEN, xdp);
     nexthdr = ipv6->nexthdr;
@@ -106,6 +107,7 @@ int ingress_handler(struct xdp_md* xdp) {
       nexthdr = opt->nexthdr;
       ip_end += (opt->hdrlen + 1) << 3;
     }
+    ip_payload_len = ntohs(ipv6->payload_len);
   } else {
     return XDP_PASS;
   }
@@ -117,8 +119,12 @@ int ingress_handler(struct xdp_md* xdp) {
   struct filter_settings* settings = matches_whitelist(QUARTET_TCP);
   if (!settings) return XDP_PASS;
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP);
+  __u32 payload_len = ip_payload_len - (tcp->doff << 2);
+
   __u32 buf_len = bpf_xdp_get_buff_len(xdp);
-  __u32 payload_len = buf_len - ip_end - (tcp->doff << 2);
+  __s64 buf_diff = buf_len - ip_end - ip_payload_len;
+  if (buf_diff < 0) return XDP_DROP;
+
   log_tcp(LOG_TRACE, true, &conn_key, tcp, payload_len);
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
 
@@ -304,18 +310,18 @@ int ingress_handler(struct xdp_md* xdp) {
   __u32 csum = (__u16)~ntohs(tcp->check);
 
   __be32 csum_diff = 0;
-  try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len, &csum_diff));
+  try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len - buf_diff, &csum_diff));
   decl_drop(struct udphdr, udp, ip_end, xdp);
   csum += u32_fold(ntohl(csum_diff));
 
-  __u16 udp_len = buf_len - ip_end - TCP_UDP_HEADER_DIFF;
+  __u16 udp_len = ip_payload_len - TCP_UDP_HEADER_DIFF;
   udp->len = htons(udp_len);
 
   udp->check = 0;
   csum_diff = bpf_csum_diff((__be32*)&old_tcp, sizeof(old_tcp), (__be32*)udp, sizeof(*udp), 0);
   csum += u32_fold(ntohl(csum_diff));
 
-  __be16 oldlen = htons(buf_len - ip_end);
+  __be16 oldlen = htons(ip_payload_len);
   struct ph_part old_ph = {.protocol = IPPROTO_TCP, .len = oldlen};
   struct ph_part new_ph = {.protocol = IPPROTO_UDP, .len = udp->len};
   csum_diff = bpf_csum_diff((__be32*)&old_ph, sizeof(old_ph), (__be32*)&new_ph, sizeof(new_ph), 0);
