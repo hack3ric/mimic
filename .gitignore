@@ -55,7 +55,10 @@ Mkfile.old
 /bpf/vmlinux/system.h
 /out/
 /.cache
-compile_commands.json
 /src/kmod/build/
 /linux-source-*
+/make
+/kmod/dkms.conf
+/kmod/AKMBUILD
 .pc
+compile_commands.json

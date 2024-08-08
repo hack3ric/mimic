@@ -1,9 +1,16 @@
 obj-m += mimic.o
-mimic-objs := main.o kprobe.o
+mimic-objs := main.o
 ccflags-y := -D_MIMIC_KMOD
 
 KERNEL_UNAME ?= $(shell uname -r)
 SYSTEM_BUILD_DIR := /lib/modules/$(KERNEL_UNAME)/build
+
+CHECKSUM_HACK ?= kfunc
+ifeq ($(filter kfunc kprobe,$(CHECKSUM_HACK)),)
+$(error unknown checksum hack '$(CHECKSUM_HACK)')
+endif
+mimic-objs += csum-hack-$(CHECKSUM_HACK).o
+ccflags-y += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
 
 # Notes on hack:
 #
@@ -48,7 +55,10 @@ export VMLINUX_SUFFIX ?= -$(KERNEL_UNAME)
 
 endif
 
-all:
+all: build
+
+.PHONY: build
+build:
 ifdef enable_hack
 	-cp -rL $(SYSTEM_BUILD_DIR) $(build_dir)
 ifeq ($(vmlinux_exists),0)
@@ -64,6 +74,12 @@ endif  # resolve_btfids_exists
 endif  # enable_hack
 	$(MAKE) -C $(build_dir) M=$(CURDIR) modules
 
+.PHONY: clean
 clean:
-	rm -rf build
+	rm -rf build dkms.conf AKMBUILD
 	[ ! -d $(SYSTEM_BUILD_DIR) ] || $(MAKE) -C $(SYSTEM_BUILD_DIR) M=$(CURDIR) clean
+
+dkms.conf: dkms.conf.in
+	sed 's|@@EXTRA_OPTS@@|CHECKSUM_HACK=$(CHECKSUM_HACK)|' $^ > $@
+AKMBUILD: AKMBUILD.in
+	sed 's|@@EXTRA_OPTS@@|CHECKSUM_HACK=$(CHECKSUM_HACK)|' $^ > $@

@@ -3,7 +3,7 @@
 #include <bpf/bpf_helpers.h>
 
 #include "common/try.h"
-#include "kmod/main.h"
+#include "kmod/csum-hack.h"
 #include "main.h"
 
 int log_verbosity = 0;
@@ -46,7 +46,7 @@ int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key) {
   item->type = RB_ITEM_STORE_PACKET;
   item->store_packet.conn_key = *key;
   item->store_packet.len = data_len;
-  item->store_packet.l4_csum_partial = mimic_inspect_skb(skb)->ip_summed == CHECKSUM_PARTIAL;
+  item->store_packet.l4_csum_partial = mimic_skb_ip_summed(skb) == CHECKSUM_PARTIAL;
 
   char* packet = NULL;
   __u32 offset = 0, i = 0;

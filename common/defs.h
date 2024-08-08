@@ -110,7 +110,7 @@ static inline void cleanup_malloc_str(char** ptr) { cleanup_malloc((void*)ptr); 
 #define MAX_PACKET_SIZE 10000
 
 // Used for reading packet data in bulk
-#define SEGMENT_SIZE 256
+#define SEGMENT_SIZE 64
 
 #define INIT_CWND 0xffff
 #define CWND_SCALE 7

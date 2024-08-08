@@ -1,4 +1,3 @@
-#include <asm/ptrace.h>
 #include <linux/bpf.h>
 #include <linux/filter.h>
 #include <linux/kprobes.h>
@@ -7,7 +6,8 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 
-#include "kprobe.h"
+#include "asm/ptrace.h"
+#include "csum-hack.h"
 
 struct bpf_skb_change_proto_params {
   struct sk_buff* skb;
@@ -15,7 +15,7 @@ struct bpf_skb_change_proto_params {
   u64 flags;
 };
 
-static int entry_handler(struct kretprobe_instance* ri, struct pt_regs* regs) {
+static int bpf_skb_change_proto_entry_handler(struct kretprobe_instance* ri, struct pt_regs* regs) {
   struct bpf_skb_change_proto_params* params = (typeof(params))ri->data;
   params->skb = (void*)regs_get_kernel_argument(regs, 0);
   params->proto = regs_get_kernel_argument(regs, 1);
@@ -32,45 +32,36 @@ static int entry_handler(struct kretprobe_instance* ri, struct pt_regs* regs) {
 #endif
   return 0;
 }
-NOKPROBE_SYMBOL(entry_handler);
+NOKPROBE_SYMBOL(bpf_skb_change_proto_entry_handler);
 
-static int ret_handler(struct kretprobe_instance* ri, struct pt_regs* regs) {
+static int bpf_skb_change_proto_ret_handler(struct kretprobe_instance* ri, struct pt_regs* regs) {
   unsigned long retval = regs_return_value(regs);
   if (retval != -EINVAL) return 0;
 
   struct bpf_skb_change_proto_params* params = (typeof(params))ri->data;
-  if (!params->skb || params->flags != MAGIC_FLAG) return 0;
+  if (!params->skb) return 0;
 
-  printk("checksum: %d\n", params->skb->ip_summed);
-
-  if (params->skb->ip_summed != CHECKSUM_PARTIAL) {
-    regs_set_return_value(regs, -1);
-    return 0;
-  }
-
-  switch (params->proto) {
-    case IPPROTO_TCP:
-      printk("proto TCP, prev offset = %d\n", params->skb->csum_offset);
-      params->skb->csum_offset = offsetof(struct tcphdr, check);
-      // printk("proto TCP, after offset = %d\n", params->skb->csum_offset);
+  switch (params->flags) {
+    case MAGIC_FLAG1:
+      regs_set_return_value(regs, params->skb->ip_summed);
       break;
-    case IPPROTO_UDP:
-      printk("proto UDP\n");
-      params->skb->csum_offset = offsetof(struct udphdr, check);
+    case MAGIC_FLAG2:
+      regs_set_return_value(regs, change_csum_offset(params->skb, params->proto));
       break;
     default:
-      regs_set_return_value(regs, -1);
-      return 0;
+      break;
   }
-  regs_set_return_value(regs, 0);
   return 0;
 }
-NOKPROBE_SYMBOL(ret_handler);
+NOKPROBE_SYMBOL(bpf_skb_change_proto_ret_handler);
 
-struct kretprobe kp = {
+static struct kretprobe bpf_skb_change_proto_probe = {
   .kp.symbol_name = "bpf_skb_change_proto",
-  .entry_handler = entry_handler,
-  .handler = ret_handler,
+  .entry_handler = bpf_skb_change_proto_entry_handler,
+  .handler = bpf_skb_change_proto_ret_handler,
   .data_size = sizeof(struct bpf_skb_change_proto_params),
   .maxactive = 32,
 };
+
+int csum_hack_init(void) { return register_kretprobe(&bpf_skb_change_proto_probe); }
+void csum_hack_exit(void) { unregister_kretprobe(&bpf_skb_change_proto_probe); }

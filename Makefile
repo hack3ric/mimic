@@ -11,6 +11,8 @@ mimic_link_libs := -lbpf -lffi
 
 mimic_tools := $(patsubst tools/%.c,%,$(wildcard tools/*.c))
 
+# Compile options
+
 BPF_CC ?= clang
 BPFTOOL ?= /usr/sbin/bpftool
 
@@ -27,6 +29,21 @@ endif
 
 BPF_CFLAGS += -iquote. -Wall -std=gnu99
 CFLAGS += -iquote. -Wall -std=gnu99
+
+ifeq ($(ARGP_STANDALONE),)
+ifeq ($(filter "gnu libc" "glibc" "free software foundation",$(shell ldd --version 2>&1 | tr '[A-Z]' '[a-z]')),)
+ARGP_STANDALONE := 1
+endif
+endif
+
+ifeq ($(ARGP_STANDALONE),1)
+mimic_link_libs += -largp
+endif
+
+ifneq ($(STATIC),)
+mimic_link_libs += -lelf -lzstd -lz
+LDFLAGS += -static
+endif
 
 ifneq ($(BPF_USE_SYSTEM_VMLINUX),)
 BPF_CFLAGS += -D_MIMIC_BPF_USE_SYSTEM_VMLINUX
@@ -48,23 +65,16 @@ else
 BPF_CFLAGS += -D_MIMIC_BPF_TARGET_ARCH_$(shell $(CC) -dumpmachine | sed 's/-.*//')
 endif  # BPF_USE_SYSTEM_VMLINUX
 
-ifeq ($(ARGP_STANDALONE),)
-ifeq ($(filter "gnu libc" "glibc" "free software foundation",$(shell ldd --version 2>&1 | tr '[A-Z]' '[a-z]')),)
-ARGP_STANDALONE := 1
-endif
-endif
-
-ifeq ($(ARGP_STANDALONE),1)
-mimic_link_libs += -largp
-endif
-
-ifneq ($(STATIC),)
-mimic_link_libs += -lelf -lzstd -lz
-LDFLAGS += -static
-endif
-
 RUNTIME_DIR ?= /run/mimic
 CFLAGS += -DMIMIC_RUNTIME_DIR="\"$(RUNTIME_DIR)\""
+
+CHECKSUM_HACK ?= kfunc
+ifeq ($(filter kfunc kprobe,$(CHECKSUM_HACK)),)
+$(error unknown checksum hack '$(CHECKSUM_HACK)')
+endif
+BPF_CFLAGS += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
+
+# Rules
 
 mkdir_p = mkdir -p $(@D)
 check_options := out/.options.$(shell echo $(BPF_CC) $(CC) $(BPFTOOL) $(BPF_CFLAGS) $(CFLAGS) | sha256sum | awk '{ print $$1 }')
@@ -80,12 +90,17 @@ build-cli: out/mimic
 build-kmod: out/mimic.ko
 build-tools: $(patsubst %,out/%,$(mimic_tools))
 
-.PHONY: generate generate-skel generate-manpage generate-pot generate-compile-commands
-generate: generate-skel generate-vmlinux
+.PHONY: generate-skel generate-manpage generate-pot generate-compile-commands
 generate-skel: src/bpf_skel.h
 generate-manpage: out/mimic.1.gz
 generate-pot: out/mimic.pot
 generate-compile-commands: compile_commands.json
+
+.PHONY: generate-dkms generate-akms
+generate-dkms:
+	$(MAKE) -C kmod dkms.conf
+generate-akms:
+	$(MAKE) -C kmod AKMBUILD
 
 .PHONY: test
 test: build-cli
@@ -111,7 +126,7 @@ out/.options.%:
 bpf/vmlinux/system.h:
 	$(BPFTOOL) btf dump file $(KERNEL_VMLINUX) format c > $@
 
-$(filter bpf/%.o, $(mimic_bpf_obj)): bpf/%.o: bpf/%.c $(mimic_bpf_headers) $(use_system_vmlinux_req) $(check_options)
+$(mimic_bpf_obj): bpf/%.o: bpf/%.c $(mimic_bpf_headers) $(use_system_vmlinux_req) $(check_options)
 	$(BPF_CC) $(BPF_CFLAGS) -D_MIMIC_BPF -c -o $@ $<
 
 out/mimic.bpf.o: $(mimic_bpf_obj)
@@ -133,9 +148,9 @@ out/mimic.ko: .FORCE build-tools
 	cp kmod/mimic.ko $@
 
 define generate_tool_rule
-out/$(1): tools/$(1).c $$(mimic_common_headers)
+out/$(1): tools/$(1).c $(mimic_common_headers) $(check_options)
 	$$(mkdir_p)
-	$$(CC) $$(CFLAGS) $$< -o $$@ $$(LDFLAGS)
+	$(CC) $(CFLAGS) $$< -o $$@ $(LDFLAGS)
 endef
 $(foreach _tool,$(mimic_tools),$(eval $(call generate_tool_rule,$(_tool))))
 

@@ -25,7 +25,7 @@ extern struct mimic_conns_map {
 
 extern struct mimic_rb_map {
   __uint(type, BPF_MAP_TYPE_RINGBUF);
-  __uint(max_entries, 1 << 12);
+  __uint(max_entries, 1 << 20);
 } mimic_rb;
 
 #define IPV4_CSUM_OFF (offsetof(struct iphdr, check))
@@ -153,7 +153,7 @@ int use_pktbuf(enum rb_item_type type, uintptr_t buf);
     struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);                 \
     if (item) {                                                                              \
       item->log_event.level = (_l);                                                          \
-      item->log_event.type = LOG_MSG;                                             \
+      item->log_event.type = LOG_MSG;                                                        \
       _log_f(item->log_event.info.msg, sizeof(item->log_event.info.msg), _fmt, __VA_ARGS__); \
       bpf_ringbuf_submit(item, 0);                                                           \
     }                                                                                        \

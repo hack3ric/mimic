@@ -266,6 +266,7 @@ static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx
       break;
     case RB_ITEM_FREE_PKTBUF:
       name = N_("freeing packet buffer");
+      log_info("freeing packet buffer");
       packet_buf_free((struct packet_buf*)item->pktbuf);
       break;
     default:

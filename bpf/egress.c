@@ -5,8 +5,7 @@
 
 #include "common/defs.h"
 #include "common/try.h"
-#include "kmod/main.h"
-#include "kmod/kprobe.h"
+#include "kmod/csum-hack.h"
 #include "main.h"
 
 // Extend socket buffer and move n bytes from front to back.
@@ -160,9 +159,9 @@ int egress_handler(struct __sk_buff* skb) {
   csum_diff = bpf_csum_diff((__be32*)&old_ph, sizeof(old_ph), (__be32*)&new_ph, sizeof(new_ph), 0);
   bpf_l4_csum_replace(skb, csum_off, 0, csum_diff, BPF_F_PSEUDO_HDR);
 
-  bpf_skb_change_proto(skb, IPPROTO_TCP, MAGIC_FLAG);
+  // bpf_skb_change_proto(skb, IPPROTO_TCP, MAGIC_FLAG);
   // log_info("%llu", retval);
-  // mimic_change_csum_offset(skb, IPPROTO_TCP);
+  mimic_change_csum_offset(skb, IPPROTO_TCP);
 
   return TC_ACT_OK;
 }
