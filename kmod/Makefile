@@ -12,6 +12,10 @@ endif
 mimic-objs += csum-hack-$(CHECKSUM_HACK).o
 ccflags-y += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
 
+ifneq ($(CHECKSUM_HACK),kfunc)
+build_dir := $(SYSTEM_BUILD_DIR)
+else
+
 # Notes on hack:
 #
 # - Debian does not ship vmlinux nor resolve_btfids in
@@ -32,12 +36,12 @@ ifneq ($(wildcard $(SYSTEM_BUILD_DIR)/vmlinux),)
 vmlinux_exists := 1
 else
 vmlinux_exists := 0
-endif
+endif  # vmlinux
 ifneq ($(wildcard $(SYSTEM_BUILD_DIR)/tools/bpf/resolve_btfids/resolve_btfids),)
 resolve_btfids_exists := 1
 else
 resolve_btfids_exists := 0
-endif
+endif  # resolve_btfids
 
 ifeq ($(vmlinux_exists)$(resolve_btfids_exists),11)
 build_dir := $(SYSTEM_BUILD_DIR)
@@ -53,7 +57,8 @@ export EXTRACT_VMLINUX ?= $(path_extension) extract-vmlinux
 export EXTRACT_BTF ?= $(path_extension) extract-btf
 export VMLINUX_SUFFIX ?= -$(KERNEL_UNAME)
 
-endif
+endif  # vmlinux_exists, resolve_btfids_exists
+endif  # CHECKSUM_HACK
 
 all: build
 
