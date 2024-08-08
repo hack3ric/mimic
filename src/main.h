@@ -12,10 +12,6 @@
 #include "common/defs.h"
 #include "common/try.h"
 
-#ifndef MIMIC_RUNTIME_DIR
-#define MIMIC_RUNTIME_DIR "/run/mimic"
-#endif
-
 struct args {
   enum {
     CMD_NULL,

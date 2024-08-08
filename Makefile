@@ -1,3 +1,16 @@
+mimic_common_headers := $(wildcard common/*.h)
+
+mimic_bpf_src := $(wildcard bpf/*.c)
+mimic_bpf_obj := $(mimic_bpf_src:.c=.o)
+mimic_bpf_headers := bpf/vmlinux.h $(wildcard bpf/*.h) $(mimic_common_headers)
+
+mimic_src := $(wildcard src/*.c)
+mimic_obj := $(mimic_src:.c=.o)
+mimic_headers := src/bpf_skel.h $(wildcard src/*.h) $(mimic_common_headers)
+mimic_link_libs := -lbpf -lffi
+
+mimic_tools := $(patsubst tools/%.c,%,$(wildcard tools/*.c))
+
 BPF_CC ?= clang
 BPFTOOL ?= /usr/sbin/bpftool
 
@@ -29,22 +42,11 @@ else ifneq ($(wildcard /lib/modules/$(KERNEL_UNAME)/build/vmlinux),)
 KERNEL_VMLINUX := /lib/modules/$(KERNEL_UNAME)/build/vmlinux
 else
 $(error vmlinux file not found)
-endif
+endif  # KERNEL_UNAME
 
 else
 BPF_CFLAGS += -D_MIMIC_BPF_TARGET_ARCH_$(shell $(CC) -dumpmachine | sed 's/-.*//')
-endif
-
-mimic_common_headers := $(wildcard common/*.h)
-
-mimic_bpf_src := $(wildcard bpf/*.c)
-mimic_bpf_obj := $(mimic_bpf_src:.c=.o)
-mimic_bpf_headers := bpf/vmlinux.h $(wildcard bpf/*.h) $(mimic_common_headers)
-
-mimic_src := $(wildcard src/*.c)
-mimic_obj := $(mimic_src:.c=.o)
-mimic_headers := src/bpf_skel.h $(wildcard src/*.h) $(mimic_common_headers)
-mimic_link_libs := -lbpf -lffi
+endif  # BPF_USE_SYSTEM_VMLINUX
 
 ifeq ($(ARGP_STANDALONE),)
 ifeq ($(filter "gnu libc" "glibc" "free software foundation",$(shell ldd --version 2>&1 | tr '[A-Z]' '[a-z]')),)
@@ -61,12 +63,8 @@ mimic_link_libs += -lelf -lzstd -lz
 LDFLAGS += -static
 endif
 
-mimic_tools := $(patsubst tools/%.c,%,$(wildcard tools/*.c))
-
-RUNTIME_DIR ?=
-ifneq ($(RUNTIME_DIR),)
+RUNTIME_DIR ?= /run/mimic
 CFLAGS += -DMIMIC_RUNTIME_DIR="\"$(RUNTIME_DIR)\""
-endif
 
 mkdir_p = mkdir -p $(@D)
 check_options := out/.options.$(shell echo $(BPF_CC) $(CC) $(BPFTOOL) $(BPF_CFLAGS) $(CFLAGS) | sha256sum | awk '{ print $$1 }')
