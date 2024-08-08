@@ -1,5 +1,5 @@
 obj-m += mimic.o
-mimic-objs := main.o
+mimic-objs := main.o kprobe.o
 ccflags-y := -D_MIMIC_KMOD
 
 KERNEL_UNAME ?= $(shell uname -r)

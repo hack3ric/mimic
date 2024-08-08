@@ -4,8 +4,10 @@
 #include <linux/skbuff.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
+#include <linux/kprobes.h>
 
 #include "main.h"
+#include "kprobe.h"
 
 #ifndef __bpf_kfunc
 #define __bpf_kfunc __used noinline
@@ -74,10 +76,13 @@ static const struct btf_kfunc_id_set mimic_tc_kfunc_set = {
 static int __init mimic_init(void) {
   int ret = 0;
   ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_SCHED_CLS, &mimic_tc_kfunc_set);
+  ret = ret ?: register_kretprobe(&kp);
   return ret;
 }
 
-static void __exit mimic_exit(void) {}
+static void __exit mimic_exit(void) {
+  unregister_kretprobe(&kp);
+}
 
 module_init(mimic_init);
 module_exit(mimic_exit);
