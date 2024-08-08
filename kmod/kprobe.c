@@ -41,6 +41,8 @@ static int ret_handler(struct kretprobe_instance* ri, struct pt_regs* regs) {
   struct bpf_skb_change_proto_params* params = (typeof(params))ri->data;
   if (!params->skb || params->flags != MAGIC_FLAG) return 0;
 
+  printk("checksum: %d\n", params->skb->ip_summed);
+
   if (params->skb->ip_summed != CHECKSUM_PARTIAL) {
     regs_set_return_value(regs, -1);
     return 0;
