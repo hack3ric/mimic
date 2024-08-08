@@ -16,7 +16,7 @@ ifneq ($(CHECKSUM_HACK),kfunc)
 build_dir := $(SYSTEM_BUILD_DIR)
 else
 
-# Notes on hack:
+# Notes on build hack:
 #
 # - Debian does not ship vmlinux nor resolve_btfids in
 #   linux-headers like Arch Linux does, so we need to refer to externally
@@ -46,7 +46,7 @@ endif  # resolve_btfids
 ifeq ($(vmlinux_exists)$(resolve_btfids_exists),11)
 build_dir := $(SYSTEM_BUILD_DIR)
 else
-enable_hack := 1
+enable_build_hack := 1
 build_dir := build
 
 RESOLVE_BTFIDS ?= /usr/lib/mimic/resolve_btfids
@@ -64,7 +64,7 @@ all: build
 
 .PHONY: build
 build:
-ifdef enable_hack
+ifdef enable_build_hack
 	-cp -rL $(SYSTEM_BUILD_DIR) $(build_dir)
 ifeq ($(vmlinux_exists),0)
 	$(VMLINUX_TO_BTF) >$(build_dir)/vmlinux
@@ -76,7 +76,7 @@ ifeq ($(wildcard $(RESOLVE_BTFIDS)),)
 endif
 	install -Dm755 $(RESOLVE_BTFIDS) $(build_dir)/tools/bpf/resolve_btfids/resolve_btfids
 endif  # resolve_btfids_exists
-endif  # enable_hack
+endif  # enable_build_hack
 	$(MAKE) -C $(build_dir) M=$(CURDIR) modules
 
 .PHONY: clean
