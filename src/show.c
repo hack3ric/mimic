@@ -9,7 +9,7 @@
 #include "common/log.h"
 #include "common/try.h"
 #include "log.h"
-#include "mimic.h"
+#include "main.h"
 
 static const struct argp_option options[] = {
   {"process", 'p', NULL, 0, N_("Show process information")},

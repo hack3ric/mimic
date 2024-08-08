@@ -6,7 +6,7 @@
 #include "common/checksum.h"
 #include "common/defs.h"
 #include "common/try.h"
-#include "mimic.h"
+#include "main.h"
 
 // Move back n bytes, shrink socket buffer and restore data.
 //

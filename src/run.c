@@ -30,7 +30,7 @@
 #include "common/defs.h"
 #include "common/try.h"
 #include "log.h"
-#include "mimic.h"
+#include "main.h"
 
 static const struct argp_option options[] = {
   {"verbose", 'v', NULL, 0, N_("Output more information"), 0},

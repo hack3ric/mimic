@@ -5,8 +5,8 @@
 
 #include "common/defs.h"
 #include "common/try.h"
-#include "kmod/mimic.h"
-#include "mimic.h"
+#include "kmod/main.h"
+#include "main.h"
 
 // Extend socket buffer and move n bytes from front to back.
 static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_diff) {

@@ -5,7 +5,7 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 
-#include "mimic.h"
+#include "main.h"
 
 #ifndef __bpf_kfunc
 #define __bpf_kfunc __used noinline

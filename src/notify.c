@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #include "common/defs.h"
-#include "mimic.h"
+#include "main.h"
 
 static int notify_systemd(const char* msg) {
   size_t message_length = strlen(msg);

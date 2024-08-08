@@ -3,8 +3,8 @@
 #include <bpf/bpf_helpers.h>
 
 #include "common/try.h"
-#include "kmod/mimic.h"
-#include "mimic.h"
+#include "kmod/main.h"
+#include "main.h"
 
 int log_verbosity = 0;
 

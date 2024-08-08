@@ -9,7 +9,7 @@
 #include "common/defs.h"
 #include "common/try.h"
 #include "log.h"
-#include "mimic.h"
+#include "main.h"
 
 int main(int argc, char** argv) {
   struct args args = {};

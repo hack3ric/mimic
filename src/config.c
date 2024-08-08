@@ -12,7 +12,7 @@
 #include "common/defs.h"
 #include "common/try.h"
 #include "log.h"
-#include "mimic.h"
+#include "main.h"
 
 static inline bool is_whitespace(char c) {
   switch (c) {

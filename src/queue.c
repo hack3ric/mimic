@@ -13,7 +13,7 @@
 #include "common/defs.h"
 #include "common/try.h"
 #include "log.h"
-#include "mimic.h"
+#include "main.h"
 
 int queue_push(struct queue* q, void* data, void (*data_free)(void*)) {
   struct queue_node* node = malloc(sizeof(*node));

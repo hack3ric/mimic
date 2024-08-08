@@ -9,7 +9,7 @@
 #include "common/defs.h"
 #include "common/log_impl.h"
 #include "log.h"
-#include "mimic.h"
+#include "main.h"
 
 void log_conn(int level, struct conn_tuple* conn, const char* fmt, ...) {
   va_list ap;
