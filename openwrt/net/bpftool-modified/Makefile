@@ -7,7 +7,7 @@
 
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=bpftool-modified
+PKG_NAME:=bpftool
 PKG_VERSION:=7.4.0
 PKG_RELEASE:=1
 
@@ -22,11 +22,13 @@ PKG_BUILD_FLAGS:=no-mips16 gc-sections lto
 PKG_BUILD_PARALLEL:=1
 PKG_INSTALL:=1
 
-include $(INCLUDE_DIR)/host-build.mk
-# include $(INCLUDE_DIR)/package.mk
-# include $(INCLUDE_DIR)/nls.mk
+HOST_BUILD_PARALLEL:=1
 
-define Package/bpftool-modified/Default
+include $(INCLUDE_DIR)/package.mk
+include $(INCLUDE_DIR)/nls.mk
+include $(INCLUDE_DIR)/host-build.mk
+
+define Package/bpftool/Default
   SECTION:=net
   CATEGORY:=Network
   TITLE:=bpftool - eBPF subsystem utility
@@ -35,8 +37,8 @@ define Package/bpftool-modified/Default
   DEPENDS:=+libelf
 endef
 
-define Package/bpftool-modified-minimal
-  $(call Package/bpftool-modified/Default)
+define Package/bpftool-minimal
+  $(call Package/bpftool/Default)
   TITLE+= (Minimal)
   VARIANT:=minimal
   DEFAULT_VARIANT:=1
@@ -44,8 +46,8 @@ define Package/bpftool-modified-minimal
   ALTERNATIVES:=200:/usr/sbin/bpftool:/usr/libexec/bpftool-minimal
 endef
 
-define Package/bpftool-modified-full
-  $(call Package/bpftool-modified/Default)
+define Package/bpftool-full
+  $(call Package/bpftool/Default)
   TITLE+= (Full)
   VARIANT:=full
   PROVIDES:=bpftool
@@ -53,11 +55,11 @@ define Package/bpftool-modified-full
   DEPENDS+= +libbfd +libopcodes
 endef
 
-define Package/bpftool-modified-minimal/description
+define Package/bpftool-minimal/description
   A tool for inspection and simple manipulation of eBPF programs and maps.
 endef
 
-define Package/bpftool-modified-full/description
+define Package/bpftool-full/description
   A tool for inspection and simple manipulation of eBPF programs and maps.
   This full version uses libbfd and libopcodes to support disassembly of
   eBPF programs and jited code.
@@ -83,19 +85,25 @@ MAKE_FLAGS += \
 
 MAKE_PATH = src
 
-define Package/bpftool-modified-$(BUILD_VARIANT)/install
+define Package/bpftool-$(BUILD_VARIANT)/install
 	$(INSTALL_DIR) $(1)/usr/libexec
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/bpftool \
 		$(1)/usr/libexec/bpftool-$(BUILD_VARIANT)
 endef
 
-HOST_MAKE_PATH = src
 HOST_MAKE_FLAGS += \
 	OUTPUT="$(HOST_BUILD_DIR)/" \
 	prefix="/usr" \
 	$(if $(findstring c,$(OPENWRT_VERBOSE)),V=1,V='') \
-  feature-llvm=0 \
-  feature-libcap=0
+	check_feat=0 \
+	feature-clang-bpf-co-re=0 \
+	feature-libbfd=1 \
+	feature-llvm=0 \
+	feature-libcap=0 \
+	feature-disassembler-four-args=1 \
+	feature-disassembler-init-styled=1
+
+HOST_MAKE_PATH = src
 
 define Host/Install
 	$(INSTALL_DIR) $(STAGING_DIR_HOST)/usr/sbin
@@ -103,6 +111,6 @@ define Host/Install
 		$(STAGING_DIR_HOST)/usr/sbin/bpftool
 endef
 
+$(eval $(call BuildPackage,bpftool-full))
+$(eval $(call BuildPackage,bpftool-minimal))
 $(eval $(call HostBuild))
-# $(eval $(call BuildPackage,bpftool-modified-full))
-# $(eval $(call BuildPackage,bpftool-modified-minimal))
