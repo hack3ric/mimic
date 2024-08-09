@@ -104,5 +104,5 @@ define Host/Install
 endef
 
 $(eval $(call HostBuild))
-$(eval $(call BuildPackage,bpftool-modified-full))
-$(eval $(call BuildPackage,bpftool-modified-minimal))
+# $(eval $(call BuildPackage,bpftool-modified-full))
+# $(eval $(call BuildPackage,bpftool-modified-minimal))
