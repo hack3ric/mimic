@@ -80,6 +80,7 @@ jobs:
         uses: openwrt/gh-action-sdk@main
         env:
           ARCH: ${{ matrix.arch }}
+          V: s
       - name: Store packages
         uses: actions/upload-artifact@v2
         with:
