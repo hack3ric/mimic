@@ -21,36 +21,39 @@ LLVM_STRIP ?= llvm-strip
 # for bpf-gcc, use -mcpu=v3 -gbtf -mco-re -O2
 BPF_TARGET ?= bpf
 BPF_CFLAGS += --target=$(BPF_TARGET) -mcpu=v3 -g -O2
-MODE ?= debug
 
+BPF_CFLAGS += -iquote. -Wall -std=gnu99
+CFLAGS += -iquote. -Wall -std=gnu99
+
+# Specify compiler option presets
+MODE ?=
 ifeq ($(MODE), debug)
 CFLAGS += -O0 -g
 else ifeq ($(MODE), release)
 CFLAGS += -O2
 endif
 
-BPF_CFLAGS += -iquote. -Wall -std=gnu99
-CFLAGS += -iquote. -Wall -std=gnu99
-
+# Whether to use argp-standalone
+#
+# If host glibc is detected, the option is automatically enabled. This
+# behaviour can be overriden.
 ifeq ($(ARGP_STANDALONE),)
 ifeq ($(filter "gnu libc" "glibc" "free software foundation",$(shell ldd --version 2>&1 | tr '[A-Z]' '[a-z]')),)
 ARGP_STANDALONE := 1
 endif
 endif
-
 ifeq ($(ARGP_STANDALONE),1)
 mimic_link_libs += -largp
 endif
 
+# Whether to link CLI statically
 ifneq ($(STATIC),)
 mimic_link_libs += -lelf -lzstd -lz
 LDFLAGS += -static
 endif
 
-ifneq ($(BPF_USE_SYSTEM_VMLINUX),)
-BPF_CFLAGS += -D_MIMIC_BPF_USE_SYSTEM_VMLINUX
-use_system_vmlinux_req := bpf/vmlinux/system.h
-
+# Specify path of vmlinux for generating bpf/vmlinux/system.h
+ifeq ($(KERNEL_VMLINUX),)
 ifeq ($(KERNEL_UNAME),)
 KERNEL_VMLINUX := /sys/kernel/btf/vmlinux
 else ifeq ($(KERNEL_UNAME),$(shell uname -r))
@@ -59,17 +62,35 @@ else ifneq ($(wildcard /usr/lib/debug/lib/modules/$(KERNEL_UNAME)/vmlinux),)
 KERNEL_VMLINUX := /usr/lib/debug/lib/modules/$(KERNEL_UNAME)/vmlinux
 else ifneq ($(wildcard /lib/modules/$(KERNEL_UNAME)/build/vmlinux),)
 KERNEL_VMLINUX := /lib/modules/$(KERNEL_UNAME)/build/vmlinux
-else
-$(error vmlinux file not found)
 endif  # KERNEL_UNAME
+endif  # KERNEL_VMLINUX
 
+# Specify whether to use system vmlinux
+ifneq ($(BPF_USE_SYSTEM_VMLINUX),)
+BPF_CFLAGS += -D_MIMIC_BPF_USE_SYSTEM_VMLINUX
+use_system_vmlinux_req := bpf/vmlinux/system.h
 else
 BPF_CFLAGS += -D_MIMIC_BPF_TARGET_ARCH_$(shell $(CC) -dumpmachine | sed 's/-.*//')
 endif  # BPF_USE_SYSTEM_VMLINUX
 
+# Mimic runtime directory, where the lock files are stored
 RUNTIME_DIR ?= /run/mimic
 CFLAGS += -DMIMIC_RUNTIME_DIR="\"$(RUNTIME_DIR)\""
 
+# Select packet checksum hack method
+#
+# When transport header changes from UDP to TCP in TC, skb->csum_offset still
+# points to UDP's checksum position. Some network drivers may use the value to
+# do checksum offload, causing packet corruption. This field is not accesible
+# through BPF's `struct __sk_buff`, so we have to use kernel module to hack
+# into `struct sk_buff`.
+#
+# Selecting kfunc requires CONFIG_DEBUG_INFO_BTF=y, and running the compiled
+# Mimic requires loading the corresponding kernel module.
+#
+# Using kprobe requires CONFIG_KRETPROBES=y and CONFIG_KALLSYMS=y, and making
+# the kernel module optional. The hack simply goes out of effect if the module
+# is not loaded.
 CHECKSUM_HACK ?= kfunc
 ifeq ($(filter kfunc kprobe,$(CHECKSUM_HACK)),)
 $(error unknown checksum hack '$(CHECKSUM_HACK)')
@@ -77,6 +98,10 @@ endif
 BPF_CFLAGS += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
 CFLAGS += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
 
+# Whether to strip .BTF.ext section from BPF object
+#
+# Removing the section removes dependency on kernel BTF and improves
+# compatibility, but also makes the program lose CO-RE functionality.
 STRIP_BTF_EXT ?=
 
 # Enable BPF dynamic pointer usage (requires Linux >= 6.1)
@@ -84,7 +109,7 @@ STRIP_BTF_EXT ?=
 # This is used in caching outgoing packets while attempting handshake, and
 # re-send them afterwards. It is a quality-of-life feature, but not necessary.
 ENABLE_BPF_DYNPTR ?= 1
-ifneq ($(ENABLE_BPF_DYNPTR),)
+ifeq ($(ENABLE_BPF_DYNPTR),1)
 BPF_CFLAGS += -DMIMIC_ENABLE_BPF_DYNPTR
 endif
 
@@ -138,7 +163,12 @@ out/.options.%:
 	touch $@
 
 bpf/vmlinux/system.h:
+ifneq ($(KERNEL_VMLINUX),)
 	$(BPFTOOL) btf dump file $(KERNEL_VMLINUX) format c > $@
+else
+	@echo vmlinux file not found and KERNEL_VMLINUX not specified >2
+	@exit 1
+endif
 
 $(mimic_bpf_obj): bpf/%.o: bpf/%.c $(mimic_bpf_headers) $(use_system_vmlinux_req) $(check_options)
 	$(BPF_CC) $(BPF_CFLAGS) -D_MIMIC_BPF -c -o $@ $<
