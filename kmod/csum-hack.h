@@ -16,7 +16,7 @@ int csum_hack_init(void);
 void csum_hack_exit(void);
 #endif
 
-#define MAGIC_FLAG1 0xfc9e39d58639b65a
+#define MAGIC_FLAG1 0xfc9e39d5
 #define MAGIC_FLAG2 0x4eb37b03751ff785
 
 #ifdef _MIMIC_KMOD
@@ -46,7 +46,7 @@ int mimic_change_csum_offset(struct __sk_buff* skb, __u16 protocol) __ksym;
 
 #elif defined(MIMIC_CHECKSUM_HACK_kprobe)
 static inline int mimic_skb_ip_summed(struct __sk_buff* skb) {
-  return bpf_skb_change_proto(skb, 0, MAGIC_FLAG1);
+  return bpf_skb_change_type(skb, MAGIC_FLAG1);
 }
 static inline int mimic_change_csum_offset(struct __sk_buff* skb, __u16 protocol) {
   return bpf_skb_change_proto(skb, protocol, MAGIC_FLAG2);

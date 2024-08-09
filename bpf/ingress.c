@@ -136,7 +136,7 @@ int ingress_handler(struct xdp_md* xdp) {
   // leave the verifying process to the kernel, since invalid packets will remain invalid after
   // processing.
 
-  uintptr_t pktbuf = 0;
+  __u64 pktbuf = 0;
 
   // Quick path for RST
   if (tcp->rst) {

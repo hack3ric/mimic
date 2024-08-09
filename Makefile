@@ -74,6 +74,9 @@ ifeq ($(filter kfunc kprobe,$(CHECKSUM_HACK)),)
 $(error unknown checksum hack '$(CHECKSUM_HACK)')
 endif
 BPF_CFLAGS += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
+CFLAGS += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
+
+STRIP_BTF_EXT ?=
 
 # Rules
 

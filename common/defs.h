@@ -60,7 +60,9 @@
 #define ETH_P_IPV6 0x86DD /* IPv6 over bluebook	*/
 
 // defined in linux/tcp.h
+#ifndef tcp_flag_word
 #define tcp_flag_word(tp) (((union tcp_word_hdr*)(tp))->words[3])
+#endif
 
 #define CHECKSUM_NONE 0
 #define CHECKSUM_UNNECESSARY 1
@@ -188,7 +190,7 @@ struct connection {
     CONN_ESTABLISHED,
   } state;
   __u32 seq, ack_seq;
-  uintptr_t pktbuf;
+  __u64 pktbuf;
   __u32 cwnd;
   __u64 retry_tstamp, reset_tstamp, stale_tstamp;
   bool keepalive_sent;
@@ -266,7 +268,7 @@ struct rb_item {
       __u16 len;
       bool l4_csum_partial;
     } store_packet;
-    uintptr_t pktbuf;
+    __u64 pktbuf;
   };
   // additional buffer follows
 };

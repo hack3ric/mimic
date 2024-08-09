@@ -78,5 +78,12 @@ static struct kretprobe bpf_skb_change_proto_probe = {
   .maxactive = 32,
 };
 
+struct bpf_skb_change_type_params {
+  struct sk_buff* skb;
+  u32 type;
+};
+
+// TODO: kretprobe bpf_skb_change_type
+
 int csum_hack_init(void) { return register_kretprobe(&bpf_skb_change_proto_probe); }
 void csum_hack_exit(void) { unregister_kretprobe(&bpf_skb_change_proto_probe); }

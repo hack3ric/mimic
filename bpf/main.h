@@ -133,8 +133,8 @@ static inline void log_destroy(enum log_level level, struct conn_tuple* conn,
 }
 
 int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_seq, __u32 cwnd);
-int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key);
-int use_pktbuf(enum rb_item_type type, uintptr_t buf);
+int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key, int ip_summed);
+int use_pktbuf(enum rb_item_type type, __u64 buf);
 
 #define _log_a(_0, _1, _2, _3, N, ...) _##N
 #define _log_b_0() (__u64[0]){}, 0

@@ -28,6 +28,7 @@
 #include "bpf_skel.h"
 #include "common/checksum.h"
 #include "common/defs.h"
+#include "common/log.h"
 #include "common/try.h"
 #include "log.h"
 #include "main.h"
@@ -216,7 +217,7 @@ static int store_packet(struct bpf_map* conns, struct conn_tuple* conn_key, cons
     log_warn(_("store packet event processed after connection was established"));
     return 0;
   }
-  if (!conn.pktbuf) conn.pktbuf = (uintptr_t)try2_p(packet_buf_new(conn_key));
+  if (!conn.pktbuf) conn.pktbuf = (__u64)(uintptr_t)try2_p(packet_buf_new(conn_key));
   try2_e(packet_buf_push((struct packet_buf*)conn.pktbuf, data, len, l4_csum_partial));
   try2(bpf_map__update_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn),
                             BPF_EXIST | BPF_F_LOCK));
@@ -419,6 +420,14 @@ cleanup:;
   _get_id(map, map, _name, _("failed to get fd of map '%s': %s"), \
           _("failed to get info of map '%s': %s"))
 
+static inline bool is_kmod_loaded() {
+  _cleanup_file FILE* modules = fopen("/proc/modules", "r");
+  char buf[256];
+  while (fgets(buf, sizeof(buf), modules))
+    if (strncmp("mimic ", buf, 6) == 0) return true;
+  return false;
+}
+
 static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname, int ifindex) {
   int retcode;
   struct mimic_bpf* skel = NULL;
@@ -438,28 +447,30 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
 
   skel = try2_p(mimic_bpf__open(), _("failed to open BPF program: %s"), strret);
 
+#ifdef MIMIC_CHECKSUM_HACK_kprobe
+  if (!is_kmod_loaded()) {
+    log_warn(_("Mimic kernel module not loaded, kprobe checksum hack not applied"));
+    log_warn(_("if traffic flowing through Mimic does not work properly, make sure "
+               "%sCONFIG_KRETPROBE%s is enabled in kernel and load the module."),
+             BOLD, RESET);
+    // TODO: disable checksum hack
+  }
+#endif
+
   retcode = mimic_bpf__load(skel);
   if (retcode < 0) {
     log_error(_("failed to load BPF program: %s"), strerror(-retcode));
-    if (-retcode == EINVAL) {
-      FILE* modules = fopen("/proc/modules", "r");
-      char buf[256];
-      while (fgets(buf, sizeof(buf), modules)) {
-        if (strncmp("mimic", buf, 5) == 0) goto einval_end;
-      }
+#ifdef MIMIC_CHECKSUM_HACK_kfunc
+    if (-retcode == EINVAL && !is_kmod_loaded())
       log_error(_("hint: did you load the Mimic kernel module?"));
-    einval_end:
-      fclose(modules);
-    }
+#endif
     cleanup(retcode);
   }
 
   // Save state to lock file
-
   struct bpf_prog_info prog_info = {};
   struct bpf_map_info map_info = {};
   __u32 prog_len = sizeof(prog_info), map_len = sizeof(map_info);
-
   struct lock_content lock_content = {
     .pid = getpid(),
     .egress_id = _get_prog_id(egress_handler),

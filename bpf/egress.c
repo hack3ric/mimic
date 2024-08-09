@@ -3,6 +3,7 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
 
+#include "common/checksum.h"
 #include "common/defs.h"
 #include "common/try.h"
 #include "kmod/csum-hack.h"
@@ -119,7 +120,25 @@ int egress_handler(struct __sk_buff* skb) {
         bpf_spin_unlock(&conn->lock);
         break;
     }
-    return store_packet(skb, ip_end, &conn_key);
+    int ip_summed = mimic_skb_ip_summed(skb);
+    if (ip_summed < 0) {
+      // If we can't determine skb->ip_summed, calculate partial checksum on our own
+      __u32 partial_pre_csum = 0;
+      if (ipv4) {
+        partial_pre_csum += u32_fold(ntohl(ipv4->saddr));
+        partial_pre_csum += u32_fold(ntohl(ipv4->daddr));
+      } else if (ipv6) {
+        for (int i = 0; i < 8; i++) {
+          partial_pre_csum += ntohs(ipv6->saddr.in6_u.u6_addr16[i]);
+          partial_pre_csum += ntohs(ipv6->daddr.in6_u.u6_addr16[i]);
+        }
+      }
+      partial_pre_csum += ip_proto;
+      partial_pre_csum += udp_len;
+      udp->check = htons(~csum_fold(partial_pre_csum));
+      ip_summed = CHECKSUM_PARTIAL;
+    }
+    return store_packet(skb, ip_end, &conn_key, ip_summed);
   }
   conn_cwnd = conn->cwnd;
   bpf_spin_unlock(&conn->lock);
@@ -159,8 +178,6 @@ int egress_handler(struct __sk_buff* skb) {
   csum_diff = bpf_csum_diff((__be32*)&old_ph, sizeof(old_ph), (__be32*)&new_ph, sizeof(new_ph), 0);
   bpf_l4_csum_replace(skb, csum_off, 0, csum_diff, BPF_F_PSEUDO_HDR);
 
-  // bpf_skb_change_proto(skb, IPPROTO_TCP, MAGIC_FLAG);
-  // log_info("%llu", retval);
   mimic_change_csum_offset(skb, IPPROTO_TCP);
 
   return TC_ACT_OK;

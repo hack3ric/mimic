@@ -3,7 +3,6 @@
 #include <bpf/bpf_helpers.h>
 
 #include "common/try.h"
-#include "kmod/csum-hack.h"
 #include "main.h"
 
 int log_verbosity = 0;
@@ -30,7 +29,7 @@ int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_
   return 0;
 }
 
-int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key) {
+int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key, int ip_summed) {
   int retcode;
   __u32 data_len = skb->len - pkt_off;
   if (!key || data_len > MAX_PACKET_SIZE) return TC_ACT_SHOT;
@@ -46,7 +45,7 @@ int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key) {
   item->type = RB_ITEM_STORE_PACKET;
   item->store_packet.conn_key = *key;
   item->store_packet.len = data_len;
-  item->store_packet.l4_csum_partial = mimic_skb_ip_summed(skb) == CHECKSUM_PARTIAL;
+  item->store_packet.l4_csum_partial = ip_summed == CHECKSUM_PARTIAL;
 
   char* packet = NULL;
   __u32 offset = 0, i = 0;
@@ -78,7 +77,7 @@ cleanup:
 }
 
 // Need to manually clear conn.pktbuf in eBPF
-int use_pktbuf(enum rb_item_type type, uintptr_t buf) {
+int use_pktbuf(enum rb_item_type type, __u64 buf) {
   if (type != RB_ITEM_CONSUME_PKTBUF && type != RB_ITEM_FREE_PKTBUF) return -1;
   if (!buf) return 0;
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
