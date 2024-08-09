@@ -7,7 +7,7 @@
 
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=bpftool
+PKG_NAME:=bpftool-modified
 PKG_VERSION:=7.4.0
 PKG_RELEASE:=1
 
@@ -26,7 +26,7 @@ include $(INCLUDE_DIR)/host-build.mk
 # include $(INCLUDE_DIR)/package.mk
 # include $(INCLUDE_DIR)/nls.mk
 
-define Package/bpftool/Default
+define Package/bpftool-modified/Default
   SECTION:=net
   CATEGORY:=Network
   TITLE:=bpftool - eBPF subsystem utility
@@ -35,8 +35,8 @@ define Package/bpftool/Default
   DEPENDS:=+libelf
 endef
 
-define Package/bpftool-minimal
-  $(call Package/bpftool/Default)
+define Package/bpftool-modified-minimal
+  $(call Package/bpftool-modified/Default)
   TITLE+= (Minimal)
   VARIANT:=minimal
   DEFAULT_VARIANT:=1
@@ -44,8 +44,8 @@ define Package/bpftool-minimal
   ALTERNATIVES:=200:/usr/sbin/bpftool:/usr/libexec/bpftool-minimal
 endef
 
-define Package/bpftool-full
-  $(call Package/bpftool/Default)
+define Package/bpftool-modified-full
+  $(call Package/bpftool-modified/Default)
   TITLE+= (Full)
   VARIANT:=full
   PROVIDES:=bpftool
@@ -53,11 +53,11 @@ define Package/bpftool-full
   DEPENDS+= +libbfd +libopcodes
 endef
 
-define Package/bpftool-minimal/description
+define Package/bpftool-modified-minimal/description
   A tool for inspection and simple manipulation of eBPF programs and maps.
 endef
 
-define Package/bpftool-full/description
+define Package/bpftool-modified-full/description
   A tool for inspection and simple manipulation of eBPF programs and maps.
   This full version uses libbfd and libopcodes to support disassembly of
   eBPF programs and jited code.
@@ -83,7 +83,7 @@ MAKE_FLAGS += \
 
 MAKE_PATH = src
 
-define Package/bpftool-$(BUILD_VARIANT)/install
+define Package/bpftool-modified-$(BUILD_VARIANT)/install
 	$(INSTALL_DIR) $(1)/usr/libexec
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/bpftool \
 		$(1)/usr/libexec/bpftool-$(BUILD_VARIANT)
@@ -104,5 +104,5 @@ define Host/Install
 endef
 
 $(eval $(call HostBuild))
-# $(eval $(call BuildPackage,bpftool-full))
-# $(eval $(call BuildPackage,bpftool-minimal))
+$(eval $(call BuildPackage,bpftool-modified-full))
+$(eval $(call BuildPackage,bpftool-modified-minimal))
