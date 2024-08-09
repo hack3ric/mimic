@@ -451,7 +451,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   if (!is_kmod_loaded()) {
     log_warn(_("Mimic kernel module not loaded, kprobe checksum hack not applied"));
     log_warn(_("if traffic flowing through Mimic does not work properly, make sure "
-               "%sCONFIG_KRETPROBE%s is enabled in kernel and load the module."),
+               "%sCONFIG_KRETPROBE%s is enabled in kernel and load the module"),
              BOLD, RESET);
     // TODO: disable checksum hack
   }
