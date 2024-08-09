@@ -2,7 +2,7 @@
 
 #include <bpf/bpf_helpers.h>
 
-#include "common/try.h"
+#include "common/defs.h"
 #include "main.h"
 
 int log_verbosity = 0;
@@ -28,6 +28,10 @@ int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_
   bpf_ringbuf_submit(item, 0);
   return 0;
 }
+
+#ifdef MIMIC_ENABLE_BPF_DYNPTR
+
+#include "common/try.h"
 
 int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key, int ip_summed) {
   int retcode;
@@ -87,5 +91,15 @@ int use_pktbuf(enum rb_item_type type, __u64 buf) {
   bpf_ringbuf_submit(item, 0);
   return 0;
 }
+
+#else
+
+int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key, int ip_summed) {
+  return TC_ACT_SHOT;
+}
+
+int use_pktbuf(enum rb_item_type type, __u64 buf) { return 0; }
+
+#endif  // MIMIC_ENABLE_BPF_DYNPTR
 
 char _license[] SEC("license") = "GPL";

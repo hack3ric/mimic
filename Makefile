@@ -79,6 +79,15 @@ CFLAGS += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
 
 STRIP_BTF_EXT ?=
 
+# Enable BPF dynamic pointer usage (requires Linux >= 6.1)
+#
+# This is used in caching outgoing packets while attempting handshake, and
+# re-send them afterwards. It is a quality-of-life feature, but not necessary.
+ENABLE_BPF_DYNPTR ?= 1
+ifneq ($(ENABLE_BPF_DYNPTR),)
+BPF_CFLAGS += -DMIMIC_ENABLE_BPF_DYNPTR
+endif
+
 # Rules
 
 mkdir_p = mkdir -p $(@D)
