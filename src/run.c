@@ -218,7 +218,7 @@ static int store_packet(struct bpf_map* conns, struct conn_tuple* conn_key, cons
     return 0;
   }
   if (!conn.pktbuf) conn.pktbuf = (__u64)(uintptr_t)try2_p(packet_buf_new(conn_key));
-  try2_e(packet_buf_push((struct packet_buf*)conn.pktbuf, data, len, l4_csum_partial));
+  try2_e(packet_buf_push((struct packet_buf*)(uintptr_t)conn.pktbuf, data, len, l4_csum_partial));
   try2(bpf_map__update_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn),
                             BPF_EXIST | BPF_F_LOCK));
   return 0;
@@ -228,7 +228,7 @@ cleanup:
              _("connection released when attempting to store packet; freeing packet buffer"));
     retcode = 0;
   }
-  if (conn.pktbuf) packet_buf_free((struct packet_buf*)conn.pktbuf);
+  if (conn.pktbuf) packet_buf_free((struct packet_buf*)(uintptr_t)conn.pktbuf);
   return retcode;
 }
 
@@ -258,8 +258,8 @@ static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx
       break;
     case RB_ITEM_CONSUME_PKTBUF:
       name = N_("consuming packet buffer");
-      ret = packet_buf_consume((struct packet_buf*)item->pktbuf, &consumed);
-      if (!consumed) packet_buf_free((struct packet_buf*)item->pktbuf);
+      ret = packet_buf_consume((struct packet_buf*)(uintptr_t)item->pktbuf, &consumed);
+      if (!consumed) packet_buf_free((struct packet_buf*)(uintptr_t)item->pktbuf);
       if (ret < 0) {
         log_debug(_("error %s: %s"), gettext(name), strerror(-ret));
         ret = 0;
@@ -268,7 +268,7 @@ static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx
     case RB_ITEM_FREE_PKTBUF:
       name = N_("freeing packet buffer");
       log_info("freeing packet buffer");
-      packet_buf_free((struct packet_buf*)item->pktbuf);
+      packet_buf_free((struct packet_buf*)(uintptr_t)item->pktbuf);
       break;
     default:
       name = N_("handling unknown ring buffer item");
@@ -385,7 +385,7 @@ static int do_routine(int conns_fd, const char* ifname) {
       log_destroy(LOG_WARN, &key, DESTROY_TIMED_OUT);
       struct _conn_to_free* item = malloc(sizeof(*item));
       item->key = key;
-      item->buf = (struct packet_buf*)conn.pktbuf;
+      item->buf = (struct packet_buf*)(uintptr_t)conn.pktbuf;
       queue_push(&free_queue, item, free);
       send_ctrl_packet(&key, RST, conn.seq, 0, 0, ifname);
     }
