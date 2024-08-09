@@ -19,7 +19,8 @@ LLVM_STRIP ?= llvm-strip
 
 # -g is required (by Clang) to generate BTF
 # for bpf-gcc, use -mcpu=v3 -gbtf -mco-re -O2
-BPF_CFLAGS += --target=bpf -mcpu=v3 -g -O2
+BPF_TARGET ?= bpf
+BPF_CFLAGS += --target=$(BPF_TARGET) -mcpu=v3 -g -O2
 MODE ?= debug
 
 ifeq ($(MODE), debug)
