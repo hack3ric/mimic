@@ -18,10 +18,14 @@ struct bpf_skb_change_proto_params {
 static int bpf_skb_change_proto_entry_handler(struct kretprobe_instance* ri, struct pt_regs* regs) {
   struct bpf_skb_change_proto_params* params = (typeof(params))ri->data;
 
-#if defined(__LP64__)
+#if defined(__LP64__) || !defined(__mips__)
   params->skb = (void*)regs_get_kernel_argument(regs, 0);
   params->proto = regs_get_kernel_argument(regs, 1);
   params->flags = regs_get_kernel_argument(regs, 2);
+#elif defined(__mips64__)
+  params->skb = (void*)regs->regs[4];
+  params->proto = regs->regs[5];
+  params->flags = regs->regs[6];
 #else
   // FIXME: most 32-bit kernels does not have `regs_get_kernel_argument`, need to follow calling
   // conventions
@@ -30,6 +34,11 @@ static int bpf_skb_change_proto_entry_handler(struct kretprobe_instance* ri, str
   params->proto = regs->uregs[1];
   unsigned long a2 = regs->uregs[2];
   unsigned long a3 = regs->uregs[3];
+#elif defined(__mips__)
+  params->skb = (void*)regs->regs[4];
+  params->proto = regs->regs[5];
+  unsigned long a2 = regs->regs[6];
+  unsigned long a3 = regs->regs[7];
 #else
   params->skb = (void*)regs_get_kernel_argument(regs, 0);
   params->proto = regs_get_kernel_argument(regs, 1);
