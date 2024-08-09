@@ -17,19 +17,36 @@ struct bpf_skb_change_proto_params {
 
 static int bpf_skb_change_proto_entry_handler(struct kretprobe_instance* ri, struct pt_regs* regs) {
   struct bpf_skb_change_proto_params* params = (typeof(params))ri->data;
+
+#if defined(CONFIG_64BIT)
   params->skb = (void*)regs_get_kernel_argument(regs, 0);
   params->proto = regs_get_kernel_argument(regs, 1);
-#if defined(CONFIG_32BIT)
+  params->flags = regs_get_kernel_argument(regs, 2);
+#elif defined(CONFIG_32BIT)
+  // FIXME: most 32-bit kernels does not have `regs_get_kernel_argument`, need to follow calling
+  // conventions
+#if defined(__arm__)
+  params->skb = (void*)regs->uregs[0];
+  params->proto = regs->uregs[1];
+  unsigned long a2 = regs->uregs[2];
+  unsigned long a3 = regs->uregs[3];
+#else
+  params->skb = (void*)regs_get_kernel_argument(regs, 0);
+  params->proto = regs_get_kernel_argument(regs, 1);
   unsigned long a2 = regs_get_kernel_argument(regs, 2);
   unsigned long a3 = regs_get_kernel_argument(regs, 3);
+#endif
+
 #if defined(CONFIG_CPU_BIG_ENDIAN)
   params->flags = ((u64)a2 << 32) + a3;
 #else
   params->flags = ((u64)a3 << 32) + a2;
 #endif
+
 #else
-  params->flags = regs_get_kernel_argument(regs, 2);
-#endif
+#error don't know how to get kernel arguments
+#endif  // CONFIG_*BIT
+
   return 0;
 }
 NOKPROBE_SYMBOL(bpf_skb_change_proto_entry_handler);
