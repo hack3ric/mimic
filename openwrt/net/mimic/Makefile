@@ -12,6 +12,8 @@ PKG_SOURCE := $(commit).tar.gz
 PKG_SOURCE_URL := https://github.com/hack3ric/mimic/archive
 PKG_HASH := b628a6e642d4fec8acd91b87a8bd4e3f856f84d7d6926af1f2f28ca568163aec
 
+PKG_BUILD_DEPENDS := argp-standalone bpf-headers bpftool/host
+
 include $(INCLUDE_DIR)/package.mk
 
 define Package/mimic
@@ -40,6 +42,7 @@ mimic_kmod_flags := \
 mimic_cli_flags := \
 	MODE= \
 	BPF_CC="$(CLANG)" \
+	BPFTOOL="$(STAGING_DIR_HOST)/usr/sbin/bpftool" \
 	BPF_TARGET="$(BPF_TARGET)" \
 	ARGP_STANDALONE=1 \
 	CHECKSUM_HACK=kprobe \
