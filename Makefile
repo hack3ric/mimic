@@ -15,6 +15,7 @@ mimic_tools := $(patsubst tools/%.c,%,$(wildcard tools/*.c))
 
 BPF_CC ?= clang
 BPFTOOL ?= /usr/sbin/bpftool
+LLVM_STRIP ?= llvm-strip
 
 # -g is required (by Clang) to generate BTF
 # for bpf-gcc, use -mcpu=v3 -gbtf -mco-re -O2
@@ -132,6 +133,9 @@ $(mimic_bpf_obj): bpf/%.o: bpf/%.c $(mimic_bpf_headers) $(use_system_vmlinux_req
 out/mimic.bpf.o: $(mimic_bpf_obj)
 	$(mkdir_p)
 	$(BPFTOOL) gen object $@ $(mimic_bpf_obj)
+ifneq ($(STRIP_BTF_EXT),)
+	$(LLVM_STRIP) --remove-section=.BTF.ext --no-strip-all $@
+endif
 
 src/bpf_skel.h: out/mimic.bpf.o
 	$(BPFTOOL) gen skeleton out/mimic.bpf.o > $@
