@@ -6,7 +6,7 @@ on:
 
 jobs:
   build-openwrt:
-    name: Build OpenWrt ${{ matrix.revision }} packages for ${{ matrix.arch }}
+    name: Build ${{ matrix.revision }} packages for ${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -15,7 +15,6 @@ jobs:
           - armsr-armv7
           - armsr-armv8
           - malta-le
-          - malta-le64
         revision:
           - openwrt-23.05
           - SNAPSHOT
