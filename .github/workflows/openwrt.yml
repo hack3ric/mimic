@@ -11,10 +11,9 @@ jobs:
     strategy:
       matrix:
         arch:
-          - x86-64
-          - armsr-armv7
-          - armsr-armv8
-          - malta-le
+          - x86_64
+          - aarch64_generic
+          - mipsel_24kc
         revision:
           - openwrt-23.05
           - SNAPSHOT
