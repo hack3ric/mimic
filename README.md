@@ -1,0 +1,1 @@
+# Mimic OpenWrt packaging

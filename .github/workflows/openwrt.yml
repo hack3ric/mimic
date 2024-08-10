@@ -1,0 +1,31 @@
+name: OpenWrt package build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-openwrt:
+    name: Build OpenWrt packages for ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch:
+          - x86_64-23.05.4
+          - aarch64_generic-23.05.4
+          - mipsel_24kc-23.05.4
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Build
+        uses: openwrt/gh-action-sdk@main
+        env:
+          ARCH: ${{ matrix.arch }}
+          PACKAGES: mimic
+          V: s
+      - name: Store packages
+        uses: actions/upload-artifact@v2
+        with:
+          name: openwrt-${{ matrix.arch }}
+          path: bin/packages/${{ matrix.arch }}/action/*.ipk
