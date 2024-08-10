@@ -6,7 +6,7 @@ on:
 
 jobs:
   build-openwrt:
-    name: Build OpenWrt ${{ matrix.version }} packages for ${{ matrix.arch }}
+    name: Build OpenWrt ${{ matrix.revision }} packages for ${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -16,8 +16,8 @@ jobs:
           - armsr-armv8
           - malta-le
           - malta-le64
-        version:
-          - 23.05.4
+        revision:
+          - openwrt-23.05
           - SNAPSHOT
     steps:
       - uses: actions/checkout@v4
@@ -26,13 +26,13 @@ jobs:
       - name: Build
         uses: openwrt/gh-action-sdk@main
         env:
-          ARCH: ${{ matrix.arch }}-${{ matrix.version }}
+          ARCH: ${{ matrix.arch }}-${{ matrix.revision }}
           PACKAGES: mimic
           V: s
       - name: Store packages
         uses: actions/upload-artifact@v4
         with:
-          name: openwrt-${{ matrix.arch }}-${{ matrix.version }}
+          name: ${{ matrix.arch }}-${{ matrix.revision }}
           path: |
             bin/packages/*/action/*.ipk
             bin/targets/*/*/packages/kmod-mimic*.ipk
