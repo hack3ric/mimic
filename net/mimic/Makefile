@@ -3,14 +3,14 @@ include $(INCLUDE_DIR)/bpf.mk
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME := mimic
-PKG_VERSION := 0.5.0-22-g709a786
+PKG_VERSION := v0.5.0-25-g078a1b7
 PKG_RELEASE := 1
-commit := 709a786ae9bff9324134ee9926c3038da4310d19
+commit := 078a1b7d84b6e44b31307f3b8d51219bacaaffc3
 
 PKG_BUILD_DIR := $(BUILD_DIR)/mimic-$(commit)
 PKG_SOURCE := $(commit).tar.gz
 PKG_SOURCE_URL := https://github.com/hack3ric/mimic/archive
-PKG_HASH := b628a6e642d4fec8acd91b87a8bd4e3f856f84d7d6926af1f2f28ca568163aec
+PKG_HASH := 38a2cc8c6e3a70e18afcefec5d48f39604db710d9abb407916851335e63a1964
 
 PKG_BUILD_DEPENDS := argp-standalone bpf-headers mimic-bpftool/host
 
@@ -49,6 +49,7 @@ mimic_cli_flags := \
 	CHECKSUM_HACK=kprobe \
 	RUNTIME_DIR=/var/run/mimic \
 	ENABLE_BPF_DYNPTR=0 \
+	ENABLE_XDP_FRAGS=0 \
 	STRIP_BTF_EXT=1
 
 export BPF_CFLAGS := \
