@@ -1,6 +1,7 @@
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/bpf.mk
 include $(INCLUDE_DIR)/kernel.mk
+include $(INCLUDE_DIR)/version.mk
 
 PKG_NAME := mimic
 PKG_VERSION := v0.5.0-25-g078a1b7
@@ -48,9 +49,13 @@ mimic_cli_flags := \
 	ARGP_STANDALONE=1 \
 	CHECKSUM_HACK=kprobe \
 	RUNTIME_DIR=/var/run/mimic \
-	ENABLE_BPF_DYNPTR=0 \
-	ENABLE_XDP_FRAGS=0 \
 	STRIP_BTF_EXT=1
+
+ifneq ($(filter 23.05%,$(VERSION_NUMBER)),)
+mimic_cli_flags += \
+	ENABLE_BPF_DYNPTR=0 \
+	ENABLE_XDP_FRAGS=0
+endif
 
 export BPF_CFLAGS := \
 	-I$(BPF_HEADERS_DIR)/user_headers/include \
