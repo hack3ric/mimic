@@ -15,6 +15,7 @@ jobs:
           - aarch64_generic
           - mipsel_24kc
         revision:
+          - openwrt-23.05
           - SNAPSHOT
     steps:
       - uses: actions/checkout@v4
