@@ -1,8 +1,6 @@
-diff --git a/bpf/ingress.c b/bpf/ingress.c
-index 2436ce4..e7a8f04 100644
 --- a/bpf/ingress.c
 +++ b/bpf/ingress.c
-@@ -83,7 +83,7 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
+@@ -83,7 +83,7 @@ static inline int read_tcp_options(struc
    return XDP_PASS;
  }
  
