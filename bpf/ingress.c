@@ -121,10 +121,6 @@ int ingress_handler(struct xdp_md* xdp) {
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP);
   __u32 payload_len = ip_payload_len - (tcp->doff << 2);
 
-  __u32 buf_len = bpf_xdp_get_buff_len(xdp);
-  __s64 buf_diff = buf_len - ip_end - ip_payload_len;
-  if (buf_diff < 0) return XDP_DROP;
-
   log_tcp(LOG_TRACE, true, &conn_key, tcp, payload_len);
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
 
@@ -310,7 +306,7 @@ int ingress_handler(struct xdp_md* xdp) {
   __u32 csum = (__u16)~ntohs(tcp->check);
 
   __be32 csum_diff = 0;
-  try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), buf_len - buf_diff, &csum_diff));
+  try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), ip_end + ip_payload_len, &csum_diff));
   decl_drop(struct udphdr, udp, ip_end, xdp);
   csum += u32_fold(ntohl(csum_diff));
 
