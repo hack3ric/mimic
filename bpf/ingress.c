@@ -83,7 +83,11 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
   return XDP_PASS;
 }
 
+#ifdef MIMIC_ENABLE_XDP_FRAGS
 SEC("xdp.frags")
+#else
+SEC("xdp")
+#endif
 int ingress_handler(struct xdp_md* xdp) {
   decl_pass(struct ethhdr, eth, 0, xdp);
   __u16 eth_proto = ntohs(eth->h_proto);

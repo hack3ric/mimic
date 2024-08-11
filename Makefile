@@ -113,6 +113,12 @@ ifeq ($(ENABLE_BPF_DYNPTR),1)
 BPF_CFLAGS += -DMIMIC_ENABLE_BPF_DYNPTR
 endif
 
+# Enable XDP fragment support (requires Linux >= 5.18?)
+ENABLE_XDP_FRAGS ?= 1
+ifeq ($(ENABLE_XDP_FRAGS),1)
+BPF_CFLAGS += -DMIMIC_ENABLE_XDP_FRAGS
+endif
+
 # Rules
 
 mkdir_p = mkdir -p $(@D)
