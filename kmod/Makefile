@@ -1,6 +1,6 @@
 obj-m += mimic.o
 mimic-objs := main.o
-ccflags-y := -D_MIMIC_KMOD
+ccflags-y := -D_MIMIC_KMOD -std=gnu99 -Wno-error=declaration-after-statement
 
 KERNEL_UNAME ?= $(shell uname -r)
 SYSTEM_BUILD_DIR := /lib/modules/$(KERNEL_UNAME)/build
