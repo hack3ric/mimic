@@ -114,7 +114,7 @@ int egress_handler(struct __sk_buff* skb) {
         conn->retry_tstamp = conn->reset_tstamp = tstamp;
         bpf_spin_unlock(&conn->lock);
         log_conn(LOG_INFO, LOG_CONN_INIT, &conn_key);
-        send_ctrl_packet(&conn_key, SYN, seq, ack_seq, 0xffff);
+        send_ctrl_packet(&conn_key, TCP_FLAG_SYN, seq, ack_seq, 0xffff);
         break;
       default:
         bpf_spin_unlock(&conn->lock);

@@ -146,8 +146,10 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
 
   try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strret);
 
+  __be32 flags = htonl(s->flags << 16);
+
   // TCP header + (MSS + window scale + SACK PERM) if SYN
-  size_t buf_len = sizeof(struct tcphdr) + (s->syn ? 3 * 4 : 0);
+  size_t buf_len = sizeof(struct tcphdr) + (flags & TCP_FLAG_SYN ? 3 * 4 : 0);
   csum += buf_len;
 
   _cleanup_malloc void* buf = malloc(buf_len);
@@ -157,16 +159,14 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
     .dest = htons(s->conn.remote_port),
     .seq = htonl(s->seq),
     .ack_seq = htonl(s->ack_seq),
-    .doff = buf_len >> 2,
-    .syn = s->syn,
-    .ack = s->ack,
-    .rst = s->rst,
-    .window = htons(s->syn ? s->cwnd : (s->cwnd >> CWND_SCALE)),
     .check = 0,
     .urg_ptr = 0,
   };
+  tcp_flag_word(tcp) = flags;
+  tcp->doff = buf_len >> 2;
+  tcp->window = htons(flags & TCP_FLAG_SYN ? s->cwnd : (s->cwnd >> CWND_SCALE));
 
-  if (s->syn) {
+  if (flags & TCP_FLAG_SYN) {
     // Look up MTU in time for (probably) correctness
     struct ifreq ifr;
     strncpy(ifr.ifr_name, ifname, sizeof(ifr.ifr_name));
@@ -194,13 +194,11 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
   return 0;
 }
 
-static inline int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_seq,
+static inline int send_ctrl_packet(struct conn_tuple* conn, __be32 flags, __u32 seq, __u32 ack_seq,
                                    __u32 cwnd, const char* ifname) {
   struct send_options s = {
     .conn = *conn,
-    .syn = flags & SYN,
-    .ack = flags & ACK,
-    .rst = flags & RST,
+    .flags = htons(ntohl(flags) >> 16),
     .seq = seq,
     .ack_seq = ack_seq,
     .cwnd = cwnd,
@@ -267,7 +265,6 @@ static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx
       break;
     case RB_ITEM_FREE_PKTBUF:
       name = N_("freeing packet buffer");
-      log_info("freeing packet buffer");
       packet_buf_free((struct packet_buf*)(uintptr_t)item->pktbuf);
       break;
     default:
@@ -352,7 +349,7 @@ static int do_routine(int conns_fd, const char* ifname) {
             log_conn(LOG_DEBUG, &key, _("sending keepalive"));
             conn.reset_tstamp = tstamp;
             conn.keepalive_sent = true;
-            send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
+            send_ctrl_packet(&key, TCP_FLAG_ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
             bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
           } else {
             int reset_secs = time_diff_sec(tstamp, conn.reset_tstamp);
@@ -360,7 +357,7 @@ static int do_routine(int conns_fd, const char* ifname) {
               reset = true;
             } else if (reset_secs % conn.settings.ki == 0) {
               log_conn(LOG_DEBUG, &key, _("sending keepalive"));
-              send_ctrl_packet(&key, ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
+              send_ctrl_packet(&key, TCP_FLAG_ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
             }
           }
         }
@@ -370,7 +367,7 @@ static int do_routine(int conns_fd, const char* ifname) {
           reset = true;
         } else if (retry_secs != 0 && retry_secs % conn.settings.hi == 0) {
           log_conn(LOG_INFO, &key, _("retry sending SYN"));
-          send_ctrl_packet(&key, SYN, conn.seq - 1, 0, 0xffff, ifname);
+          send_ctrl_packet(&key, TCP_FLAG_SYN, conn.seq - 1, 0, 0xffff, ifname);
           // pktbuf_drain((struct pktbuf*)conn.pktbuf);
         }
         break;
@@ -387,7 +384,7 @@ static int do_routine(int conns_fd, const char* ifname) {
       item->key = key;
       item->buf = (struct packet_buf*)(uintptr_t)conn.pktbuf;
       queue_push(&free_queue, item, free);
-      send_ctrl_packet(&key, RST, conn.seq, 0, 0, ifname);
+      send_ctrl_packet(&key, TCP_FLAG_RST, conn.seq, 0, 0, ifname);
     }
   }
 
@@ -590,6 +587,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   retcode = 0;
 cleanup:
   log_info(_("cleaning up"));
+  // TODO: send RST to all
   sigprocmask(SIG_SETMASK, NULL, NULL);
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
   if (xdp_ingress) bpf_link__destroy(xdp_ingress);

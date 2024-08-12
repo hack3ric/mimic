@@ -104,10 +104,6 @@ static inline void cleanup_malloc_str(char** ptr) { cleanup_malloc((void*)ptr); 
 // max: "remote=[%pI6]:%d\0"
 #define FILTER_FMT_MAX_LEN (8 + INET6_ADDRSTRLEN + 2 + 5 + 1)
 
-#define SYN 1
-#define ACK (1 << 1)
-#define RST (1 << 2)
-
 // Mainly used for limiting loop counts
 #define MAX_PACKET_SIZE 10000
 
@@ -200,7 +196,7 @@ struct connection {
 
 struct send_options {
   struct conn_tuple conn;
-  bool syn, ack, rst;
+  __u16 flags;
   __u32 seq, ack_seq;
   __u32 cwnd;
 };
@@ -250,7 +246,7 @@ struct log_event {
 
 extern struct log_event _e;
 _Static_assert(sizeof(_e.info) == sizeof(_e.info.msg),
-               "Message length should match its parent union");
+               "message length should match its parent union");
 
 struct rb_item {
   enum rb_item_type {

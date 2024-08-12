@@ -152,7 +152,7 @@ int ingress_handler(struct xdp_md* xdp) {
   if (!conn) {
     // Quick path for ACK without connection
     if (tcp->ack) {
-      send_ctrl_packet(&conn_key, RST, htonl(tcp->ack_seq), 0, 0);
+      send_ctrl_packet(&conn_key, TCP_FLAG_RST, htonl(tcp->ack_seq), 0, 0);
       return XDP_DROP;
     }
 
@@ -162,12 +162,14 @@ int ingress_handler(struct xdp_md* xdp) {
     conn = try_p_drop(bpf_map_lookup_elem(&mimic_conns, &conn_key));
   }
 
-  bool syn, ack, rst, is_keepalive, will_send_ctrl_packet, will_drop, newly_estab;
+  bool is_keepalive, will_send_ctrl_packet, will_drop, newly_estab;
+  is_keepalive = newly_estab = false;
+  will_send_ctrl_packet = will_drop = true;
+
+  __be32 flags = 0;
   __u32 seq = 0, ack_seq = 0, cwnd = 0xffff;
   __u32 random = bpf_get_prandom_u32();
   __u64 tstamp = bpf_ktime_get_boot_ns();
-  syn = ack = rst = is_keepalive = newly_estab = false;
-  will_send_ctrl_packet = will_drop = true;
 
   bpf_spin_lock(&conn->lock);
 
@@ -178,7 +180,7 @@ int ingress_handler(struct xdp_md* xdp) {
     case CONN_IDLE:
       if (tcp->syn && !tcp->ack) {
         conn->state = CONN_SYN_RECV;
-        syn = ack = true;
+        flags |= TCP_FLAG_SYN | TCP_FLAG_ACK;
         seq = conn->seq = random;
         ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
         conn->seq += 1;
@@ -192,7 +194,7 @@ int ingress_handler(struct xdp_md* xdp) {
       if (tcp->syn && !tcp->ack) {
         __u32 new_ack_seq = next_ack_seq(tcp, payload_len);
         if (new_ack_seq != conn->ack_seq) goto fsm_error;
-        syn = ack = true;
+        flags |= TCP_FLAG_SYN | TCP_FLAG_ACK;
         seq = conn->seq++;
         ack_seq = new_ack_seq;
         conn->peer_mss = opt.mss;
@@ -209,7 +211,7 @@ int ingress_handler(struct xdp_md* xdp) {
 
     case CONN_SYN_SENT:
       if (tcp->syn) {
-        ack = true;
+        flags |= TCP_FLAG_ACK;
         if (tcp->ack) {
           // 3-way handshake
           conn->state = CONN_ESTABLISHED;
@@ -233,7 +235,8 @@ int ingress_handler(struct xdp_md* xdp) {
         goto fsm_error;
       } else if (ntohl(tcp->seq) == conn->ack_seq - 1) {
         // Received keepalive; send keepalive ACK
-        ack = is_keepalive = true;
+        flags |= TCP_FLAG_ACK;
+        is_keepalive = true;
         seq = conn->seq;
         ack_seq = conn->ack_seq;
         cwnd = conn->cwnd;
@@ -252,7 +255,8 @@ int ingress_handler(struct xdp_md* xdp) {
         __u32 upper_bound = 20 * peer_mss;
         __u32 lower_bound = 2 * peer_mss;
         if (random % (upper_bound - lower_bound) + lower_bound >= conn->cwnd) {
-          will_send_ctrl_packet = ack = true;
+          will_send_ctrl_packet = true;
+          flags |= TCP_FLAG_ACK;
           seq = conn->seq;
           ack_seq = conn->ack_seq;
           conn->cwnd = cwnd = 44 * peer_mss;
@@ -263,7 +267,7 @@ int ingress_handler(struct xdp_md* xdp) {
 
     default:
     fsm_error:
-      rst = true;
+      flags |= TCP_FLAG_RST;
       swap(pktbuf, conn->pktbuf);
       seq = conn->seq;
       break;
@@ -272,11 +276,10 @@ int ingress_handler(struct xdp_md* xdp) {
 
   bpf_spin_unlock(&conn->lock);
 
-  if (syn && ack) log_conn(LOG_INFO, LOG_CONN_ACCEPT, &conn_key);
-  if (will_send_ctrl_packet) {
-    send_ctrl_packet(&conn_key, syn * SYN | ack * ACK | rst * RST, seq, ack_seq, rst ? 0 : cwnd);
-  }
-  if (rst) {
+  if (flags & TCP_FLAG_SYN && flags & TCP_FLAG_ACK) log_conn(LOG_INFO, LOG_CONN_ACCEPT, &conn_key);
+  if (will_send_ctrl_packet)
+    send_ctrl_packet(&conn_key, flags, seq, ack_seq, flags & TCP_FLAG_RST ? 0 : cwnd);
+  if (flags & TCP_FLAG_RST) {
     log_destroy(LOG_WARN, &conn_key, DESTROY_INVALID);
     bpf_map_delete_elem(&mimic_conns, &conn_key);
     use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);

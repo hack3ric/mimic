@@ -119,7 +119,7 @@ static inline void log_tcp(enum log_level level, bool recv, struct conn_tuple* c
   union log_info info = {
     .conn = *conn,
     .len = len,
-    .flags = tcp->syn * SYN | tcp->ack * ACK | tcp->rst * RST,
+    .flags = ntohl(tcp_flag_word(tcp)) >> 16,
     .seq = htonl(tcp->seq),
     .ack_seq = htonl(tcp->ack_seq),
   };
@@ -132,7 +132,7 @@ static inline void log_destroy(enum log_level level, struct conn_tuple* conn,
   log_any(level, LOG_CONN_DESTROY, &(union log_info){.conn = *conn, .destroy_type = type});
 }
 
-int send_ctrl_packet(struct conn_tuple* conn, __u16 flags, __u32 seq, __u32 ack_seq, __u32 cwnd);
+int send_ctrl_packet(struct conn_tuple* conn, __be32 flags, __u32 seq, __u32 ack_seq, __u32 cwnd);
 int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key, int ip_summed);
 int use_pktbuf(enum rb_item_type type, __u64 buf);
 

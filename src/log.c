@@ -31,24 +31,29 @@ void log_conn(int level, struct conn_tuple* conn, const char* fmt, ...) {
 static void _log_tcp(enum log_level level, bool recv, struct conn_tuple* conn, __u16 len,
                      __u16 flags, __u32 seq, __u32 ack_seq) {
   if (log_verbosity < level) return;
-  char buf[12] = {};
+  char buf[32] = {};
   if (flags) {
-    if (flags & SYN) strcat(buf, "SYN,");
-    if (flags & RST) strcat(buf, "RST,");
-    if (flags & ACK) strcat(buf, "ACK,");
+    __be32 flag_word = htonl(flags << 16);
+    if (flag_word & TCP_FLAG_SYN) strcat(buf, "SYN,");
+    if (flag_word & TCP_FLAG_RST) strcat(buf, "RST,");
+    if (flag_word & TCP_FLAG_FIN) strcat(buf, "FIN,");
+    if (flag_word & TCP_FLAG_PSH) strcat(buf, "PSH,");
+    if (flag_word & TCP_FLAG_ACK) strcat(buf, "ACK,");
+    if (flag_word & TCP_FLAG_CWR) strcat(buf, "CWR,");
+    if (flag_word & TCP_FLAG_ECE) strcat(buf, "ECE,");
+    if (flag_word & TCP_FLAG_URG) strcat(buf, "URG,");
   } else {
     strcpy(buf, "<None>");
   }
-  if (recv) {
+  if (recv)
     log_conn(level, conn, _("recv - len=%u, %s seq=%08x, ack=%08x"), len, buf, seq, ack_seq);
-  } else {
+  else
     log_conn(level, conn, _("sent - len=%u, %s seq=%08x, ack=%08x"), len, buf, seq, ack_seq);
-  }
 }
 
 void log_tcp(enum log_level level, struct conn_tuple* conn, struct tcphdr* tcp, __u16 len) {
-  _log_tcp(level, false, conn, len, tcp->syn * SYN | tcp->ack * ACK | tcp->rst * RST,
-           htonl(tcp->seq), htonl(tcp->ack_seq));
+  _log_tcp(level, false, conn, len, ntohl(tcp_flag_word(tcp)) >> 16, ntohl(tcp->seq),
+           ntohl(tcp->ack_seq));
 }
 
 void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_type type) {
