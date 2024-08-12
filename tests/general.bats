@@ -9,8 +9,10 @@ if [ "$SLEEP_MULTIPLIER" -lt 1 ]; then
   exit 1
 fi
 
-load env/switch
 load util
+
+TEST_NETWORK_ID="Mgeneral"
+load env/switch
 
 pcap_file="$BATS_RUN_TMPDIR/general.pcapng"
 pcap_file_dest="$BATS_TEST_DIRNAME/../out/general.pcapng"
