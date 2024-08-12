@@ -113,7 +113,7 @@ static int parse_int_seq(char* str, int* nums, size_t len) {
   return nums_idx;
 }
 
-static int parse_bool(const char* str, bool* result) {
+__attribute__((unused)) static int parse_bool(const char* str, bool* result) {
   if (strcmp("true", str) == 0 || strcmp("1", str) == 0) {
     *result = true;
   } else if (strcmp("false", str) == 0 || strcmp("0", str) == 0) {

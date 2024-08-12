@@ -3,7 +3,7 @@
 
 #ifdef _MIMIC_BPF
 // clang-format off
-#include "../bpf/vmlinux.h"
+#include "bpf/vmlinux.h"
 #include <bpf/bpf_endian.h>
 // clang-format on
 #else

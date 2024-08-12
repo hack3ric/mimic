@@ -6,9 +6,10 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #elif defined(_MIMIC_BPF)
-#include "../bpf/vmlinux.h"
-
+// clang-format off
+#include "bpf/vmlinux.h"
 #include <bpf/bpf_helpers.h>
+// clang-format on
 #endif
 
 #ifdef _MIMIC_KMOD
