@@ -1,4 +1,4 @@
-name: Build .deb packages on release
+name: Release actions
 
 on:
   release:
@@ -8,8 +8,18 @@ permissions:
   contents: write
 
 jobs:
-  build-bookworm:
+  build-deb:
+    name: Build .deb packages for ${{ matrix.distro.name }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        distro:
+          - name: Debian 12
+            codename: bookworm
+            image: debian:bookworm-slim
+          - name: Ubuntu 24.04
+            codename: noble
+            image: ubuntu:noble
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,29 +27,11 @@ jobs:
         uses: jtdor/build-deb-action@v1
         with:
           buildpackage-opts: -b -us -uc
-          docker-image: debian:bookworm-slim
+          docker-image: ${{ matrix.distro.image }}
       - name: Upload
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd debian/artifacts
-          for _f in mimic*.deb; do sudo mv "$_f" "Debian-12_$_f"; done
-          gh release upload $(sed 's|refs/tags/||' <(echo ${{ github.ref }})) *.deb
-  build-noble:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Build
-        uses: jtdor/build-deb-action@v1
-        with:
-          buildpackage-opts: -b -us -uc
-          docker-image: ubuntu:noble
-      - name: Upload
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cd debian/artifacts
-          for _f in mimic*.deb mimic*.ddeb; do sudo mv "$_f" "Ubuntu-24.04_$_f"; done
+          for _f in mimic*.deb mimic*.ddeb; do sudo mv "$_f" "${{ matrix.distro.codename }}_$_f"; done
           gh release upload $(sed 's|refs/tags/||' <(echo ${{ github.ref }})) *.deb *.ddeb
-

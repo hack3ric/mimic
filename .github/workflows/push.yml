@@ -1,4 +1,4 @@
-name: Test and build on push
+name: Push actions
 
 on:
   push:
@@ -6,31 +6,48 @@ on:
 
 jobs:
   test:
+    name: Run tests with ${{ matrix.flags }}
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        flags:
+          - CHECKSUM_HACK=kfunc
+          - CHECKSUM_HACK=kprobe
+          - CHECKSUM_HACK=kprobe STRIP_BTF_EXT=1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install dependencies
         run: |
-          sudo apt install python3 clang-15 pahole \
+          sudo apt install python3 clang-15 llvm pahole \
             bats bc conntrack ethtool iperf3 jq socat tshark wireguard-tools \
             libbpf-dev libffi-dev libelf-dev
       - name: Build & Test
         run: |
           export BPF_CC=clang-15
           sudo cp /sys/kernel/btf/vmlinux /lib/modules/`uname -r`/build
-          make -j
+          make -j ${{ matrix.flags }}
           sudo nft delete table filter  # Docker's nftables rule drops IPv4 packets in tests
           sudo insmod out/mimic.ko
-          sudo make test
+          sudo make test ${{ matrix.flags }}
       - name: Upload captured packets
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: pcap
           path: out/*.pcapng
-  build-bookworm:
+  build-deb:
+    name: Build .deb packages for ${{ matrix.distro.name }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        distro:
+          - name: Debian 12
+            codename: bookworm
+            image: debian:bookworm-slim
+          - name: Ubuntu 24.04
+            codename: noble
+            image: ubuntu:noble
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,13 +55,16 @@ jobs:
         uses: jtdor/build-deb-action@v1
         with:
           buildpackage-opts: -b -us -uc
-          docker-image: debian:bookworm-slim
+          docker-image: ${{ matrix.distro.image }}
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: bookworm
-          path: debian/artifacts/*.deb
-  build-noble:
+          name: ${{ matrix.distro.codename }}
+          path: |
+            debian/artifacts/*.deb
+            debian/artifacts/*.ddeb
+  test-deb-install:
+    name: Test .deb installation
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -57,10 +77,3 @@ jobs:
       - name: Test Install
         run: |
           sudo apt install ./debian/artifacts/*.deb linux-headers-`uname -r`
-      - name: Upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: noble
-          path: |
-            debian/artifacts/*.deb
-            debian/artifacts/*.ddeb
