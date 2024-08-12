@@ -1,9 +1,11 @@
 #!/bin/bash
 
-br=br-mimicsw
-netns=(mimicsw{1..2})
+: "${TEST_NETWORK_ID:=mimicsw}"
 
-veth=(vethmimicsw{1..2})
+br="br$TEST_NETWORK_ID"
+netns=("$TEST_NETWORK_ID"{1..2})
+
+veth=("veth$TEST_NETWORK_ID"{1..2})
 veth_ipv4_range=169.254.100.0/24
 veth_ipv4=(169.254.100.{1..2}/24)
 veth_ipv6_range=fc10::/64

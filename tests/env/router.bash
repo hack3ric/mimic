@@ -9,10 +9,12 @@
 # |  netns1  |      | netns2 (router) |      |  netns3  |
 # \----------/      \-----------------/      \----------/
 
-br=(brmimicrt{1..2})
-netns_internal=(mimicrt{1..3})
+: "${TEST_NETWORK_ID:=mimicrt}"
 
-veth_internal=(vethmimicrt{1..2}{1..2})
+br=("br$TEST_NETWORK_ID"{1..2})
+netns_internal=("$TEST_NETWORK_ID"{1..3})
+
+veth_internal=("veth$TEST_NETWORK_ID"{1..4})
 veth_ipv4_range=(169.254.101.{0,128}/25)
 veth_ipv4_internal=(169.254.101.{1,2,129,130}/25)
 veth_ipv6_range=(fc11:{1..2}::/64)
