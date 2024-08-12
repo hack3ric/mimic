@@ -11,7 +11,7 @@ commit := 24615062d166b0abc7ffffa2a0ac8ea298e15f3f
 PKG_BUILD_DIR := $(BUILD_DIR)/mimic-$(commit)
 PKG_SOURCE := $(commit).tar.gz
 PKG_SOURCE_URL := https://github.com/hack3ric/mimic/archive
-PKG_HASH := d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed
+PKG_HASH := bfa95e729d86380f40734e2876bba4785897c5d8c7f85c1e3ce60771925ec889
 
 PKG_BUILD_DEPENDS := argp-standalone bpf-headers mimic-bpftool/host
 
