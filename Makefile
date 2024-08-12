@@ -104,21 +104,6 @@ CFLAGS += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
 # compatibility, but also makes the program lose CO-RE functionality.
 STRIP_BTF_EXT ?=
 
-# Enable BPF dynamic pointer usage (requires Linux >= 6.1)
-#
-# This is used in caching outgoing packets while attempting handshake, and
-# re-send them afterwards. It is a quality-of-life feature, but not necessary.
-ENABLE_BPF_DYNPTR ?= 1
-ifeq ($(ENABLE_BPF_DYNPTR),1)
-BPF_CFLAGS += -DMIMIC_ENABLE_BPF_DYNPTR
-endif
-
-# Enable XDP fragment support (requires Linux >= 5.18?)
-ENABLE_XDP_FRAGS ?= 1
-ifeq ($(ENABLE_XDP_FRAGS),1)
-BPF_CFLAGS += -DMIMIC_ENABLE_XDP_FRAGS
-endif
-
 # Rules
 
 mkdir_p = mkdir -p $(@D)
