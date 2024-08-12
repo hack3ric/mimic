@@ -12,10 +12,10 @@ jobs:
       matrix:
         arch:
           - x86_64
+          - arm_cortex-a7
           - aarch64_generic
           - mipsel_24kc
         revision:
-          - openwrt-23.05
           - SNAPSHOT
     steps:
       - uses: actions/checkout@v4

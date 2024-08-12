@@ -4,14 +4,14 @@ include $(INCLUDE_DIR)/kernel.mk
 include $(INCLUDE_DIR)/version.mk
 
 PKG_NAME := mimic
-PKG_VERSION := v0.5.0-25-g078a1b7
+PKG_VERSION := 0.5.0-26-g2461506
 PKG_RELEASE := 1
-commit := 078a1b7d84b6e44b31307f3b8d51219bacaaffc3
+commit := 24615062d166b0abc7ffffa2a0ac8ea298e15f3f
 
 PKG_BUILD_DIR := $(BUILD_DIR)/mimic-$(commit)
 PKG_SOURCE := $(commit).tar.gz
 PKG_SOURCE_URL := https://github.com/hack3ric/mimic/archive
-PKG_HASH := 38a2cc8c6e3a70e18afcefec5d48f39604db710d9abb407916851335e63a1964
+PKG_HASH := d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed
 
 PKG_BUILD_DEPENDS := argp-standalone bpf-headers mimic-bpftool/host
 
@@ -22,7 +22,7 @@ define Package/mimic
 	CATEGORY := Network
 	TITLE := eBPF TCP -> UDP Obfuscator
 	URL := https://github.com/hack3ric/mimic
-	DEPENDS := +libbpf +libffi +kmod-sched-bpf
+	DEPENDS := +libbpf +libffi +kmod-sched-core +kmod-sched-bpf
 endef
 
 define KernelPackage/mimic
@@ -50,12 +50,6 @@ mimic_cli_flags := \
 	CHECKSUM_HACK=kprobe \
 	RUNTIME_DIR=/var/run/mimic \
 	STRIP_BTF_EXT=1
-
-ifneq ($(filter 23.05%,$(VERSION_NUMBER)),)
-mimic_cli_flags += \
-	ENABLE_BPF_DYNPTR=0 \
-	ENABLE_XDP_FRAGS=0
-endif
 
 export BPF_CFLAGS := \
 	-I$(BPF_HEADERS_DIR)/user_headers/include \
