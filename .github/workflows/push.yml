@@ -68,15 +68,16 @@ jobs:
             debian/artifacts/*.ddeb
   test-deb-install:
     name: Test .deb installation
+    needs: build-deb
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Build
-        uses: jtdor/build-deb-action@v1
+      - name: Download artifact
+        uses: actions/download-artifact@v4
         with:
-          buildpackage-opts: -b -us -uc
-          docker-image: ubuntu:noble
+          name: noble-packages
+          path: noble-packages
       - name: Test Install
         run: |
-          sudo apt install ./debian/artifacts/*.deb linux-headers-`uname -r`
+          sudo apt install ./noble-packages/*.deb linux-headers-`uname -r`
