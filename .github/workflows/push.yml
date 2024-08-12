@@ -6,14 +6,17 @@ on:
 
 jobs:
   test:
-    name: Run tests with ${{ matrix.flags }}
+    name: Run tests with ${{ matrix.flags.flags }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
         flags:
-          - CHECKSUM_HACK=kfunc
-          - CHECKSUM_HACK=kprobe
-          - CHECKSUM_HACK=kprobe STRIP_BTF_EXT=1
+          - flags: CHECKSUM_HACK=kfunc
+            desc: kfunc
+          - flags: CHECKSUM_HACK=kprobe
+            desc: kprobe
+          - flags: CHECKSUM_HACK=kprobe STRIP_BTF_EXT=1
+            desc: kprobe-strip-btf-ext
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,15 +29,15 @@ jobs:
         run: |
           export BPF_CC=clang-15
           sudo cp /sys/kernel/btf/vmlinux /lib/modules/`uname -r`/build
-          make -j ${{ matrix.flags }}
+          make -j ${{ matrix.flags.flags }}
           sudo nft delete table filter  # Docker's nftables rule drops IPv4 packets in tests
           sudo insmod out/mimic.ko
-          sudo make test ${{ matrix.flags }}
+          sudo make test ${{ matrix.flags.flags }}
       - name: Upload captured packets
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pcap
+          name: pcap-${{ matrix.flags.desc }}
           path: out/*.pcapng
   build-deb:
     name: Build .deb packages for ${{ matrix.distro.name }}
@@ -59,7 +62,7 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.distro.codename }}
+          name: ${{ matrix.distro.codename }}-packages
           path: |
             debian/artifacts/*.deb
             debian/artifacts/*.ddeb
