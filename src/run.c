@@ -425,6 +425,13 @@ static inline bool is_kmod_loaded() {
   return false;
 }
 
+static inline int terminate_all_conns(int mimic_conns_fd, const char* ifname) {
+  struct conn_tuple key;
+  struct bpf_map_iter iter = {.map_fd = mimic_conns_fd, .map_name = "mimic_conns"};
+  while (try(bpf_map_iter_next(&iter, &key))) send_ctrl_packet(&key, TCP_FLAG_RST, 0, 0, 0, ifname);
+  return 0;
+}
+
 static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname, int ifindex) {
   int retcode;
   struct mimic_bpf* skel = NULL;
@@ -587,7 +594,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   retcode = 0;
 cleanup:
   log_info(_("cleaning up"));
-  // TODO: send RST to all
+  terminate_all_conns(mimic_conns_fd, ifname);
   sigprocmask(SIG_SETMASK, NULL, NULL);
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
   if (xdp_ingress) bpf_link__destroy(xdp_ingress);
