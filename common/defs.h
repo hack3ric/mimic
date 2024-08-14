@@ -235,6 +235,7 @@ struct log_event {
         };
         enum destroy_type {
           DESTROY_RECV_RST,
+          DESTROY_RECV_FIN,
           DESTROY_TIMED_OUT,
           DESTROY_INVALID,
         } destroy_type;

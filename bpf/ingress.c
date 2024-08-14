@@ -134,28 +134,24 @@ int ingress_handler(struct xdp_md* xdp) {
 
   __u64 pktbuf = 0;
 
-  // Quick path for RST
-  if (tcp->rst) {
+  // Quick path for RST and FIN
+  if (tcp->rst || tcp->fin) {
     if (conn) {
       bpf_spin_lock(&conn->lock);
       swap(pktbuf, conn->pktbuf);
       bpf_spin_unlock(&conn->lock);
       bpf_map_delete_elem(&mimic_conns, &conn_key);
       use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
-      log_destroy(LOG_WARN, &conn_key, DESTROY_RECV_RST);
+      log_destroy(LOG_WARN, &conn_key, tcp->rst ? DESTROY_RECV_RST : DESTROY_RECV_FIN);
     }
-    // Drop the RST packet no matter if it is generated from Mimic or the peer's OS, since there
-    // are no good ways to tell them apart.
     return XDP_DROP;
   }
 
   if (!conn) {
-    // Quick path for ACK without connection
-    if (tcp->ack) {
+    if (!tcp->syn || tcp->ack) {
       send_ctrl_packet(&conn_key, TCP_FLAG_RST, htonl(tcp->ack_seq), 0, 0);
       return XDP_DROP;
     }
-
     struct connection conn_value = {.cwnd = INIT_CWND};
     __builtin_memcpy(&conn_value.settings, settings, sizeof(*settings));
     try_drop(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));

@@ -62,6 +62,9 @@ void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_typ
     case DESTROY_RECV_RST:
       reason = _("received RST");
       break;
+    case DESTROY_RECV_FIN:
+      reason = _("received FIN");
+      break;
     case DESTROY_TIMED_OUT:
       reason = _("timed out");
       break;
