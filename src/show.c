@@ -50,8 +50,9 @@ const struct argp show_argp = {
 };
 
 int show_overview(int whitelist_fd, struct filter_settings* gsettings, int log_verbosity) {
-  if (log_verbosity >= 2) printf("%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
-  printf(_("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d\n"), BOLD, RESET, gsettings->hi,
+  FILE* out = log_verbosity > 0 ? stderr : stdout;
+  if (log_verbosity >= 2) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
+  fprintf(out, _("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d\n"), BOLD, RESET, gsettings->hi,
          gsettings->hr, gsettings->kt, gsettings->ki, gsettings->kr, gsettings->ks);
 
   char buf[FILTER_FMT_MAX_LEN];
@@ -63,37 +64,37 @@ int show_overview(int whitelist_fd, struct filter_settings* gsettings, int log_v
     filter_fmt(&filter, buf);
     try(bpf_map_lookup_elem(whitelist_fd, &filter, &settings),
         _("failed to get value from map '%s': %s"), "mimic_whitelist", strret);
-    if (log_verbosity >= 2) printf("%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
-    printf(_("  %sfilter:%s %s"), BOLD, RESET, buf);
+    if (log_verbosity >= 2) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
+    fprintf(out, _("  %sfilter:%s %s"), BOLD, RESET, buf);
 
     struct filter_settings *a = &settings, *b = gsettings;
     bool heq = a->hi == b->hi && a->hr == b->hr;
     bool keq = a->kt == b->kt && a->ki == b->ki && a->kr == b->kr && a->ks == b->ks;
     if (heq && keq) {
-      printf("\n");
+      fprintf(out, "\n");
     } else {
-      printf(" " GRAY "(");
+      fprintf(out, " " GRAY "(");
       if (!heq) {
-        printf(_("handshake "));
-        if (a->hi != b->hi) printf("%d", settings.hi);
-        printf(":");
-        if (a->hr != b->hr) printf("%d", settings.hr);
+        fprintf(out, _("handshake "));
+        if (a->hi != b->hi) fprintf(out, "%d", settings.hi);
+        fprintf(out, ":");
+        if (a->hr != b->hr) fprintf(out, "%d", settings.hr);
       }
-      if (!heq && !keq) printf(", ");
+      if (!heq && !keq) fprintf(out, ", ");
       if (!keq) {
-        printf(_("keepalive "));
-        if (a->kt != b->kt) printf("%d", settings.kt);
-        printf(":");
-        if (a->ki != b->ki) printf("%d", settings.ki);
-        printf(":");
-        if (a->kr != b->kr) printf("%d", settings.kr);
-        printf(":");
-        if (a->ks != b->ks) printf("%d", settings.ks);
+        fprintf(out, _("keepalive "));
+        if (a->kt != b->kt) fprintf(out, "%d", settings.kt);
+        fprintf(out, ":");
+        if (a->ki != b->ki) fprintf(out, "%d", settings.ki);
+        fprintf(out, ":");
+        if (a->kr != b->kr) fprintf(out, "%d", settings.kr);
+        fprintf(out, ":");
+        if (a->ks != b->ks) fprintf(out, "%d", settings.ks);
       }
-      printf(")" RESET "\n");
+      fprintf(out, ")" RESET "\n");
     }
   }
-  if (!iter.has_key) printf(_("  %sfilter:%s none\n"), BOLD, RESET);
+  if (!iter.has_key) fprintf(out, _("  %sfilter:%s none\n"), BOLD, RESET);
   return 0;
 }
 
