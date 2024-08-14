@@ -4,6 +4,7 @@
 #ifdef _MIMIC_BPF
 // clang-format off
 #include "bpf/vmlinux.h"
+#include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 // clang-format on
 #else
@@ -142,6 +143,8 @@ struct filter_settings {
   int kt, ki, kr, ks;  // keepalive time, interval, retry, stale
 };
 
+#define DEFAULT_COOLDOWN 5
+
 #define DEFAULT_HANDSHAKE_INTERVAL 2
 #define DEFAULT_HANDSHAKE_RETRY 3
 #define DEFAULT_KEEPALIVE_TIME 180
@@ -188,11 +191,43 @@ struct connection {
   __u32 seq, ack_seq;
   __u64 pktbuf;
   __u32 cwnd;
-  __u64 retry_tstamp, reset_tstamp, stale_tstamp;
-  bool keepalive_sent;
   __u16 peer_mss;
+  bool keepalive_sent;
+  __u8 cooldown_mul;
   struct filter_settings settings;
+  __u64 retry_tstamp, reset_tstamp, stale_tstamp;
 };
+
+static __always_inline struct connection conn_init(struct filter_settings* settings, __u64 tstamp) {
+  struct connection conn = {.cwnd = INIT_CWND};
+  __builtin_memcpy(&conn.settings, settings, sizeof(*settings));
+  conn.retry_tstamp = conn.reset_tstamp = conn.stale_tstamp = tstamp;
+  return conn;
+}
+
+static __always_inline void conn_reset(struct connection* conn, __u64 tstamp) {
+  conn->state = CONN_IDLE;
+  conn->seq = conn->ack_seq = 0;
+  // conn->pktbuf should be swapped out prior
+  conn->cwnd = INIT_CWND;
+  conn->peer_mss = 0;
+  conn->keepalive_sent = false;
+  if (conn->cooldown_mul < 11) conn->cooldown_mul += 1;
+  conn->retry_tstamp = conn->reset_tstamp = conn->stale_tstamp = tstamp;
+}
+
+static __always_inline __u32 conn_cooldown(struct connection* conn) {
+  return conn->cooldown_mul ? DEFAULT_COOLDOWN * (1 << (conn->cooldown_mul - 1)) : 0;
+}
+
+static __always_inline int time_diff_sec(__u64 a, __u64 b) {
+  if (a <= b) return 0;
+  if ((a - b) % SECOND < SECOND / 2) {
+    return (a - b) / SECOND;
+  } else {
+    return (a - b) / SECOND + 1;
+  }
+}
 
 struct send_options {
   struct conn_tuple conn;
@@ -233,12 +268,15 @@ struct log_event {
           __u16 len, flags;
           __u32 seq, ack_seq;
         };
-        enum destroy_type {
-          DESTROY_RECV_RST,
-          DESTROY_RECV_FIN,
-          DESTROY_TIMED_OUT,
-          DESTROY_INVALID,
-        } destroy_type;
+        struct {
+          enum destroy_type {
+            DESTROY_RECV_RST,
+            DESTROY_RECV_FIN,
+            DESTROY_TIMED_OUT,
+            DESTROY_INVALID,
+          } destroy_type;
+          __u32 cooldown;
+        };
       };
     };
     char msg[52];

@@ -127,9 +127,10 @@ static inline void log_tcp(enum log_level level, bool recv, struct conn_tuple* c
 }
 
 static inline void log_destroy(enum log_level level, struct conn_tuple* conn,
-                               enum destroy_type type) {
+                               enum destroy_type type, __u32 cooldown) {
   if (!conn || log_verbosity < level) return;
-  log_any(level, LOG_CONN_DESTROY, &(union log_info){.conn = *conn, .destroy_type = type});
+  log_any(level, LOG_CONN_DESTROY,
+          &(union log_info){.conn = *conn, .destroy_type = type, .cooldown = cooldown});
 }
 
 int send_ctrl_packet(struct conn_tuple* conn, __be32 flags, __u32 seq, __u32 ack_seq, __u32 cwnd);

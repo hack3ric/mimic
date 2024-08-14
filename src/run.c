@@ -211,10 +211,14 @@ static int store_packet(struct bpf_map* conns, struct conn_tuple* conn_key, cons
   int retcode;
   struct connection conn = {};
   try2(bpf_map__lookup_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn), BPF_F_LOCK));
-  if (conn.state == CONN_ESTABLISHED) {
-    log_warn(_("store packet event processed after connection was established"));
+
+  if (conn.state != CONN_SYN_SENT && conn.state != CONN_SYN_RECV) {
+    log_debug(_("store packet event processed when connection is in %s state"),
+              conn_state_to_str(conn.state));
+    // TODO: send out the packet directly if established
     return 0;
   }
+
   if (!conn.pktbuf) conn.pktbuf = (__u64)(uintptr_t)try2_p(packet_buf_new(conn_key));
   try2_e(packet_buf_push((struct packet_buf*)(uintptr_t)conn.pktbuf, data, len, l4_csum_partial));
   try2(bpf_map__update_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn),
@@ -305,15 +309,6 @@ static ring_buffer_sample_fn handle_rb_event(struct handle_rb_event_ctx* ctx, ff
   return fn;
 }
 
-static inline int time_diff_sec(__u64 a, __u64 b) {
-  if (a <= b) return 0;
-  if ((a - b) % SECOND < SECOND / 2) {
-    return (a - b) / SECOND;
-  } else {
-    return (a - b) / SECOND + 1;
-  }
-}
-
 // Retry, keepalive, cleanup
 static int do_routine(int conns_fd, const char* ifname) {
   struct _conn_to_free {
@@ -333,15 +328,29 @@ static int do_routine(int conns_fd, const char* ifname) {
   struct bpf_map_iter iter = {.map_fd = conns_fd, .map_name = "mimic_conns"};
 
   while (try2(bpf_map_iter_next(&iter, &key))) {
-    bool reset = false;
+    bool reset = false, remove = false;
     try2(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK),
          _("failed to get value from map '%s': %s"), "mimic_conns", strret);
 
     int retry_secs = time_diff_sec(tstamp, conn.retry_tstamp);
     switch (conn.state) {
+      case CONN_IDLE:
+        if (time_diff_sec(tstamp, conn.stale_tstamp) >= conn_cooldown(&conn) * 2) remove = true;
+        break;
+      case CONN_SYN_SENT:
+        if (retry_secs >= (conn.settings.hr + 1) * conn.settings.hi) {
+          reset = true;
+        } else if (retry_secs != 0 && retry_secs % conn.settings.hi == 0) {
+          log_conn(LOG_INFO, &key, _("retry sending SYN"));
+          send_ctrl_packet(&key, TCP_FLAG_SYN, conn.seq - 1, 0, 0xffff, ifname);
+        }
+        break;
+      case CONN_SYN_RECV:
+        if (retry_secs >= (conn.settings.hr + 1) * conn.settings.hi) reset = true;
+        break;
       case CONN_ESTABLISHED:
         if (conn.settings.ks > 0 && time_diff_sec(tstamp, conn.stale_tstamp) >= conn.settings.ks) {
-          reset = true;
+          reset = remove = true;
         } else if (conn.settings.kt > 0 && retry_secs >= conn.settings.kt) {
           if (conn.settings.ki <= 0) {
             reset = true;
@@ -362,29 +371,27 @@ static int do_routine(int conns_fd, const char* ifname) {
           }
         }
         break;
-      case CONN_SYN_SENT:
-        if (retry_secs >= (conn.settings.hr + 1) * conn.settings.hi) {
-          reset = true;
-        } else if (retry_secs != 0 && retry_secs % conn.settings.hi == 0) {
-          log_conn(LOG_INFO, &key, _("retry sending SYN"));
-          send_ctrl_packet(&key, TCP_FLAG_SYN, conn.seq - 1, 0, 0xffff, ifname);
-          // pktbuf_drain((struct pktbuf*)conn.pktbuf);
-        }
-        break;
-      case CONN_SYN_RECV:
-        if (retry_secs >= (conn.settings.hr + 1) * conn.settings.hi) reset = true;
-        break;
       default:
         break;
     }
 
     if (reset) {
-      log_destroy(LOG_WARN, &key, DESTROY_TIMED_OUT);
+      if (!remove) {
+        struct packet_buf* orig_pktbuf = (typeof(orig_pktbuf))(uintptr_t)conn.pktbuf;
+        conn.pktbuf = 0;
+        conn_reset(&conn, tstamp);
+        bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
+        packet_buf_free(orig_pktbuf);
+      }
+      log_destroy(LOG_WARN, &key, DESTROY_TIMED_OUT, conn_cooldown(&conn));
+      send_ctrl_packet(&key, TCP_FLAG_RST, conn.seq, 0, 0, ifname);
+    }
+    if (remove) {
       struct _conn_to_free* item = malloc(sizeof(*item));
       item->key = key;
       item->buf = (struct packet_buf*)(uintptr_t)conn.pktbuf;
       queue_push(&free_queue, item, free);
-      send_ctrl_packet(&key, TCP_FLAG_RST, conn.seq, 0, 0, ifname);
+      log_conn(LOG_DEBUG, &key, _("connection removed"));
     }
   }
 
@@ -427,8 +434,13 @@ static inline bool is_kmod_loaded() {
 
 static inline int terminate_all_conns(int mimic_conns_fd, const char* ifname) {
   struct conn_tuple key;
+  struct connection conn;
   struct bpf_map_iter iter = {.map_fd = mimic_conns_fd, .map_name = "mimic_conns"};
-  while (try(bpf_map_iter_next(&iter, &key))) send_ctrl_packet(&key, TCP_FLAG_RST, 0, 0, 0, ifname);
+  while (try(bpf_map_iter_next(&iter, &key))) {
+    try(bpf_map_lookup_elem_flags(mimic_conns_fd, &key, &conn, BPF_F_LOCK),
+        _("failed to get value from map '%s': %s"), "mimic_conns", strret);
+    if (conn.state != CONN_IDLE) send_ctrl_packet(&key, TCP_FLAG_RST, 0, 0, 0, ifname);
+  }
   return 0;
 }
 

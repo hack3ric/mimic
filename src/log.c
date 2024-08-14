@@ -56,7 +56,8 @@ void log_tcp(enum log_level level, struct conn_tuple* conn, struct tcphdr* tcp, 
            ntohl(tcp->ack_seq));
 }
 
-void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_type type) {
+void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_type type,
+                 __u32 cooldown) {
   const char* reason;
   switch (type) {
     case DESTROY_RECV_RST:
@@ -75,7 +76,10 @@ void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_typ
       reason = _("unknown");
       break;
   }
-  log_conn(level, conn, _("connection destroyed (%s)"), reason);
+  if (cooldown)
+    log_conn(level, conn, _("connection destroyed (%s), retry in %u seconds"), reason, cooldown);
+  else
+    log_conn(level, conn, _("connection destroyed (%s)"), reason);
 }
 
 int libbpf_print_fn(enum libbpf_print_level bpf_level, const char* format, va_list args) {
@@ -138,7 +142,7 @@ int handle_log_event(struct log_event* e) {
                  e->info.seq, e->info.ack_seq);
         break;
       case LOG_CONN_DESTROY:
-        log_destroy(e->level, &e->info.conn, e->info.destroy_type);
+        log_destroy(e->level, &e->info.conn, e->info.destroy_type, e->info.cooldown);
         break;
       default:
         log_conn(e->level, &e->info.conn, "%s", log_type_to_str(e->type));

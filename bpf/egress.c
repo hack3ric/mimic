@@ -76,14 +76,15 @@ int egress_handler(struct __sk_buff* skb) {
   if (ip_proto != IPPROTO_UDP) return TC_ACT_OK;
   decl_ok(struct udphdr, udp, ip_end, skb);
 
+  __u64 tstamp = bpf_ktime_get_boot_ns();
+
   struct filter_settings* settings = matches_whitelist(QUARTET_UDP);
   if (!settings) return TC_ACT_OK;
   struct conn_tuple conn_key = gen_conn_key(QUARTET_UDP);
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
   if (!conn) {
-    if (settings->hi == 0) return TC_ACT_STOLEN;
-    struct connection conn_value = {.cwnd = INIT_CWND};
-    __builtin_memcpy(&conn_value.settings, settings, sizeof(*settings));
+    if (settings->hi == 0) return TC_ACT_STOLEN;  // passive mode
+    struct connection conn_value = conn_init(settings, tstamp);
     try_shot(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
     conn = try_p_shot(bpf_map_lookup_elem(&mimic_conns, &conn_key));
   }
@@ -91,13 +92,10 @@ int egress_handler(struct __sk_buff* skb) {
   struct udphdr old_udp = *udp;
   old_udp.check = 0;
   __be16 old_udp_csum = udp->check;
-
   __u16 udp_len = ntohs(udp->len);
   __u16 payload_len = udp_len - sizeof(*udp);
-
   __u32 seq = 0, ack_seq = 0, conn_cwnd;
   __u32 random = bpf_get_prandom_u32();
-  __u64 tstamp = bpf_ktime_get_boot_ns();
 
   bpf_spin_lock(&conn->lock);
   if (conn->state == CONN_ESTABLISHED) {
@@ -105,21 +103,24 @@ int egress_handler(struct __sk_buff* skb) {
     ack_seq = conn->ack_seq;
     conn->seq += payload_len;
   } else {
-    switch (conn->state) {
-      case CONN_IDLE:
-        conn->state = CONN_SYN_SENT;
-        seq = conn->seq = random;
-        conn->seq += 1;
-        ack_seq = conn->ack_seq = 0;
-        conn->retry_tstamp = conn->reset_tstamp = tstamp;
+    if (conn->state == CONN_IDLE) {
+      __u32 cooldown = conn_cooldown(conn);
+      if (cooldown && time_diff_sec(tstamp, conn->retry_tstamp) < cooldown) {
         bpf_spin_unlock(&conn->lock);
-        log_conn(LOG_INFO, LOG_CONN_INIT, &conn_key);
-        send_ctrl_packet(&conn_key, TCP_FLAG_SYN, seq, ack_seq, 0xffff);
-        break;
-      default:
-        bpf_spin_unlock(&conn->lock);
-        break;
+        return TC_ACT_STOLEN;
+      }
+      conn->state = CONN_SYN_SENT;
+      seq = conn->seq = random;
+      conn->seq += 1;
+      ack_seq = conn->ack_seq = 0;
+      conn->retry_tstamp = conn->reset_tstamp = tstamp;
+      bpf_spin_unlock(&conn->lock);
+      log_conn(LOG_INFO, LOG_CONN_INIT, &conn_key);
+      send_ctrl_packet(&conn_key, TCP_FLAG_SYN, seq, ack_seq, 0xffff);
+    } else {
+      bpf_spin_unlock(&conn->lock);
     }
+
     int ip_summed = mimic_skb_ip_summed(skb);
     if (ip_summed < 0) {
       // If we can't determine skb->ip_summed, calculate partial checksum on our own

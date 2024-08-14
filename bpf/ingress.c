@@ -133,20 +133,23 @@ int ingress_handler(struct xdp_md* xdp) {
   // processing.
 
   __u64 pktbuf = 0;
+  __u64 tstamp = bpf_ktime_get_boot_ns();
 
   // Quick path for RST and FIN
   if (tcp->rst || tcp->fin) {
     if (conn) {
+      __u32 cooldown;
       bpf_spin_lock(&conn->lock);
       swap(pktbuf, conn->pktbuf);
+      conn_reset(conn, tstamp);
+      cooldown = conn_cooldown(conn);
       bpf_spin_unlock(&conn->lock);
-      bpf_map_delete_elem(&mimic_conns, &conn_key);
       use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
       if (tcp->rst) {
-        log_destroy(LOG_WARN, &conn_key, DESTROY_RECV_RST);
+        log_destroy(LOG_WARN, &conn_key, DESTROY_RECV_RST, cooldown);
       } else {
         send_ctrl_packet(&conn_key, TCP_FLAG_RST, htonl(tcp->ack_seq), 0, 0);
-        log_destroy(LOG_WARN, &conn_key, DESTROY_RECV_FIN);
+        log_destroy(LOG_WARN, &conn_key, DESTROY_RECV_FIN, cooldown);
       }
     }
     return XDP_DROP;
@@ -157,8 +160,7 @@ int ingress_handler(struct xdp_md* xdp) {
       send_ctrl_packet(&conn_key, TCP_FLAG_RST, htonl(tcp->ack_seq), 0, 0);
       return XDP_DROP;
     }
-    struct connection conn_value = {.cwnd = INIT_CWND};
-    __builtin_memcpy(&conn_value.settings, settings, sizeof(*settings));
+    struct connection conn_value = conn_init(settings, tstamp);
     try_drop(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
     conn = try_p_drop(bpf_map_lookup_elem(&mimic_conns, &conn_key));
   }
@@ -168,9 +170,8 @@ int ingress_handler(struct xdp_md* xdp) {
   will_send_ctrl_packet = will_drop = true;
 
   __be32 flags = 0;
-  __u32 seq = 0, ack_seq = 0, cwnd = 0xffff;
+  __u32 seq = 0, ack_seq = 0, cwnd = 0xffff, cooldown = 0;
   __u32 random = bpf_get_prandom_u32();
-  __u64 tstamp = bpf_ktime_get_boot_ns();
 
   bpf_spin_lock(&conn->lock);
 
@@ -203,6 +204,7 @@ int ingress_handler(struct xdp_md* xdp) {
         will_send_ctrl_packet = false;
         conn->state = CONN_ESTABLISHED;
         conn->ack_seq = next_ack_seq(tcp, payload_len);
+        conn->cooldown_mul = 0;
         newly_estab = true;
         swap(pktbuf, conn->pktbuf);
       } else {
@@ -216,6 +218,7 @@ int ingress_handler(struct xdp_md* xdp) {
         if (tcp->ack) {
           // 3-way handshake
           conn->state = CONN_ESTABLISHED;
+          conn->cooldown_mul = 0;
           newly_estab = true;
           swap(pktbuf, conn->pktbuf);
         } else {
@@ -270,6 +273,8 @@ int ingress_handler(struct xdp_md* xdp) {
     fsm_error:
       flags |= TCP_FLAG_RST;
       swap(pktbuf, conn->pktbuf);
+      conn_reset(conn, tstamp);
+      cooldown = conn_cooldown(conn);
       seq = conn->seq;
       break;
   }
@@ -281,8 +286,7 @@ int ingress_handler(struct xdp_md* xdp) {
   if (will_send_ctrl_packet)
     send_ctrl_packet(&conn_key, flags, seq, ack_seq, flags & TCP_FLAG_RST ? 0 : cwnd);
   if (flags & TCP_FLAG_RST) {
-    log_destroy(LOG_WARN, &conn_key, DESTROY_INVALID);
-    bpf_map_delete_elem(&mimic_conns, &conn_key);
+    log_destroy(LOG_WARN, &conn_key, DESTROY_INVALID, cooldown);
     use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
   } else if (newly_estab) {
     log_conn(LOG_INFO, LOG_CONN_ESTABLISH, &conn_key);
