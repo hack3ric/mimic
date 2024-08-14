@@ -142,7 +142,12 @@ int ingress_handler(struct xdp_md* xdp) {
       bpf_spin_unlock(&conn->lock);
       bpf_map_delete_elem(&mimic_conns, &conn_key);
       use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
-      log_destroy(LOG_WARN, &conn_key, tcp->rst ? DESTROY_RECV_RST : DESTROY_RECV_FIN);
+      if (tcp->rst) {
+        log_destroy(LOG_WARN, &conn_key, DESTROY_RECV_RST);
+      } else {
+        send_ctrl_packet(&conn_key, TCP_FLAG_RST, htonl(tcp->ack_seq), 0, 0);
+        log_destroy(LOG_WARN, &conn_key, DESTROY_RECV_FIN);
+      }
     }
     return XDP_DROP;
   }
