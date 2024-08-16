@@ -1,15 +1,15 @@
 #!/bin/bash
 set -e
 
-_curdir=$(dirname $(realpath "${BASH_SOURCE[0]}"))
-source "$_curdir/env/switch.bash"
+__curdir=$(dirname $(realpath "${BASH_SOURCE[0]}"))
+source "$__curdir/env/switch.bash"
 
 setup() {
   switch_env_setup --wg --wg-v6 --wg-mtu=1408
 
   if [ "$1" = "mimic" ]; then
     for _i in {0..1}; do
-      ip netns exec ${netns[$_i]} "$_curdir/../out/mimic" run ${veth[$_i]} \
+      ip netns exec ${netns[$_i]} "$__curdir/../out/mimic" run ${veth[$_i]} \
         "-flocal=[$(strip_ip_cidr ${veth_ipv6[$_i]})]:${wg_port[$_i]}" &
       _mimic[$_i]=$!
     done
