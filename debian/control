@@ -44,6 +44,14 @@ Depends:
  ${shlibs:Depends},
  binutils,
  pahole
+Recommends:
+ gzip,
+ xz,
+ bzip2,
+ lzma,
+ lzop,
+ lz4,
+ zstd
 Description: eBPF UDP -> TCP obfuscator
  Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP
  QoS and port blocking. Based on eBPF, it directly mangles data inside
