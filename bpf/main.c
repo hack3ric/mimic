@@ -31,17 +31,16 @@ int send_ctrl_packet(struct conn_tuple* conn, __be32 flags, __u32 seq, __u32 ack
 int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key, int ip_summed) {
   int retcode;
   __u32 data_len = skb->len - pkt_off;
-  if (unlikely(!key || data_len > MAX_PACKET_SIZE)) return TC_ACT_SHOT;
+  if (!key || data_len > MAX_PACKET_SIZE) return TC_ACT_SHOT;
 
   bool has_remainder = data_len % SEGMENT_SIZE;
   __u32 segments = data_len / SEGMENT_SIZE + has_remainder;
   __u32 alloc_size = sizeof(struct rb_item) + segments * SEGMENT_SIZE;
   struct bpf_dynptr ptr = {};
-  if (unlikely(bpf_ringbuf_reserve_dynptr(&mimic_rb, alloc_size, 0, &ptr) < 0))
-    cleanup(TC_ACT_SHOT);
+  if (bpf_ringbuf_reserve_dynptr(&mimic_rb, alloc_size, 0, &ptr) < 0) cleanup(TC_ACT_SHOT);
 
   struct rb_item* item = bpf_dynptr_data(&ptr, 0, sizeof(*item));
-  if (unlikely(!item)) cleanup(TC_ACT_SHOT);
+  if (!item) cleanup(TC_ACT_SHOT);
   item->type = RB_ITEM_STORE_PACKET;
   item->store_packet.conn_key = *key;
   item->store_packet.len = data_len;
@@ -78,10 +77,10 @@ cleanup:
 
 // Need to manually clear conn.pktbuf in eBPF
 int use_pktbuf(enum rb_item_type type, __u64 buf) {
-  if (unlikely(type != RB_ITEM_CONSUME_PKTBUF && type != RB_ITEM_FREE_PKTBUF)) return -1;
+  if (type != RB_ITEM_CONSUME_PKTBUF && type != RB_ITEM_FREE_PKTBUF) return -1;
   if (!buf) return 0;
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
-  if (unlikely(!item)) return -1;
+  if (!item) return -1;
   item->type = type;
   item->pktbuf = buf;
   bpf_ringbuf_submit(item, 0);

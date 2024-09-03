@@ -15,11 +15,11 @@ static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_
   try_shot(bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0));
   __u8 buf[TCP_UDP_HEADER_DIFF + 4] = {};
   __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
-  if (likely(copy_len > 0)) {
+  if (copy_len > 0) {
     // HACK: make verifier happy
     // Probably related:
     // https://lore.kernel.org/bpf/f464186c-0353-9f9e-0271-e70a30e2fcdb@linux.dev/T/
-    if (unlikely(copy_len < 2)) copy_len = 1;
+    if (copy_len < 2) copy_len = 1;
 
     try_shot(bpf_skb_load_bytes(skb, offset, buf + 1, copy_len));
     try_shot(bpf_skb_store_bytes(skb, skb->len - copy_len, buf + 1, copy_len, 0));
@@ -41,7 +41,7 @@ static inline void update_tcp_header(struct tcphdr* tcp, __u16 payload_len, __u3
   tcp->doff = 5;
   tcp->window = htons(cwnd >> CWND_SCALE);
   tcp->ack = true;
-  tcp->psh = payload_len == 0;
+  if (payload_len == 0) tcp->psh = true;
   tcp->urg_ptr = 0;
 }
 
@@ -54,25 +54,22 @@ int egress_handler(struct __sk_buff* skb) {
   struct ipv6hdr* ipv6 = NULL;
   __u32 ip_end, nexthdr = 0;
 
-  switch (eth_proto) {
-    case ETH_P_IP:
-      redecl_shot(struct iphdr, ipv4, ETH_HLEN, skb);
-      ip_end = ETH_HLEN + (ipv4->ihl << 2);
-      break;
-    case ETH_P_IPV6:
-      redecl_shot(struct ipv6hdr, ipv6, ETH_HLEN, skb);
-      nexthdr = ipv6->nexthdr;
-      ip_end = ETH_HLEN + sizeof(*ipv6);
-      struct ipv6_opt_hdr* opt = NULL;
-      for (int i = 0; i < 8; i++) {
-        if (!ipv6_is_ext(nexthdr)) break;
-        redecl_drop(struct ipv6_opt_hdr, opt, ip_end, skb);
-        nexthdr = opt->nexthdr;
-        ip_end += (opt->hdrlen + 1) << 3;
-      }
-      break;
-    default:
-      return TC_ACT_OK;
+  if (eth_proto == ETH_P_IP) {
+    redecl_shot(struct iphdr, ipv4, ETH_HLEN, skb);
+    ip_end = ETH_HLEN + (ipv4->ihl << 2);
+  } else if (eth_proto == ETH_P_IPV6) {
+    redecl_shot(struct ipv6hdr, ipv6, ETH_HLEN, skb);
+    nexthdr = ipv6->nexthdr;
+    ip_end = ETH_HLEN + sizeof(*ipv6);
+    struct ipv6_opt_hdr* opt = NULL;
+    for (int i = 0; i < 8; i++) {
+      if (!ipv6_is_ext(nexthdr)) break;
+      redecl_drop(struct ipv6_opt_hdr, opt, ip_end, skb);
+      nexthdr = opt->nexthdr;
+      ip_end += (opt->hdrlen + 1) << 3;
+    }
+  } else {
+    return TC_ACT_OK;
   }
 
   __u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? nexthdr : 0;
@@ -85,7 +82,7 @@ int egress_handler(struct __sk_buff* skb) {
   if (!settings) return TC_ACT_OK;
   struct conn_tuple conn_key = gen_conn_key(QUARTET_UDP);
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
-  if (unlikely(!conn)) {
+  if (!conn) {
     if (settings->hi == 0) return TC_ACT_STOLEN;  // passive mode
     struct connection conn_value = conn_init(settings, tstamp);
     try_shot(bpf_map_update_elem(&mimic_conns, &conn_key, &conn_value, BPF_ANY));
@@ -101,7 +98,7 @@ int egress_handler(struct __sk_buff* skb) {
   __u32 random = bpf_get_prandom_u32();
 
   bpf_spin_lock(&conn->lock);
-  if (likely(conn->state == CONN_ESTABLISHED)) {
+  if (conn->state == CONN_ESTABLISHED) {
     seq = conn->seq;
     ack_seq = conn->ack_seq;
     conn->seq += payload_len;
@@ -118,7 +115,7 @@ int egress_handler(struct __sk_buff* skb) {
       ack_seq = conn->ack_seq = 0;
       conn->retry_tstamp = conn->reset_tstamp = tstamp;
       bpf_spin_unlock(&conn->lock);
-      log_conn(LOG_CONN_INIT, &conn_key);
+      log_conn(LOG_INFO, LOG_CONN_INIT, &conn_key);
       send_ctrl_packet(&conn_key, TCP_FLAG_SYN, seq, ack_seq, 0xffff);
     } else {
       bpf_spin_unlock(&conn->lock);
@@ -168,7 +165,7 @@ int egress_handler(struct __sk_buff* skb) {
 
   __u32 csum_off = ip_end + offsetof(struct tcphdr, check);
   redecl_shot(struct tcphdr, tcp, ip_end, skb);
-  log_tcp(false, &conn_key, tcp, payload_len);
+  log_tcp(LOG_TRACE, false, &conn_key, tcp, payload_len);
 
   tcp->check = 0;
   csum_diff =

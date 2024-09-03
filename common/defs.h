@@ -32,9 +32,6 @@
 
 #define fallthrough
 
-#define unlikely(expr) __builtin_expect(!!(expr), 0)
-#define likely(expr) __builtin_expect(!!(expr), 1)
-
 #ifdef _MIMIC_BPF
 
 // Some missing declaration of vmlinux.h

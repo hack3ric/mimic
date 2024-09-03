@@ -98,9 +98,9 @@ static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF) {
 }
 
 static void log_any(enum log_level level, enum log_type type, union log_info* info) {
-  if (likely(log_verbosity < level || !info)) return;
+  if (log_verbosity < level || !info) return;
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
-  if (unlikely(!item)) return;
+  if (!item) return;
   item->type = RB_ITEM_LOG_EVENT;
   item->log_event = (struct log_event){.level = level, .type = type};
   __builtin_memcpy(&item->log_event.info, info, sizeof(*info));
@@ -108,15 +108,14 @@ static void log_any(enum log_level level, enum log_type type, union log_info* in
   return;
 }
 
-// Log general connection information
-static inline void log_conn(enum log_type type, struct conn_tuple* conn) {
-  if (likely(!conn || LOG_ALLOW_INFO)) return;
-  log_any(LOG_INFO, type, &(union log_info){.conn = *conn});
+static inline void log_conn(enum log_level level, enum log_type type, struct conn_tuple* conn) {
+  if (!conn || log_verbosity < level) return;
+  log_any(level, type, &(union log_info){.conn = *conn});
 }
 
-// Log TCP packet trace
-static inline void log_tcp(bool recv, struct conn_tuple* conn, struct tcphdr* tcp, __u16 len) {
-  if (unlikely(!conn || LOG_ALLOW_TRACE)) return;
+static inline void log_tcp(enum log_level level, bool recv, struct conn_tuple* conn,
+                           struct tcphdr* tcp, __u16 len) {
+  if (!conn || log_verbosity < level) return;
   union log_info info = {
     .conn = *conn,
     .len = len,
@@ -124,13 +123,13 @@ static inline void log_tcp(bool recv, struct conn_tuple* conn, struct tcphdr* tc
     .seq = htonl(tcp->seq),
     .ack_seq = htonl(tcp->ack_seq),
   };
-  return log_any(LOG_TRACE, recv ? LOG_PKT_RECV_TCP : LOG_PKT_SEND_TCP, &info);
+  return log_any(level, recv ? LOG_PKT_RECV_TCP : LOG_PKT_SEND_TCP, &info);
 }
 
-// Warn about connection destruction
-static inline void log_destroy(struct conn_tuple* conn, enum destroy_type type, __u32 cooldown) {
-  if (likely(!conn || LOG_ALLOW_WARN)) return;
-  log_any(LOG_WARN, LOG_CONN_DESTROY,
+static inline void log_destroy(enum log_level level, struct conn_tuple* conn,
+                               enum destroy_type type, __u32 cooldown) {
+  if (!conn || log_verbosity < level) return;
+  log_any(level, LOG_CONN_DESTROY,
           &(union log_info){.conn = *conn, .destroy_type = type, .cooldown = cooldown});
 }
 
@@ -153,7 +152,7 @@ int use_pktbuf(enum rb_item_type type, __u64 buf);
 #define _log_rbprintf(_l, _fmt, ...)                                                         \
   ({                                                                                         \
     struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);                 \
-    if (likely(item)) {                                                                      \
+    if (item) {                                                                              \
       item->log_event.level = (_l);                                                          \
       item->log_event.type = LOG_MSG;                                                        \
       _log_f(item->log_event.info.msg, sizeof(item->log_event.info.msg), _fmt, __VA_ARGS__); \
@@ -162,15 +161,15 @@ int use_pktbuf(enum rb_item_type type, __u64 buf);
   })
 
 #define log_error(fmt, ...) \
-  if (likely(LOG_ALLOW_ERROR)) _log_rbprintf(LOG_ERROR, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_ERROR) _log_rbprintf(LOG_ERROR, fmt, ##__VA_ARGS__)
 #define log_warn(fmt, ...) \
-  if (likely(LOG_ALLOW_WARN)) _log_rbprintf(LOG_WARN, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_WARN) _log_rbprintf(LOG_WARN, fmt, ##__VA_ARGS__)
 #define log_info(fmt, ...) \
-  if (likely(LOG_ALLOW_INFO)) _log_rbprintf(LOG_INFO, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_INFO) _log_rbprintf(LOG_INFO, fmt, ##__VA_ARGS__)
 #define log_debug(fmt, ...) \
-  if (unlikely(LOG_ALLOW_DEBUG)) _log_rbprintf(LOG_DEBUG, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_DEBUG) _log_rbprintf(LOG_DEBUG, fmt, ##__VA_ARGS__)
 #define log_trace(fmt, ...) \
-  if (unlikely(LOG_ALLOW_TRACE)) _log_rbprintf(LOG_TRACE, fmt, ##__VA_ARGS__)
+  if (LOG_ALLOW_TRACE) _log_rbprintf(LOG_TRACE, fmt, ##__VA_ARGS__)
 
 static inline bool ipv6_is_ext(__u8 nexthdr) {
   switch (nexthdr) {
