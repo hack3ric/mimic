@@ -97,13 +97,13 @@ int packet_buf_consume(struct packet_buf* buf, bool* consumed) {
     return 0;
   }
 
-  _cleanup_fd int sk = try(socket(buf->conn.protocol, SOCK_RAW | SOCK_NONBLOCK, IPPROTO_UDP));
+  _cleanup_fd int sk = try(socket(ip_proto(&buf->conn.local), SOCK_RAW | SOCK_NONBLOCK, IPPROTO_UDP));
   struct sockaddr_storage saddr, daddr;
   conn_tuple_to_addrs(&buf->conn, &saddr, &daddr);
 
   if (log_verbosity >= LOG_DEBUG) {
     char ip_str[INET6_ADDRSTRLEN];
-    inet_ntop(buf->conn.protocol, &buf->conn.local, ip_str, sizeof(ip_str));
+    inet_ntop(ip_proto(&buf->conn.local), ip_buf(&buf->conn.local), ip_str, sizeof(ip_str));
     log_conn(LOG_DEBUG, &buf->conn, _("pktbuf_consume: trying to bind %s"), ip_str);
   }
   try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)));

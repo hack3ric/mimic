@@ -127,22 +127,16 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
   //
   // Maybe setting reception buffer size to 0 will help, but it's just prevent packets from storing
   // and they will be forwarded to the socket and discarded anyway.
-  _cleanup_fd int sk = try(socket(s->conn.protocol, SOCK_RAW | SOCK_NONBLOCK, IPPROTO_TCP));
+  _cleanup_fd int sk = try(socket(ip_proto(&s->conn.local), SOCK_RAW | SOCK_NONBLOCK, IPPROTO_TCP));
 
   struct sockaddr_storage saddr, daddr;
   conn_tuple_to_addrs(&s->conn, &saddr, &daddr);
 
-  __u32 csum = 0;
-  if (s->conn.protocol == AF_INET) {
-    csum += u32_fold(ntohl(s->conn.local.v4));
-    csum += u32_fold(ntohl(s->conn.remote.v4));
-  } else {
-    for (int i = 0; i < 8; i++) {
-      csum += ntohs(s->conn.local.v6.s6_addr16[i]);
-      csum += ntohs(s->conn.remote.v6.s6_addr16[i]);
-    }
+  __u32 csum = IPPROTO_TCP;
+  for (int i = 0; i < 8; i++) {
+    csum += ntohs(s->conn.local.s6_addr16[i]);
+    csum += ntohs(s->conn.remote.s6_addr16[i]);
   }
-  csum += IPPROTO_TCP;
 
   try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strret);
 
@@ -171,8 +165,8 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
     struct ifreq ifr;
     strncpy(ifr.ifr_name, ifname, sizeof(ifr.ifr_name));
     ioctl(sk, SIOCGIFMTU, &ifr);
-    __u16 mss =
-      s->conn.protocol == AF_INET ? max(ifr.ifr_mtu, 576) - 40 : max(ifr.ifr_mtu, 1280) - 60;
+    __u16 mss = ip_proto(&s->conn.local) == AF_INET ? max(ifr.ifr_mtu, 576) - 40
+                                                    : max(ifr.ifr_mtu, 1280) - 60;
 
     // Specify TCP options. `1`s at the front of arrays are NOP paddings.
     struct _tlv_be16 {

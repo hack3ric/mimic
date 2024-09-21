@@ -81,6 +81,10 @@
 #define IPPROTO_DSTOPTS 60
 #define IPPROTO_MH 135
 
+#define s6_addr8 in6_u.u6_addr8
+#define s6_addr16 in6_u.u6_addr16
+#define s6_addr32 in6_u.u6_addr32
+
 #else
 
 // Cleanup utilities
@@ -131,14 +135,32 @@ static inline __attribute__((__format_arg__(1))) const char* _(const char* text)
 #endif
 #define N_(text) text
 
+// IP representation utilities
+
+#define IP_ANY (struct in6_addr){}
+
+static inline int ip_proto(const struct in6_addr* ip) {
+  if (ip->s6_addr32[0] == 0 && ip->s6_addr32[1] == 0 && ip->s6_addr32[2] == htonl(0xffff))
+    return AF_INET;
+  else
+    return AF_INET6;
+}
+
+static inline void* ip_buf(struct in6_addr* ip) {
+  if (ip_proto(ip) == AF_INET)
+    return &ip->s6_addr32[3];
+  else
+    return ip;
+}
+
+static inline struct in6_addr ipv4_mapped(__be32 ipv4) {
+  return (struct in6_addr){.s6_addr32 = {0, 0, htonl(0xffff), ipv4}};
+}
+
 struct filter {
-  enum origin { O_LOCAL, O_REMOTE } origin;
-  enum protocol { P_IPV4 = AF_INET, P_IPV6 = AF_INET6 } protocol;
+  enum { O_LOCAL, O_REMOTE } origin : 16;
   __u16 port;
-  union ip_value {
-    __be32 v4;
-    struct in6_addr v6;
-  } ip;
+  struct in6_addr ip;
 };
 
 struct filter_settings {
@@ -178,9 +200,8 @@ static inline void filter_settings_apply(struct filter_settings* local,
 }
 
 struct conn_tuple {
-  enum protocol protocol;
   __u16 local_port, remote_port;
-  union ip_value local, remote;
+  struct in6_addr local, remote;
 };
 
 struct connection {

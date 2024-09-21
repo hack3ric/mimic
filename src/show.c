@@ -145,8 +145,8 @@ int subcmd_show(struct show_args* args) {
     struct bpf_map_iter iter = {.map_fd = conns_fd, .map_name = "mimic_conns"};
 
     while (try(bpf_map_iter_next(&iter, &key))) {
-      ip_port_fmt(key.protocol, key.local, key.local_port, local);
-      ip_port_fmt(key.protocol, key.remote, key.remote_port, remote);
+      ip_port_fmt(key.local, key.local_port, local);
+      ip_port_fmt(key.remote, key.remote_port, remote);
       printf(_("%sConnection%s %s => %s\n"), BOLD GREEN, RESET, local, remote);
 
       try(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK),

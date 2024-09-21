@@ -16,8 +16,8 @@ void log_conn(int level, struct conn_tuple* conn, const char* fmt, ...) {
   va_start(ap, fmt);
   if (log_verbosity >= level) {
     char from[IP_PORT_MAX_LEN], to[IP_PORT_MAX_LEN];
-    ip_port_fmt(conn->protocol, conn->local, conn->local_port, from);
-    ip_port_fmt(conn->protocol, conn->remote, conn->remote_port, to);
+    ip_port_fmt(conn->local, conn->local_port, from);
+    ip_port_fmt(conn->remote, conn->remote_port, to);
     fprintf(stderr, "%s%s " RESET, log_prefixes[level][0], gettext(log_prefixes[level][1]));
     if (level >= LOG_TRACE) fprintf(stderr, GRAY);
     fprintf(stderr, "%s => %s :: ", from, to);

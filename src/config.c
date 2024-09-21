@@ -2,6 +2,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <limits.h>
+#include <netinet/in.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,7 +52,7 @@ static int parse_kv(char* kv, char** k, char** v) {
   return 0;
 }
 
-static int parse_ip_port(char* str, enum protocol* protocol, union ip_value* ip, __u16* port) {
+static int parse_ip_port(char* str, struct in6_addr* ip, __u16* port) {
   char* port_str = strrchr(str, ':');
   if (!port_str) ret(-EINVAL, _("no port number specified: %s"), str);
   *port_str = '\0';
@@ -63,17 +64,19 @@ static int parse_ip_port(char* str, enum protocol* protocol, union ip_value* ip,
   }
   *port = _port;
 
+  int proto;
   if (strchr(str, ':')) {
     if (*str != '[' || port_str[-2] != ']') {
       ret(-EINVAL, _("did you forget square brackets around an IPv6 address?"));
     }
-    *protocol = AF_INET6;
+    proto = AF_INET6;
     str++;
     port_str[-2] = '\0';
   } else {
-    *protocol = AF_INET;
+    proto = AF_INET;
+    *ip = ipv4_mapped(0);
   }
-  if (inet_pton(*protocol, str, ip) == 0) ret(-EINVAL, _("bad IP address: '%s'"), str);
+  if (inet_pton(proto, str, ip_buf(ip)) == 0) ret(-EINVAL, _("bad IP address: '%s'"), str);
   return 0;
 }
 
@@ -158,7 +161,7 @@ int parse_filter(char* filter_str, struct filter* filter, struct filter_settings
   } else {
     ret(-EINVAL, _("unsupported filter type: '%s'"), k);
   }
-  try(parse_ip_port(v, &filter->protocol, &filter->ip, &filter->port));
+  try(parse_ip_port(v, &filter->ip, &filter->port));
 
   *settings = (struct filter_settings){-1, -1, -1, -1, -1, -1};
   if (!delim) return 0;

@@ -44,28 +44,13 @@ struct ph_part {
 // clang-format on
 
 static __always_inline struct filter_settings* matches_whitelist(QUARTET_DEF) {
-  struct filter local = {.origin = O_LOCAL}, remote = {.origin = O_REMOTE};
-  if (udp) {
-    local.port = ntohs(udp->source);
-    remote.port = ntohs(udp->dest);
-  } else if (tcp) {
-    local.port = ntohs(tcp->source);
-    remote.port = ntohs(tcp->dest);
-  }
-  if (ipv4) {
-    local.protocol = remote.protocol = AF_INET;
-    local.ip.v4 = ipv4->saddr;
-    remote.ip.v4 = ipv4->daddr;
-  } else if (ipv6) {
-    local.protocol = remote.protocol = AF_INET6;
-    local.ip.v6 = ipv6->saddr;
-    remote.ip.v6 = ipv6->daddr;
-  }
-  if (tcp) {
-    swap(local, remote);
-    local.origin = O_LOCAL;
-    remote.origin = O_REMOTE;
-  }
+  struct filter local = {}, remote = {};
+  local.origin = udp ? O_LOCAL : O_REMOTE;
+  remote.origin = udp ? O_REMOTE : O_LOCAL;
+  local.port = udp ? ntohs(udp->source) : tcp ? ntohs(tcp->source) : 0;
+  remote.port = udp ? ntohs(udp->dest) : tcp ? ntohs(tcp->dest) : 0;
+  local.ip = ipv4 ? ipv4_mapped(ipv4->saddr) : ipv6 ? ipv6->saddr : IP_ANY;
+  remote.ip = ipv4 ? ipv4_mapped(ipv4->daddr) : ipv6 ? ipv6->daddr : IP_ANY;
 
   struct filter_settings* result = bpf_map_lookup_elem(&mimic_whitelist, &local);
   result = result ?: bpf_map_lookup_elem(&mimic_whitelist, &remote);
@@ -74,26 +59,11 @@ static __always_inline struct filter_settings* matches_whitelist(QUARTET_DEF) {
 
 static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF) {
   struct conn_tuple key = {};
-  if (udp) {
-    key.local_port = ntohs(udp->source);
-    key.remote_port = ntohs(udp->dest);
-  } else if (tcp) {
-    key.local_port = ntohs(tcp->source);
-    key.remote_port = ntohs(tcp->dest);
-  }
-  if (ipv4) {
-    key.protocol = AF_INET;
-    key.local.v4 = ipv4->saddr;
-    key.remote.v4 = ipv4->daddr;
-  } else if (ipv6) {
-    key.protocol = AF_INET6;
-    key.local.v6 = ipv6->saddr;
-    key.remote.v6 = ipv6->daddr;
-  }
-  if (tcp) {
-    swap(key.local, key.remote);
-    swap(key.local_port, key.remote_port);
-  }
+  key.local_port = udp ? ntohs(udp->source) : tcp ? ntohs(tcp->dest) : 0;
+  key.remote_port = udp ? ntohs(udp->dest) : tcp ? ntohs(tcp->source) : 0;
+  key.local = ipv4 ? ipv4_mapped(ipv4->saddr) : ipv6 ? ipv6->saddr : IP_ANY;
+  key.remote = ipv4 ? ipv4_mapped(ipv4->daddr) : ipv6 ? ipv6->daddr : IP_ANY;
+  if (tcp) swap(key.local, key.remote);
   return key;
 }
 

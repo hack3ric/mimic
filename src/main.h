@@ -4,6 +4,7 @@
 #include <bpf/bpf.h>
 #include <errno.h>
 #include <linux/types.h>
+#include <netinet/in.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -93,7 +94,7 @@ void get_lock_file_name(char* dest, size_t dest_len, int ifindex);
 void conn_tuple_to_addrs(const struct conn_tuple* conn, struct sockaddr_storage* saddr,
                          struct sockaddr_storage* daddr);
 
-void ip_port_fmt(enum protocol protocol, union ip_value ip, __be16 port, char* dest);
+void ip_port_fmt(struct in6_addr ip, __be16 port, char* dest);
 void filter_fmt(const struct filter* filter, char* dest);
 const char* conn_state_to_str(enum conn_state s);
 

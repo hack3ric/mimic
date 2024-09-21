@@ -41,22 +41,23 @@ void get_lock_file_name(char* dest, size_t dest_len, int ifindex) {
 
 void conn_tuple_to_addrs(const struct conn_tuple* conn, struct sockaddr_storage* saddr,
                          struct sockaddr_storage* daddr) {
-  if (conn->protocol == AF_INET) {
+  if (ip_proto(&conn->local) == AF_INET) {
     struct sockaddr_in *sa = (typeof(sa))saddr, *da = (typeof(da))daddr;
-    *sa = (typeof(*sa)){.sin_family = AF_INET, .sin_addr = {conn->local.v4}};
-    *da = (typeof(*da)){.sin_family = AF_INET, .sin_addr = {conn->remote.v4}};
+    *sa = (typeof(*sa)){.sin_family = AF_INET, .sin_addr = {conn->local.s6_addr32[3]}};
+    *da = (typeof(*da)){.sin_family = AF_INET, .sin_addr = {conn->remote.s6_addr32[3]}};
   } else {
     struct sockaddr_in6 *sa = (typeof(sa))saddr, *da = (typeof(da))daddr;
-    *sa = (typeof(*da)){.sin6_family = AF_INET6, .sin6_addr = conn->local.v6};
-    *da = (typeof(*da)){.sin6_family = AF_INET6, .sin6_addr = conn->remote.v6};
+    *sa = (typeof(*da)){.sin6_family = AF_INET6, .sin6_addr = conn->local};
+    *da = (typeof(*da)){.sin6_family = AF_INET6, .sin6_addr = conn->remote};
   }
 }
 
-void ip_port_fmt(enum protocol protocol, union ip_value ip, __u16 port, char* dest) {
+void ip_port_fmt(struct in6_addr ip, __u16 port, char* dest) {
+  int proto = ip_proto(&ip);
   *dest = '\0';
-  if (protocol == P_IPV6) strcat(dest, "[");
-  inet_ntop(protocol, &ip, dest + strlen(dest), INET6_ADDRSTRLEN);
-  if (protocol == P_IPV6) strcat(dest, "]");
+  if (proto == AF_INET6) strcat(dest, "[");
+  inet_ntop(proto, ip_buf(&ip), dest + strlen(dest), INET6_ADDRSTRLEN);
+  if (proto == AF_INET6) strcat(dest, "]");
   snprintf(dest + strlen(dest), 7, ":%d", port);
 }
 
@@ -70,7 +71,7 @@ void filter_fmt(const struct filter* filter, char* dest) {
     strcat(dest, "remote=");
     dest += 7;
   }
-  ip_port_fmt(filter->protocol, filter->ip, filter->port, dest);
+  ip_port_fmt(filter->ip, filter->port, dest);
 }
 
 const char* conn_state_to_str(enum conn_state s) {
