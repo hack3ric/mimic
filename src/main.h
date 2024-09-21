@@ -13,6 +13,10 @@
 #include "common/defs.h"
 #include "common/try.h"
 
+#ifndef MAX_FILTER_COUNT
+#define MAX_FILTER_COUNT 32
+#endif
+
 struct args {
   enum {
     CMD_NULL,
@@ -22,8 +26,8 @@ struct args {
   union {
     struct run_args {
       const char *ifname, *file;
-      struct filter filters[8];
-      struct filter_settings settings[8], gsettings;
+      struct filter filters[MAX_FILTER_COUNT];
+      struct filter_settings settings[MAX_FILTER_COUNT], gsettings;
       unsigned int filter_count;
     } run;
     struct show_args {
@@ -51,7 +55,8 @@ struct lock_content {
 
 int parse_handshake(char* str, struct filter_settings* settings);
 int parse_keepalive(char* str, struct filter_settings* settings);
-int parse_filter(char* filter_str, struct filter* filter, struct filter_settings* settings);
+int parse_filter(char* filter_str, struct filter* filters, struct filter_settings* settings,
+                 int size);
 int parse_config_file(FILE* file, struct run_args* args);
 int parse_lock_file(FILE* file, struct lock_content* c);
 int write_lock_file(int fd, const struct lock_content* c);

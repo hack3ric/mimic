@@ -45,6 +45,7 @@ static const struct argp_option options[] = {
 };
 
 static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
+  int ret;
   struct run_args* args = (struct run_args*)state->input;
   switch (key) {
     case 'v':
@@ -54,12 +55,14 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       if (log_verbosity > 0) log_verbosity--;
       break;
     case 'f':
-      try(
-        parse_filter(arg, &args->filters[args->filter_count], &args->settings[args->filter_count]));
-      if (args->filter_count++ > 8) {
-        log_error(_("currently only maximum of 8 filters is supported"));
-        exit(1);
-      }
+      ret = parse_filter(arg, &args->filters[args->filter_count],
+                         &args->settings[args->filter_count], MAX_FILTER_COUNT - args->filter_count);
+      if (ret == -E2BIG)
+        ret(-E2BIG, _("currently only maximum of %d filters is supported"), MAX_FILTER_COUNT);
+      else if (ret < 0)
+        return ret;
+      else
+        args->filter_count += ret;
       break;
     case 'h':
       try(parse_handshake(arg, &args->gsettings));
@@ -167,7 +170,6 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
     ioctl(sk, SIOCGIFMTU, &ifr);
     __u16 mss = ip_proto(&s->conn.local) == AF_INET ? max(ifr.ifr_mtu, 576) - 40
                                                     : max(ifr.ifr_mtu, 1280) - 60;
-
     // Specify TCP options. `1`s at the front of arrays are NOP paddings.
     struct _tlv_be16 {
       __u8 t, l;

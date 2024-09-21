@@ -2,6 +2,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <limits.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -43,40 +44,36 @@ static char* trim(char* str) {
 static int parse_kv(char* kv, char** k, char** v) {
   if (!kv || !k || !v) return -EINVAL;
   char* delim_pos = strchr(kv, '=');
-  if (delim_pos == NULL || delim_pos == kv) {
+  if (delim_pos == NULL || delim_pos == kv)
     ret(-EINVAL, _("expected key-value pair: '%s'"), kv);
-  }
   *delim_pos = 0;
   *k = trim(kv);
   *v = trim(delim_pos + 1);
   return 0;
 }
 
-static int parse_ip_port(char* str, struct in6_addr* ip, __u16* port) {
+static int parse_host_port(char* str, char** host, __u16* port) {
   char* port_str = strrchr(str, ':');
   if (!port_str) ret(-EINVAL, _("no port number specified: %s"), str);
   *port_str = '\0';
   port_str++;
   char* endptr;
   long _port = strtol(port_str, &endptr, 10);
-  if (_port <= 0 || _port > 65535 || *endptr != '\0') {
+  if (_port <= 0 || _port > 65535 || *endptr != '\0')
     ret(-EINVAL, _("invalid port number: '%s'"), port_str);
-  }
   *port = _port;
 
-  int proto;
-  if (strchr(str, ':')) {
-    if (*str != '[' || port_str[-2] != ']') {
-      ret(-EINVAL, _("did you forget square brackets around an IPv6 address?"));
-    }
-    proto = AF_INET6;
+  if (strchr(str, ':') && (*str != '[' || port_str[-2] != ']'))
+    ret(-EINVAL, _("did you forget square brackets around an IPv6 address?"));
+  else if (*str == '[' && port_str[-2] != ']')
+    ret(-EINVAL, _("missing ']': '%s'"), str);
+  else if (*str != '[' && port_str[-2] == ']')
+    ret(-EINVAL, _("missing '[': '%s'"), str);
+  if (*str == '[' && port_str[-2] == ']') {
     str++;
     port_str[-2] = '\0';
-  } else {
-    proto = AF_INET;
-    *ip = ipv4_mapped(0);
   }
-  if (inet_pton(proto, str, ip_buf(ip)) == 0) ret(-EINVAL, _("bad IP address: '%s'"), str);
+  *host = str;
   return 0;
 }
 
@@ -147,45 +144,72 @@ int parse_keepalive(char* str, struct filter_settings* settings) {
   return 0;
 }
 
-int parse_filter(char* filter_str, struct filter* filter, struct filter_settings* settings) {
+int parse_filter(char* filter_str, struct filter* filters, struct filter_settings* settings,
+                 int size) {
+  int ret;
   char *k, *v;
 
   char* delim = strchr(filter_str, ',');
   if (delim) *delim = '\0';
 
+  int origin;
   try(parse_kv(filter_str, &k, &v));
   if (strcmp("local", k) == 0) {
-    filter->origin = O_LOCAL;
+    origin = O_LOCAL;
   } else if (strcmp("remote", k) == 0) {
-    filter->origin = O_REMOTE;
+    origin = O_REMOTE;
   } else {
     ret(-EINVAL, _("unsupported filter type: '%s'"), k);
   }
-  try(parse_ip_port(v, &filter->ip, &filter->port));
 
-  *settings = (struct filter_settings){-1, -1, -1, -1, -1, -1};
-  if (!delim) return 0;
+  char* host;
+  __u16 port;
+  try(parse_host_port(v, &host, &port));
+
+  struct addrinfo* ai_list;
+  struct addrinfo hint = {
+    .ai_flags = AI_V4MAPPED | AI_ALL,
+    .ai_family = AF_INET6,
+    .ai_socktype = SOCK_DGRAM,
+    .ai_protocol = IPPROTO_UDP,
+  };
+  if ((ret = getaddrinfo(host, 0, &hint, &ai_list)) < 0)
+    ret(-EINVAL, _("cannot get address information: %s"), gai_strerror(ret));
+  int i = 0;
+  for (struct addrinfo* ai = ai_list; ai; ai = ai->ai_next, i++) {
+    if (i >= size) {
+      freeaddrinfo(ai_list);
+      return -E2BIG;
+    };
+    struct sockaddr_in6* addr = (typeof(addr))ai->ai_addr;
+    filters[i] = (typeof(*filters)){.origin = origin, .ip = addr->sin6_addr, .port = port};
+  }
+  freeaddrinfo(ai_list);
+  if (i <= 0) return 0;
+
+  settings[0] = (struct filter_settings){-1, -1, -1, -1, -1, -1};
+  if (!delim) goto ret;
   char* next_delim = delim;
   while (true) {
     delim = next_delim + 1;
     next_delim = strchr(delim, ',');
     if (next_delim) *next_delim = '\0';
-
     try(parse_kv(delim, &k, &v));
-    if (strcmp("handshake", k) == 0) {
-      try(parse_handshake(v, settings));
-    } else if (strcmp("keepalive", k) == 0) {
-      try(parse_keepalive(v, settings));
-    } else {
+    if (strcmp("handshake", k) == 0)
+      try(parse_handshake(v, &settings[0]));
+    else if (strcmp("keepalive", k) == 0)
+      try(parse_keepalive(v, &settings[0]));
+    else
       ret(-EINVAL, _("unsupported option type: '%s'"), k);
-    }
-
     if (!next_delim) break;
   }
-  return 0;
+ret:
+  for (int j = 1; j < i; j++) memcpy(&settings[j], &settings[0], sizeof(*settings));
+  return i;
 }
 
 int parse_config_file(FILE* file, struct run_args* args) {
+  int ret;
   _cleanup_malloc_str char* line = NULL;
   size_t len = 0;
   ssize_t read;
@@ -199,19 +223,18 @@ int parse_config_file(FILE* file, struct run_args* args) {
     if (strcmp(k, "log.verbosity") == 0) {
       long parsed = strtol(v, &endptr, 10);
       if (endptr && endptr != v + strlen(v)) {
-        if (strcmp(v, "error") == 0) {
+        if (strcmp(v, "error") == 0)
           parsed = LOG_ERROR;
-        } else if (strcmp(v, "warn") == 0) {
+        else if (strcmp(v, "warn") == 0)
           parsed = LOG_WARN;
-        } else if (strcmp(v, "info") == 0) {
+        else if (strcmp(v, "info") == 0)
           parsed = LOG_INFO;
-        } else if (strcmp(v, "debug") == 0) {
+        else if (strcmp(v, "debug") == 0)
           parsed = LOG_DEBUG;
-        } else if (strcmp(v, "trace") == 0) {
+        else if (strcmp(v, "trace") == 0)
           parsed = LOG_TRACE;
-        } else {
+        else
           ret(-EINVAL, _("invalid integer: '%s'"), v);
-        }
       } else {
         if (parsed < LOG_ERROR) parsed = LOG_ERROR;
         if (parsed > LOG_TRACE) parsed = LOG_TRACE;
@@ -223,11 +246,14 @@ int parse_config_file(FILE* file, struct run_args* args) {
     } else if (strcmp(k, "keepalive") == 0) {
       try(parse_keepalive(v, &args->gsettings));
     } else if (strcmp(k, "filter") == 0) {
-      try(parse_filter(v, &args->filters[args->filter_count], &args->settings[args->filter_count]));
-      if (args->filter_count++ > 8) {
-        ret(-E2BIG, _("currently only maximum of 8 filters is supported"));
-      }
-
+      ret = parse_filter(v, &args->filters[args->filter_count], &args->settings[args->filter_count],
+                         MAX_FILTER_COUNT - args->filter_count);
+      if (ret == -E2BIG)
+        ret(-E2BIG, _("currently only maximum of %d filters is supported"), MAX_FILTER_COUNT);
+      else if (ret < 0)
+        return ret;
+      else
+        args->filter_count += ret;
     } else {
       ret(-EINVAL, _("unknown key '%s'"), k);
     }
@@ -257,23 +283,22 @@ int parse_lock_file(FILE* file, struct lock_content* c) {
             argp_program_version, v);
       }
       version_checked = true;
-    } else if (strcmp(k, "pid") == 0) {
+    } else if (strcmp(k, "pid") == 0)
       try(parse_int(v, &c->pid));
-    } else if (strcmp(k, "egress_id") == 0) {
+    else if (strcmp(k, "egress_id") == 0)
       try(parse_int(v, &c->egress_id));
-    } else if (strcmp(k, "ingress_id") == 0) {
+    else if (strcmp(k, "ingress_id") == 0)
       try(parse_int(v, &c->ingress_id));
-    } else if (strcmp(k, "whitelist_id") == 0) {
+    else if (strcmp(k, "whitelist_id") == 0)
       try(parse_int(v, &c->whitelist_id));
-    } else if (strcmp(k, "conns_id") == 0) {
+    else if (strcmp(k, "conns_id") == 0)
       try(parse_int(v, &c->conns_id));
-    } else if (strcmp(k, "handshake") == 0) {
+    else if (strcmp(k, "handshake") == 0)
       try(parse_handshake(v, &c->settings));
-    } else if (strcmp(k, "keepalive") == 0) {
+    else if (strcmp(k, "keepalive") == 0)
       try(parse_keepalive(v, &c->settings));
-    } else {
+    else
       ret(-EINVAL, _("unknown key '%s'"), k);
-    }
   }
   if (!version_checked) ret(-EINVAL, _("no version found in lock file"));
   return 0;
