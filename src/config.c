@@ -12,6 +12,7 @@
 #include <sys/types.h>
 
 #include "common/defs.h"
+#include "common/log.h"
 #include "common/try.h"
 #include "log.h"
 #include "main.h"
@@ -44,8 +45,7 @@ static char* trim(char* str) {
 static int parse_kv(char* kv, char** k, char** v) {
   if (!kv || !k || !v) return -EINVAL;
   char* delim_pos = strchr(kv, '=');
-  if (delim_pos == NULL || delim_pos == kv)
-    ret(-EINVAL, _("expected key-value pair: '%s'"), kv);
+  if (delim_pos == NULL || delim_pos == kv) ret(-EINVAL, _("expected key-value pair: '%s'"), kv);
   *delim_pos = 0;
   *k = trim(kv);
   *v = trim(delim_pos + 1);
@@ -147,25 +147,23 @@ int parse_keepalive(char* str, struct filter_settings* settings) {
 int parse_filter(char* filter_str, struct filter* filters, struct filter_settings* settings,
                  int size) {
   int ret;
-  char *k, *v;
 
   char* delim = strchr(filter_str, ',');
   if (delim) *delim = '\0';
 
   int origin;
+  char *k, *v;
   try(parse_kv(filter_str, &k, &v));
-  if (strcmp("local", k) == 0) {
+  if (strcmp("local", k) == 0)
     origin = O_LOCAL;
-  } else if (strcmp("remote", k) == 0) {
+  else if (strcmp("remote", k) == 0)
     origin = O_REMOTE;
-  } else {
+  else
     ret(-EINVAL, _("unsupported filter type: '%s'"), k);
-  }
 
   char* host;
   __u16 port;
   try(parse_host_port(v, &host, &port));
-
   struct addrinfo* ai_list;
   struct addrinfo hint = {
     .ai_flags = AI_V4MAPPED | AI_ALL,
@@ -182,6 +180,9 @@ int parse_filter(char* filter_str, struct filter* filters, struct filter_setting
       return -E2BIG;
     };
     struct sockaddr_in6* addr = (typeof(addr))ai->ai_addr;
+    char ip_str[INET6_ADDRSTRLEN];
+    ip_fmt(&addr->sin6_addr, ip_str);
+    if (strcmp(host, ip_str) != 0) log_warn(_("%s resolved to %s"), host, ip_str);
     filters[i] = (typeof(*filters)){.origin = origin, .ip = addr->sin6_addr, .port = port};
   }
   freeaddrinfo(ai_list);

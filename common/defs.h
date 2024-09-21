@@ -137,7 +137,7 @@ static inline __attribute__((__format_arg__(1))) const char* _(const char* text)
 
 // IP representation utilities
 
-#define IP_ANY (struct in6_addr){}
+#define IP_ANY ((struct in6_addr){})
 
 static inline int ip_proto(const struct in6_addr* ip) {
   if (ip->s6_addr32[0] == 0 && ip->s6_addr32[1] == 0 && ip->s6_addr32[2] == htonl(0xffff))
@@ -147,6 +147,13 @@ static inline int ip_proto(const struct in6_addr* ip) {
 }
 
 static inline void* ip_buf(struct in6_addr* ip) {
+  if (ip_proto(ip) == AF_INET)
+    return &ip->s6_addr32[3];
+  else
+    return ip;
+}
+
+static inline const void* ip_buf_const(const struct in6_addr* ip) {
   if (ip_proto(ip) == AF_INET)
     return &ip->s6_addr32[3];
   else

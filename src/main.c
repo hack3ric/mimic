@@ -52,11 +52,15 @@ void conn_tuple_to_addrs(const struct conn_tuple* conn, struct sockaddr_storage*
   }
 }
 
-void ip_port_fmt(struct in6_addr ip, __u16 port, char* dest) {
-  int proto = ip_proto(&ip);
+inline void ip_fmt(const struct in6_addr* ip, char* dest) {
+  inet_ntop(ip_proto(ip), ip_buf_const(ip), dest, INET6_ADDRSTRLEN);
+}
+
+inline void ip_port_fmt(const struct in6_addr* ip, __u16 port, char* dest) {
+  int proto = ip_proto(ip);
   *dest = '\0';
   if (proto == AF_INET6) strcat(dest, "[");
-  inet_ntop(proto, ip_buf(&ip), dest + strlen(dest), INET6_ADDRSTRLEN);
+  ip_fmt(ip, dest + strlen(dest));
   if (proto == AF_INET6) strcat(dest, "]");
   snprintf(dest + strlen(dest), 7, ":%d", port);
 }
@@ -71,7 +75,7 @@ void filter_fmt(const struct filter* filter, char* dest) {
     strcat(dest, "remote=");
     dest += 7;
   }
-  ip_port_fmt(filter->ip, filter->port, dest);
+  ip_port_fmt(&filter->ip, filter->port, dest);
 }
 
 const char* conn_state_to_str(enum conn_state s) {
