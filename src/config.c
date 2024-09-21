@@ -107,9 +107,8 @@ static int parse_int_seq(char* str, int* nums, size_t len) {
       str[i] = orig_char;
     }
   }
-  if (nums_idx != len) {
+  if (nums_idx != len)
     ret(-EINVAL, _("expected %d integers, got only %d: '%s'"), len, nums_idx, str);
-  }
   return nums_idx;
 }
 
@@ -128,8 +127,8 @@ int parse_handshake(char* str, struct filter_settings* settings) {
   if (!str || !settings) return -EINVAL;
   int nums[2];
   try(parse_int_seq(str, nums, 2));
-  if (nums[0] >= 0) settings->hi = nums[0];
-  if (nums[1] >= 0) settings->hr = nums[1];
+  for (int i = 0; i < 2; i++)
+    if (nums[i] >= 0) settings->handshake.array[i] = nums[i];
   return 0;
 }
 
@@ -137,10 +136,8 @@ int parse_keepalive(char* str, struct filter_settings* settings) {
   if (!str || !settings) return -EINVAL;
   int nums[4];
   try(parse_int_seq(str, nums, 4));
-  if (nums[0] >= 0) settings->kt = nums[0];
-  if (nums[1] >= 0) settings->ki = nums[1];
-  if (nums[2] >= 0) settings->kr = nums[2];
-  if (nums[3] >= 0) settings->ks = nums[3];
+  for (int i = 0; i < 4; i++)
+    if (nums[i] >= 0) settings->keepalive.array[i] = nums[i];
   return 0;
 }
 
@@ -188,7 +185,7 @@ int parse_filter(char* filter_str, struct filter* filters, struct filter_setting
   freeaddrinfo(ai_list);
   if (i <= 0) return 0;
 
-  settings[0] = (struct filter_settings){-1, -1, -1, -1, -1, -1};
+  settings[0] = FALLBACK_SETTINGS;
   if (!delim) goto ret;
   char* next_delim = delim;
   while (true) {
@@ -247,8 +244,8 @@ int parse_config_file(FILE* file, struct run_args* args) {
     } else if (strcmp(k, "keepalive") == 0) {
       try(parse_keepalive(v, &args->gsettings));
     } else if (strcmp(k, "filter") == 0) {
-      ret = parse_filter(v, &args->filters[args->filter_count], &args->settings[args->filter_count],
-                         MAX_FILTER_COUNT - args->filter_count);
+      unsigned int fc = args->filter_count;
+      ret = parse_filter(v, &args->filters[fc], &args->settings[fc], MAX_FILTER_COUNT - fc);
       if (ret == -E2BIG)
         ret(-E2BIG, _("currently only maximum of %d filters is supported"), MAX_FILTER_COUNT);
       else if (ret < 0)
@@ -270,7 +267,7 @@ int parse_lock_file(FILE* file, struct lock_content* c) {
   ssize_t read;
 
   bool version_checked = false;
-  c->settings = DEFAULT_FILTER_SETTINGS;
+  c->settings = DEFAULT_SETTINGS;
   errno = 0;
 
   while ((read = getline(&line, &len, file)) != -1) {
@@ -312,8 +309,8 @@ int write_lock_file(int fd, const struct lock_content* c) {
   try(dprintf(fd, "ingress_id=%d\n", c->ingress_id));
   try(dprintf(fd, "whitelist_id=%d\n", c->whitelist_id));
   try(dprintf(fd, "conns_id=%d\n", c->conns_id));
-  try(dprintf(fd, "handshake=%d:%d\n", c->settings.hi, c->settings.hr));
-  try(dprintf(fd, "keepalive=%d:%d:%d:%d\n", c->settings.kt, c->settings.ki, c->settings.kr,
-              c->settings.ks));
+  try(dprintf(fd, "handshake=%d:%d\n", c->settings.h.i, c->settings.h.r));
+  try(dprintf(fd, "keepalive=%d:%d:%d:%d\n", c->settings.k.t, c->settings.k.i, c->settings.k.r,
+              c->settings.k.s));
   return 0;
 }

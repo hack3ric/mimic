@@ -170,40 +170,45 @@ struct filter {
   struct in6_addr ip;
 };
 
+// clang-format off
 struct filter_settings {
-  int hi, hr;          // handshake interval, retry
-  int kt, ki, kr, ks;  // keepalive time, interval, retry, stale
+  union {
+    struct {
+      union { struct {
+        union {
+          struct { int interval, retry; };
+          struct { int i, r; };
+          int array[2];
+        };
+      } handshake, h; };
+      union { struct {
+        union {
+          struct { int time, interval, retry, stale; };
+          struct { int t, i, r, s; };
+          int array[4];
+        };
+      } keepalive, k; };
+    };
+    int array[6];
+  };
 };
+// clang-format on
 
 #define DEFAULT_COOLDOWN 5
 
-#define DEFAULT_HANDSHAKE_INTERVAL 2
-#define DEFAULT_HANDSHAKE_RETRY 3
-#define DEFAULT_KEEPALIVE_TIME 180
-#define DEFAULT_KEEPALIVE_INTERVAL 10
-#define DEFAULT_KEEPALIVE_RETRY 3
-#define DEFAULT_KEEPALIVE_STALE 600
-#define DEFAULT_FILTER_SETTINGS \
-  ((struct filter_settings){    \
-    DEFAULT_HANDSHAKE_INTERVAL, \
-    DEFAULT_HANDSHAKE_RETRY,    \
-    DEFAULT_KEEPALIVE_TIME,     \
-    DEFAULT_KEEPALIVE_INTERVAL, \
-    DEFAULT_KEEPALIVE_RETRY,    \
-    DEFAULT_KEEPALIVE_STALE,    \
-  })
+static const struct filter_settings DEFAULT_SETTINGS = {
+  .handshake.array = {2, 3},
+  .keepalive.array = {180, 10, 3, 600},
+};
 
-#define _filter_settings_apply(_field) \
-  if (local->_field < 0) local->_field = remote->_field;
+static const struct filter_settings FALLBACK_SETTINGS = {
+  .array = {-1, -1, -1, -1, -1, -1},
+};
 
 static inline void filter_settings_apply(struct filter_settings* local,
-                                         const struct filter_settings* remote) {
-  _filter_settings_apply(hi);
-  _filter_settings_apply(hr);
-  _filter_settings_apply(kt);
-  _filter_settings_apply(ki);
-  _filter_settings_apply(kr);
-  _filter_settings_apply(ks);
+                                         const struct filter_settings* global) {
+  for (int i = 0; i < 6; i++)
+    if (local->array[i] < 0) local->array[i] = global->array[i];
 }
 
 struct conn_tuple {

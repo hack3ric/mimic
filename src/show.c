@@ -4,6 +4,7 @@
 #include <net/if.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "common/defs.h"
 #include "common/log.h"
@@ -52,8 +53,9 @@ const struct argp show_argp = {
 int show_overview(int whitelist_fd, struct filter_settings* gsettings, int log_verbosity) {
   FILE* out = log_verbosity > 0 ? stderr : stdout;
   if (log_verbosity >= 2) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
-  fprintf(out, _("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d\n"), BOLD, RESET, gsettings->hi,
-         gsettings->hr, gsettings->kt, gsettings->ki, gsettings->kr, gsettings->ks);
+  fprintf(out, _("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d\n"), BOLD, RESET,
+          gsettings->h.i, gsettings->h.r, gsettings->k.t, gsettings->k.i, gsettings->k.r,
+          gsettings->k.s);
 
   char buf[FILTER_FMT_MAX_LEN];
   struct filter filter;
@@ -68,28 +70,26 @@ int show_overview(int whitelist_fd, struct filter_settings* gsettings, int log_v
     fprintf(out, _("  %sfilter:%s %s"), BOLD, RESET, buf);
 
     struct filter_settings *a = &settings, *b = gsettings;
-    bool heq = a->hi == b->hi && a->hr == b->hr;
-    bool keq = a->kt == b->kt && a->ki == b->ki && a->kr == b->kr && a->ks == b->ks;
-    if (heq && keq) {
+    bool handshake_eq = memcmp(&a->h, &b->h, sizeof(a->h)) == 0;
+    bool keepalive_eq = memcmp(&a->k, &b->k, sizeof(a->k)) == 0;
+    if (handshake_eq && keepalive_eq) {
       fprintf(out, "\n");
     } else {
       fprintf(out, " " GRAY "(");
-      if (!heq) {
+      if (!handshake_eq) {
         fprintf(out, _("handshake "));
-        if (a->hi != b->hi) fprintf(out, "%d", settings.hi);
-        fprintf(out, ":");
-        if (a->hr != b->hr) fprintf(out, "%d", settings.hr);
+        for (int i = 0; i < 2; i++) {
+          if (a->h.array[i] != b->h.array[i]) fprintf(out, "%d", settings.h.array[i]);
+          if (i < 1) fprintf(out, ":");
+        }
       }
-      if (!heq && !keq) fprintf(out, ", ");
-      if (!keq) {
+      if (!handshake_eq && !keepalive_eq) fprintf(out, ", ");
+      if (!keepalive_eq) {
         fprintf(out, _("keepalive "));
-        if (a->kt != b->kt) fprintf(out, "%d", settings.kt);
-        fprintf(out, ":");
-        if (a->ki != b->ki) fprintf(out, "%d", settings.ki);
-        fprintf(out, ":");
-        if (a->kr != b->kr) fprintf(out, "%d", settings.kr);
-        fprintf(out, ":");
-        if (a->ks != b->ks) fprintf(out, "%d", settings.ks);
+        for (int i = 0; i < 4; i++) {
+          if (a->k.array[i] != b->k.array[i]) fprintf(out, "%d", settings.k.array[i]);
+          if (i < 3) fprintf(out, ":");
+        }
       }
       fprintf(out, ")" RESET "\n");
     }

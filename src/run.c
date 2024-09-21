@@ -47,6 +47,7 @@ static const struct argp_option options[] = {
 static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
   int ret;
   struct run_args* args = (struct run_args*)state->input;
+  unsigned int fc = args->filter_count;
   switch (key) {
     case 'v':
       if (log_verbosity < 4) log_verbosity++;
@@ -55,8 +56,7 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       if (log_verbosity > 0) log_verbosity--;
       break;
     case 'f':
-      ret = parse_filter(arg, &args->filters[args->filter_count],
-                         &args->settings[args->filter_count], MAX_FILTER_COUNT - args->filter_count);
+      ret = parse_filter(arg, &args->filters[fc], &args->settings[fc], MAX_FILTER_COUNT - fc);
       if (ret == -E2BIG)
         ret(-E2BIG, _("currently only maximum of %d filters is supported"), MAX_FILTER_COUNT);
       else if (ret < 0)
@@ -334,21 +334,23 @@ static int do_routine(int conns_fd, const char* ifname) {
         if (time_diff_sec(tstamp, conn.stale_tstamp) >= conn_cooldown(&conn) * 2) remove = true;
         break;
       case CONN_SYN_SENT:
-        if (retry_secs >= (conn.settings.hr + 1) * conn.settings.hi) {
+        if (retry_secs >= (conn.settings.handshake.retry + 1) * conn.settings.handshake.interval) {
           reset = true;
-        } else if (retry_secs != 0 && retry_secs % conn.settings.hi == 0) {
+        } else if (retry_secs != 0 && retry_secs % conn.settings.handshake.interval == 0) {
           log_conn(LOG_INFO, &key, _("retry sending SYN"));
           send_ctrl_packet(&key, TCP_FLAG_SYN, conn.seq - 1, 0, 0xffff, ifname);
         }
         break;
       case CONN_SYN_RECV:
-        if (retry_secs >= (conn.settings.hr + 1) * conn.settings.hi) reset = true;
+        if (retry_secs >= (conn.settings.handshake.retry + 1) * conn.settings.handshake.interval)
+          reset = true;
         break;
       case CONN_ESTABLISHED:
-        if (conn.settings.ks > 0 && time_diff_sec(tstamp, conn.stale_tstamp) >= conn.settings.ks) {
+        if (conn.settings.keepalive.stale > 0 &&
+            time_diff_sec(tstamp, conn.stale_tstamp) >= conn.settings.keepalive.stale) {
           reset = remove = true;
-        } else if (conn.settings.kt > 0 && retry_secs >= conn.settings.kt) {
-          if (conn.settings.ki <= 0) {
+        } else if (conn.settings.keepalive.time > 0 && retry_secs >= conn.settings.keepalive.time) {
+          if (conn.settings.keepalive.interval <= 0) {
             reset = true;
           } else if (conn.retry_tstamp >= conn.reset_tstamp) {
             log_conn(LOG_DEBUG, &key, _("sending keepalive"));
@@ -358,9 +360,9 @@ static int do_routine(int conns_fd, const char* ifname) {
             bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
           } else {
             int reset_secs = time_diff_sec(tstamp, conn.reset_tstamp);
-            if (reset_secs >= conn.settings.kr * conn.settings.ki) {
+            if (reset_secs >= conn.settings.keepalive.retry * conn.settings.keepalive.interval) {
               reset = true;
-            } else if (reset_secs % conn.settings.ki == 0) {
+            } else if (reset_secs % conn.settings.keepalive.interval == 0) {
               log_conn(LOG_DEBUG, &key, _("sending keepalive"));
               send_ctrl_packet(&key, TCP_FLAG_ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
             }
