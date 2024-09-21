@@ -49,30 +49,30 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
                                    struct tcp_options* opt) {
   __u8 opt_buf[80] = {};
   __u32 len = (tcp->doff << 2) - sizeof(*tcp);
-  if (len > 80) {  // TCP options too large
+  if (unlikely(len > 80)) {  // TCP options too large
     return XDP_DROP;
   } else if (len == 0) {  // prevent zero-sized read
     return XDP_PASS;
   } else {
-    if (len < 2) len = 1;
+    if (unlikely(len < 2)) len = 1;
     try_drop(bpf_xdp_load_bytes(xdp, ip_end + sizeof(*tcp), opt_buf, len));
   }
 
   for (__u32 i = 0; i < len; i++) {
-    if (i > 80 - 1) return XDP_DROP;
+    if (unlikely(i > 80 - 1)) return XDP_DROP;
     switch (opt_buf[i]) {
       case 0:  // end of option list
       case 1:  // no-op
         break;
       case 2:  // MSS
-        if (i > 80 - 4 || opt_buf[i + 1] != 4) return XDP_DROP;
+        if (unlikely(i > 80 - 4 || opt_buf[i + 1] != 4)) return XDP_DROP;
         opt->mss = (opt_buf[i + 2] << 8) + opt_buf[i + 3];
         i += 3;
         break;
       default:
         // HACK: `80 - 2` -> `80 - 3`
         // mimic.bpf.o compiled with LLVM 18 failed eBPF verifier in Linux 6.6 or lower.
-        if (i > 80 - 3) return XDP_DROP;
+        if (unlikely(i > 80 - 3)) return XDP_DROP;
         __u8 l = opt_buf[i + 1];
         if (l < 2 || i + l > len) return XDP_DROP;
         i += l - 1;
@@ -92,24 +92,27 @@ int ingress_handler(struct xdp_md* xdp) {
   struct ipv6hdr* ipv6 = NULL;
   __u32 ip_end, ip_payload_len, nexthdr = 0;
 
-  if (eth_proto == ETH_P_IP) {
-    redecl_drop(struct iphdr, ipv4, ETH_HLEN, xdp);
-    ip_end = ETH_HLEN + (ipv4->ihl << 2);
-    ip_payload_len = ntohs(ipv4->tot_len) - (ipv4->ihl << 2);
-  } else if (eth_proto == ETH_P_IPV6) {
-    redecl_drop(struct ipv6hdr, ipv6, ETH_HLEN, xdp);
-    nexthdr = ipv6->nexthdr;
-    ip_end = ETH_HLEN + sizeof(*ipv6);
-    struct ipv6_opt_hdr* opt = NULL;
-    for (int i = 0; i < 8; i++) {
-      if (!ipv6_is_ext(nexthdr)) break;
-      redecl_drop(struct ipv6_opt_hdr, opt, ip_end, xdp);
-      nexthdr = opt->nexthdr;
-      ip_end += (opt->hdrlen + 1) << 3;
-    }
-    ip_payload_len = ntohs(ipv6->payload_len);
-  } else {
-    return XDP_PASS;
+  switch (eth_proto) {
+    case ETH_P_IP:
+      redecl_drop(struct iphdr, ipv4, ETH_HLEN, xdp);
+      ip_end = ETH_HLEN + (ipv4->ihl << 2);
+      ip_payload_len = ntohs(ipv4->tot_len) - (ipv4->ihl << 2);
+      break;
+    case ETH_P_IPV6:
+      redecl_drop(struct ipv6hdr, ipv6, ETH_HLEN, xdp);
+      nexthdr = ipv6->nexthdr;
+      ip_end = ETH_HLEN + sizeof(*ipv6);
+      struct ipv6_opt_hdr* opt = NULL;
+      for (int i = 0; i < 8; i++) {
+        if (!ipv6_is_ext(nexthdr)) break;
+        redecl_drop(struct ipv6_opt_hdr, opt, ip_end, xdp);
+        nexthdr = opt->nexthdr;
+        ip_end += (opt->hdrlen + 1) << 3;
+      }
+      ip_payload_len = ntohs(ipv6->payload_len);
+      break;
+    default:
+      return XDP_PASS;
   }
 
   __u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? nexthdr : 0;
@@ -121,7 +124,7 @@ int ingress_handler(struct xdp_md* xdp) {
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP);
   __u32 payload_len = ip_payload_len - (tcp->doff << 2);
 
-  log_tcp(LOG_TRACE, true, &conn_key, tcp, payload_len);
+  log_tcp(true, &conn_key, tcp, payload_len);
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
 
   struct tcp_options opt = {};
@@ -136,7 +139,7 @@ int ingress_handler(struct xdp_md* xdp) {
   __u64 tstamp = bpf_ktime_get_boot_ns();
 
   // Quick path for RST and FIN
-  if (tcp->rst || tcp->fin) {
+  if (unlikely(tcp->rst || tcp->fin)) {
     if (conn) {
       __u32 cooldown;
       bpf_spin_lock(&conn->lock);
@@ -146,16 +149,16 @@ int ingress_handler(struct xdp_md* xdp) {
       bpf_spin_unlock(&conn->lock);
       use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
       if (tcp->rst) {
-        log_destroy(LOG_WARN, &conn_key, DESTROY_RECV_RST, cooldown);
+        log_destroy(&conn_key, DESTROY_RECV_RST, cooldown);
       } else {
         send_ctrl_packet(&conn_key, TCP_FLAG_RST, htonl(tcp->ack_seq), 0, 0);
-        log_destroy(LOG_WARN, &conn_key, DESTROY_RECV_FIN, cooldown);
+        log_destroy(&conn_key, DESTROY_RECV_FIN, cooldown);
       }
     }
     return XDP_DROP;
   }
 
-  if (!conn) {
+  if (unlikely(!conn)) {
     if (!tcp->syn || tcp->ack) {
       send_ctrl_packet(&conn_key, TCP_FLAG_RST, htonl(tcp->ack_seq), 0, 0);
       return XDP_DROP;
@@ -180,7 +183,7 @@ int ingress_handler(struct xdp_md* xdp) {
 
   switch (conn->state) {
     case CONN_IDLE:
-      if (tcp->syn && !tcp->ack) {
+      if (likely(tcp->syn && !tcp->ack)) {
         conn->state = CONN_SYN_RECV;
         flags |= TCP_FLAG_SYN | TCP_FLAG_ACK;
         seq = conn->seq = random;
@@ -193,14 +196,14 @@ int ingress_handler(struct xdp_md* xdp) {
       break;
 
     case CONN_SYN_RECV:
-      if (tcp->syn && !tcp->ack) {
+      if (likely(tcp->syn && !tcp->ack)) {
         __u32 new_ack_seq = next_ack_seq(tcp, payload_len);
-        if (new_ack_seq != conn->ack_seq) goto fsm_error;
+        if (unlikely(new_ack_seq != conn->ack_seq)) goto fsm_error;
         flags |= TCP_FLAG_SYN | TCP_FLAG_ACK;
         seq = conn->seq++;
         ack_seq = new_ack_seq;
         conn->peer_mss = opt.mss;
-      } else if (!tcp->syn && tcp->ack) {
+      } else if (likely(!tcp->syn && tcp->ack)) {
         will_send_ctrl_packet = false;
         conn->state = CONN_ESTABLISHED;
         conn->ack_seq = next_ack_seq(tcp, payload_len);
@@ -213,9 +216,9 @@ int ingress_handler(struct xdp_md* xdp) {
       break;
 
     case CONN_SYN_SENT:
-      if (tcp->syn) {
+      if (likely(tcp->syn)) {
         flags |= TCP_FLAG_ACK;
-        if (tcp->ack) {
+        if (likely(tcp->ack)) {
           // 3-way handshake
           conn->state = CONN_ESTABLISHED;
           conn->cooldown_mul = 0;
@@ -234,8 +237,8 @@ int ingress_handler(struct xdp_md* xdp) {
       }
       break;
 
-    case CONN_ESTABLISHED:
-      if (tcp->syn) {
+    case CONN_ESTABLISHED:  // TODO: likely
+      if (unlikely(tcp->syn)) {
         goto fsm_error;
       } else if (ntohl(tcp->seq) == conn->ack_seq - 1) {
         // Received keepalive; send keepalive ACK
@@ -252,7 +255,7 @@ int ingress_handler(struct xdp_md* xdp) {
       } else if (!tcp->psh && payload_len == 0) {
         // Empty segment without PSH will be treated as control packet
         will_send_ctrl_packet = false;
-      } else {
+      } else {  // TODO: likely
         will_send_ctrl_packet = will_drop = false;
         conn->ack_seq += payload_len;
         __u32 peer_mss = conn->peer_mss ?: 1460;
@@ -269,7 +272,7 @@ int ingress_handler(struct xdp_md* xdp) {
       }
       break;
 
-    default:
+    default:  // TODO: unlikely
     fsm_error:
       flags |= TCP_FLAG_RST;
       swap(pktbuf, conn->pktbuf);
@@ -282,14 +285,14 @@ int ingress_handler(struct xdp_md* xdp) {
 
   bpf_spin_unlock(&conn->lock);
 
-  if (flags & TCP_FLAG_SYN && flags & TCP_FLAG_ACK) log_conn(LOG_INFO, LOG_CONN_ACCEPT, &conn_key);
+  if (flags & TCP_FLAG_SYN && flags & TCP_FLAG_ACK) log_conn(LOG_CONN_ACCEPT, &conn_key);
   if (will_send_ctrl_packet)
     send_ctrl_packet(&conn_key, flags, seq, ack_seq, flags & TCP_FLAG_RST ? 0 : cwnd);
-  if (flags & TCP_FLAG_RST) {
-    log_destroy(LOG_WARN, &conn_key, DESTROY_INVALID, cooldown);
+  if (unlikely(flags & TCP_FLAG_RST)) {
+    log_destroy(&conn_key, DESTROY_INVALID, cooldown);
     use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
   } else if (newly_estab) {
-    log_conn(LOG_INFO, LOG_CONN_ESTABLISH, &conn_key);
+    log_conn(LOG_CONN_ESTABLISH, &conn_key);
     use_pktbuf(RB_ITEM_CONSUME_PKTBUF, pktbuf);
   }
   if (will_drop) return XDP_DROP;
