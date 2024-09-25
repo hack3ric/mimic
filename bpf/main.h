@@ -11,7 +11,7 @@ extern int log_verbosity;
 
 extern struct mimic_whitelist_map {
   __uint(type, BPF_MAP_TYPE_HASH);
-  __uint(max_entries, 8);
+  __uint(max_entries, 32);
   __type(key, struct filter);
   __type(value, struct filter_info);
 } mimic_whitelist;
