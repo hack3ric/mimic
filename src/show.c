@@ -1,13 +1,14 @@
 #include <argp.h>
 #include <bpf/bpf.h>
+#include <errno.h>
 #include <linux/bpf.h>
 #include <net/if.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "common/defs.h"
-#include "common/log.h"
 #include "common/try.h"
 #include "log.h"
 #include "main.h"

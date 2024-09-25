@@ -4,7 +4,6 @@
 #include <bpf/bpf.h>
 #include <errno.h>
 #include <linux/types.h>
-#include <netinet/in.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>

@@ -1,5 +1,4 @@
 #include <argp.h>
-#include <arpa/inet.h>
 #include <errno.h>
 #include <limits.h>
 #include <netdb.h>
@@ -14,7 +13,6 @@
 #include "common/defs.h"
 #include "common/log.h"
 #include "common/try.h"
-#include "log.h"
 #include "main.h"
 
 static inline bool is_whitespace(char c) {
@@ -113,13 +111,12 @@ static int parse_int_seq(char* str, int* nums, size_t len) {
 }
 
 __attribute__((unused)) static int parse_bool(const char* str, bool* result) {
-  if (strcmp("true", str) == 0 || strcmp("1", str) == 0) {
+  if (strcmp("true", str) == 0 || strcmp("1", str) == 0)
     *result = true;
-  } else if (strcmp("false", str) == 0 || strcmp("0", str) == 0) {
+  else if (strcmp("false", str) == 0 || strcmp("0", str) == 0)
     *result = false;
-  } else {
+  else
     ret(-EINVAL, _("invalid boolean value: '%s'"), str);
-  }
   return 0;
 }
 

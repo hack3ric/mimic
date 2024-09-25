@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <bpf/libbpf.h>
 #include <linux/tcp.h>
+#include <linux/types.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
