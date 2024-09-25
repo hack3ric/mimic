@@ -138,8 +138,7 @@ int parse_keepalive(char* str, struct filter_settings* settings) {
   return 0;
 }
 
-int parse_filter(char* filter_str, struct filter* filters, struct filter_settings* settings,
-                 int size) {
+int parse_filter(char* filter_str, struct filter* filters, struct filter_info* info, int size) {
   int ret;
 
   char* delim = strchr(filter_str, ',');
@@ -167,7 +166,9 @@ int parse_filter(char* filter_str, struct filter* filters, struct filter_setting
   };
   if ((ret = getaddrinfo(host, 0, &hint, &ai_list)) < 0)
     ret(-EINVAL, _("cannot get address information: %s"), gai_strerror(ret));
+
   int i = 0;
+  bool resolved = false;
   for (struct addrinfo* ai = ai_list; ai; ai = ai->ai_next, i++) {
     if (i >= size) {
       freeaddrinfo(ai_list);
@@ -176,13 +177,15 @@ int parse_filter(char* filter_str, struct filter* filters, struct filter_setting
     struct sockaddr_in6* addr = (typeof(addr))ai->ai_addr;
     char ip_str[INET6_ADDRSTRLEN];
     ip_fmt(&addr->sin6_addr, ip_str);
-    if (strcmp(host, ip_str) != 0) log_warn(_("%s resolved to %s"), host, ip_str);
+    resolved = resolved || strcmp(host, ip_str) != 0;
     filters[i] = (typeof(*filters)){.origin = origin, .ip = addr->sin6_addr, .port = port};
   }
+
   freeaddrinfo(ai_list);
   if (i <= 0) return 0;
 
-  settings[0] = FALLBACK_SETTINGS;
+  if (resolved) strcpy(info[0].host, host);
+  info[0].settings = FALLBACK_SETTINGS;
   if (!delim) goto ret;
   char* next_delim = delim;
   while (true) {
@@ -191,15 +194,15 @@ int parse_filter(char* filter_str, struct filter* filters, struct filter_setting
     if (next_delim) *next_delim = '\0';
     try(parse_kv(delim, &k, &v));
     if (strcmp("handshake", k) == 0)
-      try(parse_handshake(v, &settings[0]));
+      try(parse_handshake(v, &info[0].settings));
     else if (strcmp("keepalive", k) == 0)
-      try(parse_keepalive(v, &settings[0]));
+      try(parse_keepalive(v, &info[0].settings));
     else
       ret(-EINVAL, _("unsupported option type: '%s'"), k);
     if (!next_delim) break;
   }
 ret:
-  for (int j = 1; j < i; j++) memcpy(&settings[j], &settings[0], sizeof(*settings));
+  for (int j = 1; j < i; j++) memcpy(&info[j], &info[0], sizeof(*info));
   return i;
 }
 
@@ -242,7 +245,7 @@ int parse_config_file(FILE* file, struct run_args* args) {
       try(parse_keepalive(v, &args->gsettings));
     } else if (strcmp(k, "filter") == 0) {
       unsigned int fc = args->filter_count;
-      ret = parse_filter(v, &args->filters[fc], &args->settings[fc], MAX_FILTER_COUNT - fc);
+      ret = parse_filter(v, &args->filters[fc], &args->info[fc], MAX_FILTER_COUNT - fc);
       if (ret == -E2BIG)
         ret(-E2BIG, _("currently only maximum of %d filters is supported"), MAX_FILTER_COUNT);
       else if (ret < 0)

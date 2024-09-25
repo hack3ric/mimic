@@ -13,7 +13,7 @@ extern struct mimic_whitelist_map {
   __uint(type, BPF_MAP_TYPE_HASH);
   __uint(max_entries, 8);
   __type(key, struct filter);
-  __type(value, struct filter_settings);
+  __type(value, struct filter_info);
 } mimic_whitelist;
 
 extern struct mimic_conns_map {
@@ -52,9 +52,9 @@ static __always_inline struct filter_settings* matches_whitelist(QUARTET_DEF) {
   local.ip = ipv4 ? ipv4_mapped(ipv4->saddr) : ipv6 ? ipv6->saddr : IP_ANY;
   remote.ip = ipv4 ? ipv4_mapped(ipv4->daddr) : ipv6 ? ipv6->daddr : IP_ANY;
 
-  struct filter_settings* result = bpf_map_lookup_elem(&mimic_whitelist, &local);
+  struct filter_info* result = bpf_map_lookup_elem(&mimic_whitelist, &local);
   result = result ?: bpf_map_lookup_elem(&mimic_whitelist, &remote);
-  return result;
+  return result ? &result->settings : NULL;
 }
 
 static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF) {

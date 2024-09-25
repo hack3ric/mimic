@@ -56,7 +56,7 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       if (log_verbosity > 0) log_verbosity--;
       break;
     case 'f':
-      ret = parse_filter(arg, &args->filters[fc], &args->settings[fc], MAX_FILTER_COUNT - fc);
+      ret = parse_filter(arg, &args->filters[fc], &args->info[fc], MAX_FILTER_COUNT - fc);
       if (ret == -E2BIG)
         ret(-E2BIG, _("currently only maximum of %d filters is supported"), MAX_FILTER_COUNT);
       else if (ret < 0)
@@ -499,18 +499,14 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   skel->bss->log_verbosity = log_verbosity;
 
   for (int i = 0; i < args->filter_count; i++) {
-    filter_settings_apply(&args->settings[i], &args->gsettings);
+    filter_settings_apply(&args->info[i].settings, &args->gsettings);
     retcode =
       bpf_map__update_elem(skel->maps.mimic_whitelist, &args->filters[i], sizeof(struct filter),
-                           &args->settings[i], sizeof(struct filter_settings), BPF_NOEXIST);
+                           &args->info[i], sizeof(struct filter_info), BPF_NOEXIST);
     if (retcode || LOG_ALLOW_TRACE) {
       char fmt[FILTER_FMT_MAX_LEN];
       filter_fmt(&args->filters[i], fmt);
-      if (retcode) {
-        cleanup(retcode, _("failed to add filter `%s`: %s"), fmt, strerror(-retcode));
-      } else {
-        log_trace(_("added filter: %s"), fmt);
-      }
+      if (retcode) cleanup(retcode, _("failed to add filter `%s`: %s"), fmt, strerror(-retcode));
     }
   }
 
@@ -530,17 +526,16 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
                        _("failed to attach XDP program: %s"), strret);
 
   retcode = notify_ready();
-  if (retcode < 0) {
+  if (retcode < 0)
     log_warn(_("failed to notify supervisor: %s"), strerror(-retcode));
-  } else if (retcode) {
+  else if (retcode)
     log_trace(_("notified supervisor we are ready"));
-  }
+
   log_info(_("Mimic successfully deployed on %s"), args->ifname);
-  if (args->filter_count <= 0) {
+  if (args->filter_count <= 0)
     log_warn(_("no filter specified"));
-  } else {
+  else
     show_overview(mimic_whitelist_fd, &args->gsettings, log_verbosity);
-  }
 
   struct epoll_event ev;
   struct epoll_event events[EPOLL_MAX_EVENTS];

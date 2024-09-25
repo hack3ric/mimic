@@ -26,7 +26,8 @@ struct args {
     struct run_args {
       const char *ifname, *file;
       struct filter filters[MAX_FILTER_COUNT];
-      struct filter_settings settings[MAX_FILTER_COUNT], gsettings;
+      struct filter_info info[MAX_FILTER_COUNT];
+      struct filter_settings gsettings;
       unsigned int filter_count;
     } run;
     struct show_args {
@@ -54,8 +55,7 @@ struct lock_content {
 
 int parse_handshake(char* str, struct filter_settings* settings);
 int parse_keepalive(char* str, struct filter_settings* settings);
-int parse_filter(char* filter_str, struct filter* filters, struct filter_settings* settings,
-                 int size);
+int parse_filter(char* filter_str, struct filter* filters, struct filter_info* info, int size);
 int parse_config_file(FILE* file, struct run_args* args);
 int parse_lock_file(FILE* file, struct lock_content* c);
 int write_lock_file(int fd, const struct lock_content* c);

@@ -194,6 +194,11 @@ struct filter_settings {
 };
 // clang-format on
 
+struct filter_info {
+  char host[128];
+  struct filter_settings settings;
+};
+
 #define DEFAULT_COOLDOWN 5
 
 static const struct filter_settings DEFAULT_SETTINGS = {
@@ -258,11 +263,10 @@ static __always_inline __u32 conn_cooldown(struct connection* conn) {
 
 static __always_inline int time_diff_sec(__u64 a, __u64 b) {
   if (a <= b) return 0;
-  if ((a - b) % SECOND < SECOND / 2) {
+  if ((a - b) % SECOND < SECOND / 2)
     return (a - b) / SECOND;
-  } else {
+  else
     return (a - b) / SECOND + 1;
-  }
 }
 
 struct send_options {
