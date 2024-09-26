@@ -24,7 +24,8 @@ CONFIG_DEBUG_INFO_DWARF4=y
 CONFIG_DEBUG_INFO_BTF=y
 CONFIG_BPF=y
 CONFIG_BPF_SYSCALL=y
-CONFIG_BPF_EVENTS=y
+CONFIG_NET=y
+CONFIG_INET=y
 EOF
     make O=$build_path LLVM=1 ARCH=$linux_arch olddefconfig
     make O=$build_path LLVM=1 ARCH=$linux_arch all -j$(nproc)
