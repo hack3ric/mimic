@@ -1,61 +1,42 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
-# Pick a version from Debian sid
-uname_r_ver=6.9.10
-ver=6.9.10-1
-: ${DEBIAN_SNAPSHOT:="https://snapshot.debian.org/archive"}
-: ${SNAPSHOT_TIME:="20240724T193828Z"}
+linux_ver=6.9.12
+linux_url="https://cdn.kernel.org/pub/linux/kernel/v${linux_ver%.*.*}.x/linux-$linux_ver.tar.xz"
 
-linux_image_filename() {
-  local debian_arch="$1"
-  local flavor="$2"
-  local suffix="$3"
-  if [ -z "$flavor" ]; then
-    echo "linux-image-${uname_r_ver}-*_${ver}_*.deb"
-  else
-    echo "linux-image-${uname_r_ver}-${flavor}${suffix}_${ver}_${debian_arch}.deb"
-  fi
-}
-
-do_vendor() {
+gen_vmlinux_h() {
   local arch=($1)
-  local debian_arch="$2"
-  local flavor="$3"
-  local suffix="$4"
-  local endianness="$5"
-  local is_ports="$6"
+  local linux_arch=$2
+  local bitness=$3
+  local endianness=$4
+  local build_path="$(realpath out/build-$arch)"
 
-  if [ "$is_ports" = "ports" ]; then
-    local debian_dir=debian-ports
-    local pool_dir="pool-$debian_arch"
-  else
-    local debian_dir=debian
-    local pool_dir=pool
-  fi
-  local filename="$(linux_image_filename "$debian_arch" "$flavor" "$suffix")"
-  local url="$DEBIAN_SNAPSHOT/$debian_dir/$SNAPSHOT_TIME/$pool_dir/main/l/linux/$filename"
-
-  echo $url
-  mkdir -p "out/$debian_arch"
   (
-    cd "out/$debian_arch"
-    [ -f "$debian_arch.deb" ] || curl -Lf "$url" >"$debian_arch.deb"
-    ar x "$debian_arch.deb"
-    tar xf data.*
+    cd out/linux-$linux_ver
+    rm -rf $build_path
+    mkdir $build_path
+    make O=$build_path LLVM=1 ARCH=$linux_arch tinyconfig
+    cat >>"$build_path/.config" <<EOF
+CONFIG_${bitness}BIT=y
+CONFIG_${endianness}_ENDIAN=y
+CONFIG_DEBUG_INFO=y
+CONFIG_DEBUG_INFO_DWARF4=y
+CONFIG_DEBUG_INFO_BTF=y
+CONFIG_BPF=y
+CONFIG_BPF_SYSCALL=y
+CONFIG_BPF_EVENTS=y
+EOF
+    make O=$build_path LLVM=1 ARCH=$linux_arch olddefconfig
+    make O=$build_path LLVM=1 ARCH=$linux_arch all -j$(nproc)
   )
-
-  BOOT_DIR="out/$debian_arch/boot" VMLINUX_SUFFIX="-${uname_r_ver}-${flavor}" \
-    tools/vmlinux-to-btf "$endianness" >"out/$debian_arch/vmlinux"
 
   mkdir -p bpf/vmlinux
   cat >"bpf/vmlinux/$arch.h" <<EOF
-// Generated using tools/vendor-vmlinux-h from Debian $filename
+// Generated using tools/vendor-vmlinux-h from Linux $linux_ver
 // Do not edit!
 
 EOF
-  /usr/sbin/bpftool btf dump file "out/$debian_arch/vmlinux" format c >>"bpf/vmlinux/$arch.h"
-
+  /usr/sbin/bpftool btf dump file $build_path/vmlinux format c >bpf/vmlinux/$arch.h
   echo -n "#elif defined(_MIMIC_BPF_TARGET_ARCH_${arch[0]})" >>bpf/vmlinux.h
   for _arch in ${arch[@]:1}; do
     echo -n " || defined(_MIMIC_BPF_TARGET_ARCH_$_arch)" >>bpf/vmlinux.h
@@ -64,7 +45,9 @@ EOF
   echo "#include \"vmlinux/$arch.h\"  // IWYU pragma: export" >>bpf/vmlinux.h
 }
 
-echo "Generating vmlinux.h from Debian Linux kernel ${ver} (${uname_r_ver})"
+[ -d out ] || mkdir out
+[ -f out/linux-$linux_ver.tar.xz ] || wget -O out/linux-$linux_ver.tar.xz $linux_url
+[ -d out/linux-$linux_ver ] || tar xf out/linux-$linux_ver.tar.xz -C out
 
 cat >bpf/vmlinux.h <<EOF
 // Generated using tools/vendor-vmlinux-h, do not edit!
@@ -76,22 +59,20 @@ cat >bpf/vmlinux.h <<EOF
 #include "vmlinux/system.h"  // IWYU pragma: export
 EOF
 
-do_vendor 'x86_64 amd64' amd64 amd64 "-unsigned" le
-do_vendor 'aarch64 arm64' arm64 arm64 "-unsigned" le
-do_vendor 'riscv64' riscv64 riscv64 "" le
-do_vendor 'ppc powerpc' powerpc powerpc "" be ports
-do_vendor 'ppc64 powerpc64' ppc64 powerpc64 "" be ports
-do_vendor 'ppc64le powerpc64le' ppc64el powerpc64le "" le
-
-# Debian does not currently enable BTF on these architectures
-# do_vendor 'i386 i486 i586 i686' i386 686-pae "" le
-# do_vendor 'armv7l' armhf armmp "" le
-# do_vendor 'mips64' mips64el mips64r2el "" le
-# do_vendor 'sparc64' sparc64 sparc64 "" be ports
-# do_vendor 'loongarch64' loong64 loong64 "" le ports
-
-# Yet to find out a method to extract BTF from s390x boot image
-# do_vendor s390x s390x s390x "" be
+gen_vmlinux_h 'i386 i486 i586 i686' x86 32 LITTLE
+gen_vmlinux_h 'x86_64' x86 64 LITTLE
+gen_vmlinux_h 'arm' arm 32 LITTLE
+gen_vmlinux_h 'aarch64' arm64 64 LITTLE
+gen_vmlinux_h 'riscv64' riscv 64 LITTLE
+gen_vmlinux_h 'loongarch64 loong64' loongarch 64 LITTLE
+gen_vmlinux_h 'ppc powerpc' powerpc 32 BIG
+gen_vmlinux_h 'ppc64 powerpc64' powerpc 64 BIG
+gen_vmlinux_h 'ppc64le powerpc64le' powerpc 64 LITTLE
+gen_vmlinux_h 'mips' mips 32 BIG
+gen_vmlinux_h 'mipsel' mips 32 LITTLE
+gen_vmlinux_h 'mips64' mips 64 BIG
+gen_vmlinux_h 'mips64el' mips 64 LITTLE
+gen_vmlinux_h 's390x' s390 64 BIG
 
 cat >>bpf/vmlinux.h <<EOF
 #else
