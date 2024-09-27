@@ -18,13 +18,13 @@
 static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, __be32* csum_diff,
                                __u8 padding_len) {
   size_t reserve_len = TCP_UDP_HEADER_DIFF + padding_len;
-  __u8 buf[MAX_RESERVE_LEN + 4] = {};
+  __u8 buf[MAX_RESERVE_LEN + 2] = {};
   __u16 data_len = buf_len - offset - padding_len;
   __u32 copy_len = min(data_len, reserve_len);
 
   if (padding_len > 0) {
     padding_len = min(padding_len, MAX_PADDING_LEN);
-    if (padding_len < 2) padding_len = 1;
+    if (unlikely(padding_len < 2)) padding_len = 1;
     try_drop(bpf_xdp_load_bytes(xdp, offset, buf, padding_len));
     *csum_diff = bpf_csum_diff((__be32*)buf, padding_len, NULL, 0, *csum_diff);
     buf[0] = 0;
@@ -32,7 +32,7 @@ static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, 
 
   if (likely(copy_len > 0 && copy_len <= MAX_RESERVE_LEN)) {
     // HACK: see egress.c
-    if (copy_len < 2) copy_len = 1;
+    if (unlikely(copy_len < 2)) copy_len = 1;
     try_drop(bpf_xdp_load_bytes(xdp, buf_len - copy_len, buf + 1, copy_len));
     try_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf + 1, copy_len));
 

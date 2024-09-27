@@ -141,7 +141,7 @@ static inline void cleanup_malloc_str(char** ptr) { cleanup_malloc((void*)ptr); 
 // Mainly used for limiting loop counts
 #define MAX_PACKET_SIZE 10000
 
-#define MAX_PADDING_LEN 16
+#define MAX_PADDING_LEN 18
 
 // Used for reading packet data in bulk
 #define SEGMENT_SIZE 64
