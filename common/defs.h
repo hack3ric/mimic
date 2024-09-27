@@ -204,20 +204,20 @@ struct filter_settings {
     struct {
       union { struct {
         union {
-          struct { __u16 interval, retry; };
-          struct { __u16 i, r; };
-          __u16 array[2];
+          struct { __s16 interval, retry; };
+          struct { __s16 i, r; };
+          __s16 array[2];
         };
       } handshake, h; };
       union { struct {
         union {
-          struct { __u16 time, interval, retry, stale; };
-          struct { __u16 t, i, r, s; };
-          __u16 array[4];
+          struct { __s16 time, interval, retry, stale; };
+          struct { __s16 t, i, r, s; };
+          __s16 array[4];
         };
       } keepalive, k; };
     };
-    __u16 array[6];
+    __s16 array[6];
   };
 };
 // clang-format on
@@ -254,17 +254,19 @@ struct connection {
   __u32 seq, ack_seq;
   __u32 cwnd;
 
-  enum conn_state {
-    CONN_IDLE,
-    CONN_SYN_SENT,
-    CONN_SYN_RECV,
-    CONN_ESTABLISHED,
-  } state : 2;
-  bool keepalive_sent : 1;
-  __u8 padding_len : 5;
-  __u8 cooldown_mul;
-  __u16 peer_mss;
-  struct filter_settings settings;
+  struct {
+    enum conn_state {
+      CONN_IDLE,
+      CONN_SYN_SENT,
+      CONN_SYN_RECV,
+      CONN_ESTABLISHED,
+    } state : 2;
+    bool keepalive_sent : 1;
+    __u8 padding_len : 5;
+    __u8 cooldown_mul;
+    __u16 peer_mss;
+    struct filter_settings settings;
+  };
 
   __u64 retry_tstamp, reset_tstamp, stale_tstamp;
   __u64 pktbuf;
