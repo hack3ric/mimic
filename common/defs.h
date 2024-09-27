@@ -30,10 +30,27 @@
     y = t;           \
   })
 
+#if __has_c_attribute(fallthrough)
+#define fallthrough [[fallthrough]]
+#elif __has_c_attribute(clang::fallthrough)
+#define fallthrough [[clang::fallthrough]]
+#else
 #define fallthrough
+#endif
 
 #define unlikely(expr) __builtin_expect(!!(expr), 0)
 #define likely(expr) __builtin_expect(!!(expr), 1)
+
+#if __has_c_attribute(clang::unlikely)
+#define br_unlikely [[clang::unlikely]]
+#else
+#define br_unlikely
+#endif
+#if __has_c_attribute(clang::likely)
+#define br_likely [[clang::likely]]
+#else
+#define br_likely
+#endif
 
 #ifdef _MIMIC_BPF
 

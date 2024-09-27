@@ -237,7 +237,7 @@ int ingress_handler(struct xdp_md* xdp) {
       }
       break;
 
-    case CONN_ESTABLISHED:  // TODO: likely
+    br_likely case CONN_ESTABLISHED:
       if (unlikely(tcp->syn)) {
         goto fsm_error;
       } else if (ntohl(tcp->seq) == conn->ack_seq - 1) {
@@ -255,7 +255,7 @@ int ingress_handler(struct xdp_md* xdp) {
       } else if (!tcp->psh && payload_len == 0) {
         // Empty segment without PSH will be treated as control packet
         will_send_ctrl_packet = false;
-      } else {  // TODO: likely
+      } else br_likely {
         will_send_ctrl_packet = will_drop = false;
         conn->ack_seq += payload_len;
         __u32 peer_mss = conn->peer_mss ?: 1460;
@@ -272,7 +272,7 @@ int ingress_handler(struct xdp_md* xdp) {
       }
       break;
 
-    default:  // TODO: unlikely
+    br_unlikely default:
     fsm_error:
       flags |= TCP_FLAG_RST;
       swap(pktbuf, conn->pktbuf);

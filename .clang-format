@@ -3,3 +3,4 @@ IncludeBlocks: Preserve
 IndentWidth: 2
 ContinuationIndentWidth: 2
 ColumnLimit: 100
+AttributeMacros: [br_unlikely, br_likely, fallthrough]
