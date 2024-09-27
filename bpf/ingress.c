@@ -16,23 +16,28 @@
 // MSS on handshake packets since there is no data at the end to move, so not finishing this is
 // probably going to be fine.
 static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, __be32* csum_diff) {
-  __u8 buf[TCP_UDP_HEADER_DIFF + 4] = {};
-  __u16 data_len = buf_len - offset;
-  __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
+  __u8 buf[RESERVE_LEN + 4] = {};
+  __u16 data_len = buf_len - offset - PADDING_LEN;
+  __u32 copy_len = min(data_len, RESERVE_LEN);
+
+#if PADDING_LEN != 0
+  try_drop(bpf_xdp_load_bytes(xdp, offset, buf, PADDING_LEN));
+  *csum_diff = bpf_csum_diff((__be32*)buf, PADDING_LEN, NULL, 0, *csum_diff);
+  buf[0] = 0;
+#endif
+
   if (copy_len > 0) {
     // HACK: see egress.c
     if (copy_len < 2) copy_len = 1;
-
     try_drop(bpf_xdp_load_bytes(xdp, buf_len - copy_len, buf + 1, copy_len));
     try_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf + 1, copy_len));
+
+    // Fix checksum when moved bytes does not align with u16 boundaries
+    if (copy_len == RESERVE_LEN && data_len % 2 != 0)
+      *csum_diff = bpf_csum_diff((__be32*)buf, sizeof(buf), (__be32*)(buf + 1), copy_len, *csum_diff);
   }
-  // Fix checksum when moved bytes does not align with u16 boundaries
-  if (copy_len == TCP_UDP_HEADER_DIFF && data_len % 2 != 0) {
-    *csum_diff = bpf_csum_diff((__be32*)buf, sizeof(buf), (__be32*)(buf + 1), copy_len, 0);
-  } else {
-    *csum_diff = 0;
-  }
-  try_drop(bpf_xdp_adjust_tail(xdp, -(int)TCP_UDP_HEADER_DIFF));
+
+  try_drop(bpf_xdp_adjust_tail(xdp, -(int)RESERVE_LEN));
   return XDP_PASS;
 }
 
@@ -299,16 +304,16 @@ int ingress_handler(struct xdp_md* xdp) {
 
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
-    __be16 new_len = htons(ntohs(old_len) - TCP_UDP_HEADER_DIFF);
+    __be16 new_len = htons(ntohs(old_len) - RESERVE_LEN);
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_UDP;
 
     __u32 ipv4_csum = (__u16)~ntohs(ipv4->check);
-    ipv4_csum -= TCP_UDP_HEADER_DIFF;
+    ipv4_csum -= RESERVE_LEN;
     ipv4_csum += IPPROTO_UDP - IPPROTO_TCP;
     ipv4->check = htons(csum_fold(ipv4_csum));
   } else if (ipv6) {
-    ipv6->payload_len = htons(ntohs(ipv6->payload_len) - TCP_UDP_HEADER_DIFF);
+    ipv6->payload_len = htons(ntohs(ipv6->payload_len) - RESERVE_LEN);
     ipv6->nexthdr = IPPROTO_UDP;
   }
 
@@ -321,7 +326,7 @@ int ingress_handler(struct xdp_md* xdp) {
   decl_drop(struct udphdr, udp, ip_end, xdp);
   csum += u32_fold(ntohl(csum_diff));
 
-  __u16 udp_len = ip_payload_len - TCP_UDP_HEADER_DIFF;
+  __u16 udp_len = ip_payload_len - RESERVE_LEN;
   udp->len = htons(udp_len);
 
   udp->check = 0;

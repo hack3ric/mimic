@@ -12,9 +12,10 @@
 // Extend socket buffer and move n bytes from front to back.
 static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_diff) {
   __u16 data_len = skb->len - offset;
-  try_shot(bpf_skb_change_tail(skb, skb->len + TCP_UDP_HEADER_DIFF, 0));
-  __u8 buf[TCP_UDP_HEADER_DIFF + 4] = {};
-  __u32 copy_len = min(data_len, TCP_UDP_HEADER_DIFF);
+  try_shot(bpf_skb_change_tail(skb, skb->len + RESERVE_LEN, 0));
+  __u8 buf[RESERVE_LEN + 4] = {};
+  __u32 copy_len = min(data_len, RESERVE_LEN);
+
   if (likely(copy_len > 0)) {
     // HACK: make verifier happy
     // Probably related:
@@ -23,13 +24,18 @@ static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_
 
     try_shot(bpf_skb_load_bytes(skb, offset, buf + 1, copy_len));
     try_shot(bpf_skb_store_bytes(skb, skb->len - copy_len, buf + 1, copy_len, 0));
+
+    // Fix checksum when moved bytes does not align with u16 boundaries
+    if (copy_len == RESERVE_LEN && data_len % 2 != 0)
+      *csum_diff = bpf_csum_diff((__be32*)(buf + 1), copy_len, (__be32*)buf, sizeof(buf), *csum_diff);
+
+#if PADDING_LEN != 0
+    __builtin_memset(buf, ';', PADDING_LEN);
+    *csum_diff = bpf_csum_diff(NULL, 0, (__be32*)buf, PADDING_LEN, *csum_diff);
+    try_shot(bpf_skb_store_bytes(skb, offset + TCP_UDP_HEADER_DIFF, buf, PADDING_LEN, 0));
+#endif
   }
-  // Fix checksum when moved bytes does not align with u16 boundaries
-  if (copy_len == TCP_UDP_HEADER_DIFF && data_len % 2 != 0) {
-    *csum_diff = bpf_csum_diff((__be32*)(buf + 1), copy_len, (__be32*)buf, sizeof(buf), 0);
-  } else {
-    *csum_diff = 0;
-  }
+
   return TC_ACT_OK;
 }
 
@@ -104,7 +110,7 @@ int egress_handler(struct __sk_buff* skb) {
   if (likely(conn->state == CONN_ESTABLISHED)) {
     seq = conn->seq;
     ack_seq = conn->ack_seq;
-    conn->seq += payload_len;
+    conn->seq += payload_len + PADDING_LEN;
   } else {
     if (conn->state == CONN_IDLE) {
       __u32 cooldown = conn_cooldown(conn);
@@ -149,7 +155,7 @@ int egress_handler(struct __sk_buff* skb) {
 
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
-    __be16 new_len = htons(ntohs(old_len) + TCP_UDP_HEADER_DIFF);
+    __be16 new_len = htons(ntohs(old_len) + RESERVE_LEN);
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_TCP;
 
@@ -157,7 +163,7 @@ int egress_handler(struct __sk_buff* skb) {
     try_shot(bpf_l3_csum_replace(skb, off, old_len, new_len, 2));
     try_shot(bpf_l3_csum_replace(skb, off, htons(IPPROTO_UDP), htons(IPPROTO_TCP), 2));
   } else if (ipv6) {
-    ipv6->payload_len = htons(ntohs(ipv6->payload_len) + TCP_UDP_HEADER_DIFF);
+    ipv6->payload_len = htons(ntohs(ipv6->payload_len) + RESERVE_LEN);
     ipv6->nexthdr = IPPROTO_TCP;
   }
 
@@ -176,7 +182,7 @@ int egress_handler(struct __sk_buff* skb) {
   tcp->check = old_udp_csum;
   bpf_l4_csum_replace(skb, csum_off, 0, csum_diff, 0);
 
-  __be16 new_len = htons(udp_len + TCP_UDP_HEADER_DIFF);
+  __be16 new_len = htons(udp_len + RESERVE_LEN);
   struct ph_part old_ph = {.protocol = IPPROTO_UDP, .len = old_udp.len};
   struct ph_part new_ph = {.protocol = IPPROTO_TCP, .len = new_len};
   csum_diff = bpf_csum_diff((__be32*)&old_ph, sizeof(old_ph), (__be32*)&new_ph, sizeof(new_ph), 0);

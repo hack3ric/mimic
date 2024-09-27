@@ -30,6 +30,8 @@ extern struct mimic_rb_map {
 
 #define IPV4_CSUM_OFF (offsetof(struct iphdr, check))
 #define TCP_UDP_HEADER_DIFF (sizeof(struct tcphdr) - sizeof(struct udphdr))
+#define PADDING_LEN 0
+#define RESERVE_LEN (TCP_UDP_HEADER_DIFF + PADDING_LEN)
 
 struct ph_part {
   __u8 _pad;
