@@ -10,11 +10,7 @@
 
 // Move back n bytes, shrink socket buffer and restore data.
 //
-// XXX: Not handling TCP options appended by middleboxes. This requires `bpf_xdp_adjust_head` and
-// `memmove`ing bytes from the start of the buffer to destination port, which is expensive when
-// applied to every data packet. For the same reason, middleboxes probably only append options like
-// MSS on handshake packets since there is no data at the end to move, so not finishing this is
-// probably going to be fine.
+// XXX: Not handling TCP options appended by middleboxes
 static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, __be32* csum_diff,
                                __u8 padding_len) {
   size_t reserve_len = TCP_UDP_HEADER_DIFF + padding_len;
