@@ -35,8 +35,8 @@ static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_
 
   if (padding_len > 0) {
     padding_len = min(padding_len, MAX_PADDING_LEN);
-    if (unlikely(padding_len < 2)) padding_len = 1;
-    if (unlikely(padding_len < 3)) padding_len = 2;
+    if (padding_len < 2) padding_len = 1;
+    if (padding_len < 3) padding_len = 2;
     __builtin_memset(buf, ';', min(MAX_PADDING_LEN, sizeof(buf)));
     *csum_diff = bpf_csum_diff(NULL, 0, (__be32*)buf, padding_len, *csum_diff);
     try_shot(bpf_skb_store_bytes(skb, offset + TCP_UDP_HEADER_DIFF, buf, padding_len, 0));
