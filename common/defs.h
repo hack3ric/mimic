@@ -141,6 +141,8 @@ static inline void cleanup_malloc_str(char** ptr) { cleanup_malloc((void*)ptr); 
 // Mainly used for limiting loop counts
 #define MAX_PACKET_SIZE 10000
 
+#define MAX_PADDING_LEN 16
+
 // Used for reading packet data in bulk
 #define SEGMENT_SIZE 64
 
@@ -202,20 +204,20 @@ struct filter_settings {
     struct {
       union { struct {
         union {
-          struct { int interval, retry; };
-          struct { int i, r; };
-          int array[2];
+          struct { __u16 interval, retry; };
+          struct { __u16 i, r; };
+          __u16 array[2];
         };
       } handshake, h; };
       union { struct {
         union {
-          struct { int time, interval, retry, stale; };
-          struct { int t, i, r, s; };
-          int array[4];
+          struct { __u16 time, interval, retry, stale; };
+          struct { __u16 t, i, r, s; };
+          __u16 array[4];
         };
       } keepalive, k; };
     };
-    int array[6];
+    __u16 array[6];
   };
 };
 // clang-format on
@@ -249,26 +251,30 @@ struct conn_tuple {
 
 struct connection {
   struct bpf_spin_lock lock;
+  __u32 seq, ack_seq;
+  __u32 cwnd;
+
   enum conn_state {
     CONN_IDLE,
     CONN_SYN_SENT,
     CONN_SYN_RECV,
     CONN_ESTABLISHED,
-  } state;
-  __u32 seq, ack_seq;
-  __u64 pktbuf;
-  __u32 cwnd;
-  __u16 peer_mss;
-  bool keepalive_sent;
+  } state : 2;
+  bool keepalive_sent : 1;
+  __u8 padding_len : 5;
   __u8 cooldown_mul;
+  __u16 peer_mss;
   struct filter_settings settings;
+
   __u64 retry_tstamp, reset_tstamp, stale_tstamp;
+  __u64 pktbuf;
 };
 
 static __always_inline struct connection conn_init(struct filter_settings* settings, __u64 tstamp) {
   struct connection conn = {.cwnd = INIT_CWND};
   __builtin_memcpy(&conn.settings, settings, sizeof(*settings));
   conn.retry_tstamp = conn.reset_tstamp = conn.stale_tstamp = tstamp;
+  conn.padding_len = 4;
   return conn;
 }
 

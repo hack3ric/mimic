@@ -10,13 +10,15 @@
 #include "main.h"
 
 // Extend socket buffer and move n bytes from front to back.
-static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_diff) {
+static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_diff,
+                              __u8 padding_len) {
   __u16 data_len = skb->len - offset;
-  try_shot(bpf_skb_change_tail(skb, skb->len + RESERVE_LEN, 0));
-  __u8 buf[RESERVE_LEN + 4] = {};
-  __u32 copy_len = min(data_len, RESERVE_LEN);
+  size_t reserve_len = TCP_UDP_HEADER_DIFF + padding_len;
+  try_shot(bpf_skb_change_tail(skb, skb->len + reserve_len, 0));
+  __u8 buf[MAX_RESERVE_LEN + 4] = {};
+  __u32 copy_len = min(data_len, reserve_len);
 
-  if (likely(copy_len > 0)) {
+  if (likely(copy_len > 0 && copy_len < 28)) {
     // HACK: make verifier happy
     // Probably related:
     // https://lore.kernel.org/bpf/f464186c-0353-9f9e-0271-e70a30e2fcdb@linux.dev/T/
@@ -26,14 +28,16 @@ static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_
     try_shot(bpf_skb_store_bytes(skb, skb->len - copy_len, buf + 1, copy_len, 0));
 
     // Fix checksum when moved bytes does not align with u16 boundaries
-    if (copy_len == RESERVE_LEN && data_len % 2 != 0)
-      *csum_diff = bpf_csum_diff((__be32*)(buf + 1), copy_len, (__be32*)buf, sizeof(buf), *csum_diff);
+    if (copy_len == reserve_len && data_len % 2 != 0)
+      *csum_diff =
+        bpf_csum_diff((__be32*)(buf + 1), copy_len, (__be32*)buf, sizeof(buf), *csum_diff);
 
-#if PADDING_LEN != 0
-    __builtin_memset(buf, ';', PADDING_LEN);
-    *csum_diff = bpf_csum_diff(NULL, 0, (__be32*)buf, PADDING_LEN, *csum_diff);
-    try_shot(bpf_skb_store_bytes(skb, offset + TCP_UDP_HEADER_DIFF, buf, PADDING_LEN, 0));
-#endif
+    if (padding_len > 0) {
+      padding_len = min(padding_len, MAX_PADDING_LEN);
+      __builtin_memset(buf, ';', sizeof(buf));
+      *csum_diff = bpf_csum_diff(NULL, 0, (__be32*)buf, padding_len, *csum_diff);
+      try_shot(bpf_skb_store_bytes(skb, offset + TCP_UDP_HEADER_DIFF, buf, padding_len, 0));
+    }
   }
 
   return TC_ACT_OK;
@@ -110,7 +114,7 @@ int egress_handler(struct __sk_buff* skb) {
   if (likely(conn->state == CONN_ESTABLISHED)) {
     seq = conn->seq;
     ack_seq = conn->ack_seq;
-    conn->seq += payload_len + PADDING_LEN;
+    conn->seq += payload_len + conn->padding_len;
   } else {
     if (conn->state == CONN_IDLE) {
       __u32 cooldown = conn_cooldown(conn);
@@ -153,9 +157,10 @@ int egress_handler(struct __sk_buff* skb) {
   conn_cwnd = conn->cwnd;
   bpf_spin_unlock(&conn->lock);
 
+  size_t reserve_len = TCP_UDP_HEADER_DIFF + conn->padding_len;
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
-    __be16 new_len = htons(ntohs(old_len) + RESERVE_LEN);
+    __be16 new_len = htons(ntohs(old_len) + reserve_len);
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_TCP;
 
@@ -163,12 +168,12 @@ int egress_handler(struct __sk_buff* skb) {
     try_shot(bpf_l3_csum_replace(skb, off, old_len, new_len, 2));
     try_shot(bpf_l3_csum_replace(skb, off, htons(IPPROTO_UDP), htons(IPPROTO_TCP), 2));
   } else if (ipv6) {
-    ipv6->payload_len = htons(ntohs(ipv6->payload_len) + RESERVE_LEN);
+    ipv6->payload_len = htons(ntohs(ipv6->payload_len) + reserve_len);
     ipv6->nexthdr = IPPROTO_TCP;
   }
 
   __be32 csum_diff = 0;
-  try_tc(mangle_data(skb, ip_end + sizeof(*udp), &csum_diff));
+  try_tc(mangle_data(skb, ip_end + sizeof(*udp), &csum_diff, conn->padding_len));
   decl_shot(struct tcphdr, tcp, ip_end, skb);
   update_tcp_header(tcp, payload_len, seq, ack_seq, conn_cwnd);
 
@@ -182,7 +187,7 @@ int egress_handler(struct __sk_buff* skb) {
   tcp->check = old_udp_csum;
   bpf_l4_csum_replace(skb, csum_off, 0, csum_diff, 0);
 
-  __be16 new_len = htons(udp_len + RESERVE_LEN);
+  __be16 new_len = htons(udp_len + reserve_len);
   struct ph_part old_ph = {.protocol = IPPROTO_UDP, .len = old_udp.len};
   struct ph_part new_ph = {.protocol = IPPROTO_TCP, .len = new_len};
   csum_diff = bpf_csum_diff((__be32*)&old_ph, sizeof(old_ph), (__be32*)&new_ph, sizeof(new_ph), 0);

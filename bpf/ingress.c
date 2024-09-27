@@ -15,29 +15,33 @@
 // applied to every data packet. For the same reason, middleboxes probably only append options like
 // MSS on handshake packets since there is no data at the end to move, so not finishing this is
 // probably going to be fine.
-static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, __be32* csum_diff) {
-  __u8 buf[RESERVE_LEN + 4] = {};
-  __u16 data_len = buf_len - offset - PADDING_LEN;
-  __u32 copy_len = min(data_len, RESERVE_LEN);
+static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, __be32* csum_diff,
+                               __u8 padding_len) {
+  size_t reserve_len = TCP_UDP_HEADER_DIFF + padding_len;
+  __u8 buf[MAX_RESERVE_LEN + 4] = {};
+  __u16 data_len = buf_len - offset - padding_len;
+  __u32 copy_len = min(data_len, reserve_len);
 
-#if PADDING_LEN != 0
-  try_drop(bpf_xdp_load_bytes(xdp, offset, buf, PADDING_LEN));
-  *csum_diff = bpf_csum_diff((__be32*)buf, PADDING_LEN, NULL, 0, *csum_diff);
-  buf[0] = 0;
-#endif
+  if (padding_len > 0) {
+    if (padding_len > MAX_PADDING_LEN) padding_len = MAX_PADDING_LEN;
+    try_drop(bpf_xdp_load_bytes(xdp, offset, buf, padding_len));
+    *csum_diff = bpf_csum_diff((__be32*)buf, padding_len, NULL, 0, *csum_diff);
+    buf[0] = 0;
+  }
 
-  if (copy_len > 0) {
+  if (likely(copy_len > 0 && copy_len <= MAX_RESERVE_LEN)) {
     // HACK: see egress.c
     if (copy_len < 2) copy_len = 1;
     try_drop(bpf_xdp_load_bytes(xdp, buf_len - copy_len, buf + 1, copy_len));
     try_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf + 1, copy_len));
 
     // Fix checksum when moved bytes does not align with u16 boundaries
-    if (copy_len == RESERVE_LEN && data_len % 2 != 0)
-      *csum_diff = bpf_csum_diff((__be32*)buf, sizeof(buf), (__be32*)(buf + 1), copy_len, *csum_diff);
+    if (copy_len == reserve_len && data_len % 2 != 0)
+      *csum_diff =
+        bpf_csum_diff((__be32*)buf, sizeof(buf), (__be32*)(buf + 1), copy_len, *csum_diff);
   }
 
-  try_drop(bpf_xdp_adjust_tail(xdp, -(int)RESERVE_LEN));
+  try_drop(bpf_xdp_adjust_tail(xdp, -(int)reserve_len));
   return XDP_PASS;
 }
 
@@ -302,18 +306,19 @@ int ingress_handler(struct xdp_md* xdp) {
   }
   if (will_drop) return XDP_DROP;
 
+  size_t reserve_len = TCP_UDP_HEADER_DIFF + conn->padding_len;
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
-    __be16 new_len = htons(ntohs(old_len) - RESERVE_LEN);
+    __be16 new_len = htons(ntohs(old_len) - reserve_len);
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_UDP;
 
     __u32 ipv4_csum = (__u16)~ntohs(ipv4->check);
-    ipv4_csum -= RESERVE_LEN;
+    ipv4_csum -= reserve_len;
     ipv4_csum += IPPROTO_UDP - IPPROTO_TCP;
     ipv4->check = htons(csum_fold(ipv4_csum));
   } else if (ipv6) {
-    ipv6->payload_len = htons(ntohs(ipv6->payload_len) - RESERVE_LEN);
+    ipv6->payload_len = htons(ntohs(ipv6->payload_len) - reserve_len);
     ipv6->nexthdr = IPPROTO_UDP;
   }
 
@@ -322,11 +327,12 @@ int ingress_handler(struct xdp_md* xdp) {
   __u32 csum = (__u16)~ntohs(tcp->check);
 
   __be32 csum_diff = 0;
-  try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), ip_end + ip_payload_len, &csum_diff));
+  try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), ip_end + ip_payload_len, &csum_diff,
+                       conn->padding_len));
   decl_drop(struct udphdr, udp, ip_end, xdp);
   csum += u32_fold(ntohl(csum_diff));
 
-  __u16 udp_len = ip_payload_len - RESERVE_LEN;
+  __u16 udp_len = ip_payload_len - reserve_len;
   udp->len = htons(udp_len);
 
   udp->check = 0;
