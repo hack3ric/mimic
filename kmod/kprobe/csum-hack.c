@@ -7,7 +7,7 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 
-#include "csum-hack.h"
+#include "../csum-hack.h"
 
 #ifdef __mips__
 static inline void regs_set_return_value(struct pt_regs* regs, unsigned long rc) {
@@ -48,7 +48,7 @@ static int bpf_skb_change_type_ret_handler(struct kretprobe_instance* ri, struct
 }
 NOKPROBE_SYMBOL(bpf_skb_change_type_ret_handler);
 
-static struct kretprobe bpf_skb_change_type_probe = {
+struct kretprobe bpf_skb_change_type_probe = {
   .kp.symbol_name = "bpf_skb_change_type",
   .entry_handler = bpf_skb_change_type_entry_handler,
   .handler = bpf_skb_change_type_ret_handler,
@@ -120,18 +120,10 @@ static int bpf_skb_change_proto_ret_handler(struct kretprobe_instance* ri, struc
 }
 NOKPROBE_SYMBOL(bpf_skb_change_proto_ret_handler);
 
-static struct kretprobe bpf_skb_change_proto_probe = {
+struct kretprobe bpf_skb_change_proto_probe = {
   .kp.symbol_name = "bpf_skb_change_proto",
   .entry_handler = bpf_skb_change_proto_entry_handler,
   .handler = bpf_skb_change_proto_ret_handler,
   .data_size = sizeof(struct bpf_skb_change_proto_params),
   .maxactive = 32,
 };
-
-static struct kretprobe* mimic_probes[] = {
-  &bpf_skb_change_type_probe,
-  &bpf_skb_change_proto_probe,
-};
-
-int csum_hack_init(void) { return register_kretprobes(mimic_probes, 2); }
-void csum_hack_exit(void) { unregister_kretprobes(mimic_probes, 2); }

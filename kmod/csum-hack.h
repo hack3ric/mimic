@@ -13,8 +13,8 @@
 #endif
 
 #ifdef _MIMIC_KMOD
-int csum_hack_init(void);
-void csum_hack_exit(void);
+int csum_impl_init(void);
+void csum_impl_exit(void);
 #endif
 
 #define MAGIC_FLAG1 0xfc9e39d5

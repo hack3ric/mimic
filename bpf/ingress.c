@@ -132,9 +132,9 @@ int ingress_handler(struct xdp_md* xdp) {
   struct filter_settings* settings = matches_whitelist(QUARTET_TCP);
   if (!settings) return XDP_PASS;
   struct conn_tuple conn_key = gen_conn_key(QUARTET_TCP);
-  __u32 payload_len = ip_payload_len - (tcp->doff << 2);
+  __u32 tcp_payload_len = ip_payload_len - (tcp->doff << 2);
 
-  log_tcp(true, &conn_key, tcp, payload_len);
+  log_tcp(true, &conn_key, tcp, tcp_payload_len);
   struct connection* conn = bpf_map_lookup_elem(&mimic_conns, &conn_key);
 
   struct tcp_options opt = {};
@@ -197,7 +197,7 @@ int ingress_handler(struct xdp_md* xdp) {
         conn->state = CONN_SYN_RECV;
         flags |= TCP_FLAG_SYN | TCP_FLAG_ACK;
         seq = conn->seq = random;
-        ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
+        ack_seq = conn->ack_seq = next_ack_seq(tcp, tcp_payload_len);
         conn->seq += 1;
         conn->peer_mss = opt.mss;
       } else {
@@ -207,7 +207,7 @@ int ingress_handler(struct xdp_md* xdp) {
 
     case CONN_SYN_RECV:
       if (likely(tcp->syn && !tcp->ack)) {
-        __u32 new_ack_seq = next_ack_seq(tcp, payload_len);
+        __u32 new_ack_seq = next_ack_seq(tcp, tcp_payload_len);
         if (unlikely(new_ack_seq != conn->ack_seq)) goto fsm_error;
         flags |= TCP_FLAG_SYN | TCP_FLAG_ACK;
         seq = conn->seq++;
@@ -216,7 +216,7 @@ int ingress_handler(struct xdp_md* xdp) {
       } else if (likely(!tcp->syn && tcp->ack)) {
         will_send_ctrl_packet = false;
         conn->state = CONN_ESTABLISHED;
-        conn->ack_seq = next_ack_seq(tcp, payload_len);
+        conn->ack_seq = next_ack_seq(tcp, tcp_payload_len);
         conn->cooldown_mul = 0;
         newly_estab = true;
         swap(pktbuf, conn->pktbuf);
@@ -239,7 +239,7 @@ int ingress_handler(struct xdp_md* xdp) {
           conn->state = CONN_SYN_RECV;
         }
         seq = conn->seq;
-        ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
+        ack_seq = conn->ack_seq = next_ack_seq(tcp, tcp_payload_len);
         conn->peer_mss = opt.mss;
         conn->cwnd = cwnd = 44 * opt.mss;
       } else {
@@ -257,17 +257,17 @@ int ingress_handler(struct xdp_md* xdp) {
         seq = conn->seq;
         ack_seq = conn->ack_seq;
         cwnd = conn->cwnd;
-      } else if (conn->keepalive_sent && payload_len == 0) {
+      } else if (conn->keepalive_sent && tcp_payload_len == 0) {
         // Received keepalive ACK
         will_send_ctrl_packet = false;
         is_keepalive = true;
         conn->keepalive_sent = false;
-      } else if (!tcp->psh && payload_len == 0) {
+      } else if (!tcp->psh && tcp_payload_len == 0) {
         // Empty segment without PSH will be treated as control packet
         will_send_ctrl_packet = false;
       } else br_likely {
         will_send_ctrl_packet = will_drop = false;
-        conn->ack_seq += payload_len;
+        conn->ack_seq += tcp_payload_len;
         __u32 peer_mss = conn->peer_mss ?: 1460;
         __u32 upper_bound = 20 * peer_mss;
         __u32 lower_bound = 2 * peer_mss;
@@ -278,7 +278,7 @@ int ingress_handler(struct xdp_md* xdp) {
           ack_seq = conn->ack_seq;
           conn->cwnd = cwnd = 44 * peer_mss;
         }
-        conn->cwnd -= payload_len;
+        conn->cwnd -= tcp_payload_len;
       }
       break;
 

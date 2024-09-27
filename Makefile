@@ -2,7 +2,7 @@ mimic_common_headers := $(wildcard common/*.h)
 
 mimic_bpf_src := $(wildcard bpf/*.c)
 mimic_bpf_obj := $(mimic_bpf_src:.c=.o)
-mimic_bpf_headers := bpf/vmlinux.h $(wildcard bpf/*.h) $(mimic_common_headers)
+mimic_bpf_headers := bpf/vmlinux.h $(wildcard bpf/*.h) $(wildcard kmod/*.h) $(mimic_common_headers)
 
 mimic_src := $(wildcard src/*.c)
 mimic_obj := $(mimic_src:.c=.o)

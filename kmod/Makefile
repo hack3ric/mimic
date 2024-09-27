@@ -9,8 +9,10 @@ CHECKSUM_HACK ?= kfunc
 ifeq ($(filter kfunc kprobe,$(CHECKSUM_HACK)),)
 $(error unknown checksum hack '$(CHECKSUM_HACK)')
 endif
-mimic-objs += csum-hack-$(CHECKSUM_HACK).o
+mimic-objs += $(addprefix $(CHECKSUM_HACK)/,init.o crypto.o csum-hack.o)
 ccflags-y += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
+
+$(info $(mimic-objs))
 
 ifneq ($(CHECKSUM_HACK),kfunc)
 build_dir := $(SYSTEM_BUILD_DIR)
