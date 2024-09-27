@@ -23,7 +23,8 @@ static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, 
   __u32 copy_len = min(data_len, reserve_len);
 
   if (padding_len > 0) {
-    if (padding_len > MAX_PADDING_LEN) padding_len = MAX_PADDING_LEN;
+    padding_len = min(padding_len, MAX_PADDING_LEN);
+    if (padding_len < 2) padding_len = 1;
     try_drop(bpf_xdp_load_bytes(xdp, offset, buf, padding_len));
     *csum_diff = bpf_csum_diff((__be32*)buf, padding_len, NULL, 0, *csum_diff);
     buf[0] = 0;
