@@ -30,6 +30,7 @@
     y = t;           \
   })
 
+#if __GNUC__ >= 11 || __clang_major__ >= 17
 #if __has_c_attribute(fallthrough)
 #define fallthrough [[fallthrough]]
 #elif __has_c_attribute(clang::fallthrough)
@@ -37,10 +38,14 @@
 #else
 #define fallthrough
 #endif
+#else
+#define fallthrough
+#endif
 
 #define unlikely(expr) __builtin_expect(!!(expr), 0)
 #define likely(expr) __builtin_expect(!!(expr), 1)
 
+#if __clang_major__ >= 17
 #if __has_c_attribute(clang::unlikely)
 #define br_unlikely [[clang::unlikely]]
 #else
@@ -49,6 +54,10 @@
 #if __has_c_attribute(clang::likely)
 #define br_likely [[clang::likely]]
 #else
+#define br_likely
+#endif
+#else
+#define br_unlikely
 #define br_likely
 #endif
 
