@@ -60,5 +60,6 @@ Mkfile.old
 /make
 /kmod/dkms.conf
 /kmod/AKMBUILD
+/kmod/build
 .pc
 compile_commands.json
