@@ -11,15 +11,20 @@
 // clang-format on
 #endif
 
+#ifdef _MIMIC_KMOD
 struct mimic_crypto_state {
   refcount_t rc;
   struct crypto_skcipher* tfm;
 };
+#endif
 
 #ifdef _MIMIC_BPF
 
+struct mimic_crypto_state {};
+
 #if defined(MIMIC_CHECKSUM_HACK_kfunc)
 struct mimic_crypto_state* mimic_crypto_state_create(void) __ksym;
+struct mimic_crypto_state* mimic_crypto_state_acquire(struct mimic_crypto_state* state) __ksym;
 int mimic_crypto_set_key(struct mimic_crypto_state* state, void* key, __u32 key__sz) __ksym;
 void mimic_crypto_state_release(struct mimic_crypto_state* state) __ksym;
 int mimic_encrypt_wg_header(struct __sk_buff* skb_bpf, __u32 offset, void* iv, __u32 iv__sz,
@@ -29,6 +34,7 @@ int mimic_decrypt_wg_header(struct xdp_md* xdp_bpf, __u32 offset, void* iv, __u3
 
 // HACK: see kfunc/crypto.c
 struct mimic_crypto_state* mimic_crypto_state_create2(void) __ksym;
+struct mimic_crypto_state* mimic_crypto_state_acquire2(struct mimic_crypto_state* state) __ksym;
 int mimic_crypto_set_key2(struct mimic_crypto_state* state, void* key, __u32 key__sz) __ksym;
 void mimic_crypto_state_release2(struct mimic_crypto_state* state) __ksym;
 

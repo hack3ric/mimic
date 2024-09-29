@@ -6,6 +6,7 @@
 #include <linux/crypto.h>
 #include <linux/err.h>
 #include <linux/gfp_types.h>
+#include <linux/printk.h>
 #include <linux/random.h>
 #include <linux/refcount.h>
 #include <linux/scatterlist.h>
@@ -56,6 +57,12 @@ __bpf_kfunc struct mimic_crypto_state* mimic_crypto_state_create(void) {
   return state;
 }
 
+__bpf_kfunc struct mimic_crypto_state* mimic_crypto_state_acquire(
+  struct mimic_crypto_state* state) {
+  if (refcount_inc_not_zero(&state->rc)) return state;
+  return NULL;
+}
+
 __bpf_kfunc int mimic_crypto_set_key(struct mimic_crypto_state* state, void* key, __u32 key__sz) {
   return crypto_skcipher_setkey(state->tfm, key, key__sz);
 }
@@ -79,7 +86,10 @@ __bpf_kfunc int mimic_decrypt_wg_header(struct xdp_md* xdp_bpf, __u32 offset, vo
   return skcipher(state, iv, iv__sz, xdp->data + offset, 16, crypto_skcipher_decrypt);
 }
 
-__bpf_kfunc void mimic_crypto_state_dtor(void* p) { mimic_crypto_state_release(p); }
+__bpf_kfunc void mimic_crypto_state_dtor(void* p) {
+  mimic_crypto_state_release(p);
+  pr_info("mimic_crypto_state destructor called\n");
+}
 CFI_NOSEAL(mimic_crypto_state_dtor);
 
 // HACK: Work around a libbpf bug that prevents multiple objects to reference the same kfuncs.
@@ -88,6 +98,10 @@ CFI_NOSEAL(mimic_crypto_state_dtor);
 // [1]: https://lore.kernel.org/bpf/20240929-libbpf-dup-extern-funcs-v2-0-0cc81de3f79f@hack3r.moe/
 __bpf_kfunc struct mimic_crypto_state* mimic_crypto_state_create2(void) {
   return mimic_crypto_state_create();
+}
+__bpf_kfunc struct mimic_crypto_state* mimic_crypto_state_acquire2(
+  struct mimic_crypto_state* state) {
+  return mimic_crypto_state_acquire(state);
 }
 __bpf_kfunc int mimic_crypto_set_key2(struct mimic_crypto_state* state, void* key, __u32 key__sz) {
   return mimic_crypto_set_key(state, key, key__sz);
