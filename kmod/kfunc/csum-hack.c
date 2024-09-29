@@ -8,7 +8,6 @@
 
 #include "../csum-hack.h"
 #include "common.h"
-#include "csum-hack.h"
 
 __bpf_kfunc_start_defs();
 

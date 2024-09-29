@@ -5,8 +5,6 @@
 
 #include "../impl.h"
 #include "common.h"
-#include "crypto.h"
-#include "csum-hack.h"
 
 BTF_ID_LIST(mimic_dtor_ids)
 BTF_ID(struct, mimic_crypto_state)

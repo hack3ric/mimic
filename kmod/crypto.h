@@ -27,6 +27,11 @@ int mimic_encrypt_wg_header(struct __sk_buff* skb_bpf, __u32 offset, void* iv, _
 int mimic_decrypt_wg_header(struct xdp_md* xdp_bpf, __u32 offset, void* iv, __u32 iv__sz,
                             struct mimic_crypto_state* state) __ksym;
 
+// HACK: see kfunc/crypto.c
+struct mimic_crypto_state* mimic_crypto_state_create2(void) __ksym;
+int mimic_crypto_set_key2(struct mimic_crypto_state* state, void* key, __u32 key__sz) __ksym;
+void mimic_crypto_state_release2(struct mimic_crypto_state* state) __ksym;
+
 #elif defined(MIMIC_CHECKSUM_HACK_kprobe)
 #error to be implemented
 #endif
