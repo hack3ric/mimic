@@ -6,6 +6,7 @@
 #include "common/checksum.h"
 #include "common/defs.h"
 #include "common/try.h"
+#include "kmod/crypto.h"
 #include "kmod/csum-hack.h"
 #include "main.h"
 
@@ -130,6 +131,7 @@ int egress_handler(struct __sk_buff* skb) {
   __u32 random = bpf_get_prandom_u32();
 
   bpf_spin_lock(&conn->lock);
+  bool conn_has_crypto = !!conn->crypto;
   if (likely(conn->state == CONN_ESTABLISHED)) {
     seq = conn->seq;
     ack_seq = conn->ack_seq;
@@ -189,6 +191,21 @@ int egress_handler(struct __sk_buff* skb) {
   } else if (ipv6) {
     ipv6->payload_len = htons(ntohs(ipv6->payload_len) + reserve_len);
     ipv6->nexthdr = IPPROTO_TCP;
+  }
+
+  if (payload_len >= 16) {
+    struct mimic_crypto_state* crypto = NULL;
+    if (!conn_has_crypto) {
+      __u8 key[32] = {};
+      crypto = try_p_shot(mimic_crypto_state_create());
+      mimic_crypto_set_key(crypto, key, sizeof(key));
+    } else {
+      crypto = try_p_shot(bpf_kptr_xchg(&conn->crypto, crypto));
+    }
+    __u8 iv[16] = {};
+    mimic_encrypt_wg_header(skb, ip_end + sizeof(*udp), iv, sizeof(iv), crypto);
+    crypto = bpf_kptr_xchg(&conn->crypto, crypto);
+    if (crypto) mimic_crypto_state_release(crypto);
   }
 
   __be32 csum_diff = 0;

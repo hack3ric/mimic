@@ -6,6 +6,7 @@
 #include "bpf/vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+#include "kmod/crypto.h"
 // clang-format on
 #else
 #include <linux/bpf.h>
@@ -277,6 +278,12 @@ struct connection {
 
   __u64 retry_tstamp, reset_tstamp, stale_tstamp;
   __u64 pktbuf;
+
+#ifdef _MIMIC_BPF
+  struct mimic_crypto_state __kptr* crypto;
+#else
+  __u64 crypto_ptr;
+#endif
 };
 
 static __always_inline struct connection conn_init(struct filter_settings* settings, __u64 tstamp) {

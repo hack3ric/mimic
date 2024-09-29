@@ -6,6 +6,7 @@
 #include "common/checksum.h"
 #include "common/defs.h"
 #include "common/try.h"
+#include "kmod/crypto.h"
 #include "main.h"
 
 // Move back n bytes, shrink socket buffer and restore data.
@@ -188,6 +189,8 @@ int ingress_handler(struct xdp_md* xdp) {
 
   bpf_spin_lock(&conn->lock);
 
+  bool conn_has_crypto = !!conn->crypto;
+
   // Incoming traffic == activity
   conn->retry_tstamp = conn->reset_tstamp = tstamp;
 
@@ -332,6 +335,21 @@ int ingress_handler(struct xdp_md* xdp) {
                        conn->settings.padding));
   decl_drop(struct udphdr, udp, ip_end, xdp);
   csum += u32_fold(ntohl(csum_diff));
+
+  if (tcp_payload_len >= 16) {
+    struct mimic_crypto_state* crypto = NULL;
+    if (!conn_has_crypto) {
+      __u8 key[32] = {};
+      crypto = try_p_shot(mimic_crypto_state_create2());
+      mimic_crypto_set_key2(crypto, key, sizeof(key));
+    } else {
+      crypto = try_p_shot(bpf_kptr_xchg(&conn->crypto, crypto));
+    }
+    __u8 iv[16] = {};
+    mimic_decrypt_wg_header(xdp, ip_end + sizeof(*udp), iv, sizeof(iv), crypto);
+    crypto = bpf_kptr_xchg(&conn->crypto, crypto);
+    if (crypto) mimic_crypto_state_release2(crypto);
+  }
 
   __u16 udp_len = ip_payload_len - reserve_len;
   udp->len = htons(udp_len);
