@@ -276,7 +276,7 @@ static __always_inline struct connection conn_init(struct filter_settings* setti
   struct connection conn = {.cwnd = INIT_CWND};
   __builtin_memcpy(&conn.settings, settings, sizeof(*settings));
   conn.retry_tstamp = conn.reset_tstamp = conn.stale_tstamp = tstamp;
-  conn.padding_len = 4;
+  conn.padding_len = 0;  // TODO: expose padding
   return conn;
 }
 
