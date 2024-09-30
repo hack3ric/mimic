@@ -54,8 +54,10 @@ const struct argp show_argp = {
 int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosity) {
   FILE* out = log_verbosity > 0 ? stderr : stdout;
   if (log_verbosity >= 2) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
-  fprintf(out, _("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d, padding %d\n"), BOLD,
-          RESET, gs->h.i, gs->h.r, gs->k.t, gs->k.i, gs->k.r, gs->k.s, gs->padding);
+  fprintf(out, _("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d"), BOLD, RESET, gs->h.i,
+          gs->h.r, gs->k.t, gs->k.i, gs->k.r, gs->k.s);
+  if (gs->padding) fprintf(out, _(", padding %d"), gs->padding);
+  fprintf(out, "\n");
 
   char buf[FILTER_FMT_MAX_LEN];
   struct filter filter;
@@ -67,43 +69,26 @@ int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosit
     try(bpf_map_lookup_elem(whitelist_fd, &filter, &info),
         _("failed to get value from map '%s': %s"), "mimic_whitelist", strret);
     if (log_verbosity >= 2) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
-    fprintf(out, _("  %sfilter:%s %s"), BOLD, RESET, buf);
+    fprintf(out, _("  %sfilter:%s %s%s"), BOLD, RESET, buf, BOLD GRAY);
 
     struct filter_settings *a = &info.settings, *b = gs;
-    bool handshake_ne = memcmp(&a->h, &b->h, sizeof(a->h)) != 0;
-    bool keepalive_ne = memcmp(&a->k, &b->k, sizeof(a->k)) != 0;
-    bool padding_ne = a->padding != b->padding;
-    bool has_host = strlen(info.host) != 0;
-
-    bool first = true;
-    // clang-format off
-    #define if_with_comma(cond)               \
-      if (cond && !first) fprintf(out, ", "); \
-      if (cond) first = false;                \
-      if (cond)
-    // clang-format on
-
-    if (handshake_ne || keepalive_ne || padding_ne || has_host) {
-      fprintf(out, " " GRAY "(");
-      if_with_comma(handshake_ne) {
-        fprintf(out, _("handshake "));
-        for (int i = 0; i < 2; i++) {
-          if (a->h.array[i] != b->h.array[i]) fprintf(out, "%d", info.settings.h.array[i]);
-          if (i < 1) fprintf(out, ":");
-        }
+    if (memcmp(&a->h, &b->h, sizeof(a->h)) != 0) {
+      fprintf(out, ",handshake=");
+      for (int i = 0; i < 2; i++) {
+        if (a->h.array[i] != b->h.array[i]) fprintf(out, "%d", info.settings.h.array[i]);
+        if (i < 1) fprintf(out, ":");
       }
-      if_with_comma(keepalive_ne) {
-        fprintf(out, _("keepalive "));
-        for (int i = 0; i < 4; i++) {
-          if (a->k.array[i] != b->k.array[i]) fprintf(out, "%d", info.settings.k.array[i]);
-          if (i < 3) fprintf(out, ":");
-        }
-      }
-      if_with_comma(padding_ne) fprintf(out, _("padding %d"), info.settings.padding);
-      if_with_comma(has_host) fprintf(out, _("resolved from %s"), info.host);
-      fprintf(out, ")" RESET);
     }
-    fprintf(out, "\n");
+    if (memcmp(&a->k, &b->k, sizeof(a->k)) != 0) {
+      fprintf(out, ",keepalive=");
+      for (int i = 0; i < 4; i++) {
+        if (a->k.array[i] != b->k.array[i]) fprintf(out, "%d", info.settings.k.array[i]);
+        if (i < 3) fprintf(out, ":");
+      }
+    }
+    if (a->padding != b->padding) fprintf(out, ",padding=%d", info.settings.padding);
+    if (strlen(info.host) != 0) fprintf(out, _(" %s(resolved from %s)"), RESET GRAY, info.host);
+    fprintf(out, RESET "\n");
   }
   if (!iter.has_key) fprintf(out, _("  %sfilter:%s none\n"), BOLD, RESET);
   return 0;
