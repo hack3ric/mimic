@@ -27,12 +27,16 @@ static const struct btf_kfunc_id_set mimic_tc_kfunc_set = {
 };
 
 BTF_KFUNCS_START(mimic_xdp_set)
+BTF_ID_FLAGS(func, mimic_crypto_state_create, KF_ACQUIRE | KF_RET_NULL)
+BTF_ID_FLAGS(func, mimic_crypto_state_acquire, KF_ACQUIRE | KF_RET_NULL)
+BTF_ID_FLAGS(func, mimic_crypto_set_key)
+BTF_ID_FLAGS(func, mimic_crypto_state_release, KF_RELEASE)
+BTF_ID_FLAGS(func, mimic_decrypt_wg_header)
 // HACK: see kfunc/crypto.c
 BTF_ID_FLAGS(func, mimic_crypto_state_create2, KF_ACQUIRE | KF_RET_NULL)
 BTF_ID_FLAGS(func, mimic_crypto_state_acquire2, KF_ACQUIRE | KF_RET_NULL)
 BTF_ID_FLAGS(func, mimic_crypto_set_key2)
 BTF_ID_FLAGS(func, mimic_crypto_state_release2, KF_RELEASE)
-BTF_ID_FLAGS(func, mimic_decrypt_wg_header)
 BTF_KFUNCS_END(mimic_xdp_set)
 
 static const struct btf_kfunc_id_set mimic_xdp_kfunc_set = {
