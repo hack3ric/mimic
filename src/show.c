@@ -52,8 +52,10 @@ const struct argp show_argp = {
 };
 
 int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosity) {
-  FILE* out = log_verbosity > 0 ? stderr : stdout;
-  if (log_verbosity >= 2) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
+  if (log_verbosity >= 0 && !LOG_ALLOW_INFO) return 0;
+  FILE* out = log_verbosity >= 0 ? stderr : stdout;
+
+  if (LOG_ALLOW_INFO) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
   fprintf(out, _("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d"), BOLD, RESET, gs->h.i,
           gs->h.r, gs->k.t, gs->k.i, gs->k.r, gs->k.s);
   if (gs->padding) fprintf(out, _(", padding %d"), gs->padding);
@@ -68,7 +70,7 @@ int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosit
     filter_fmt(&filter, buf);
     try(bpf_map_lookup_elem(whitelist_fd, &filter, &info),
         _("failed to get value from map '%s': %s"), "mimic_whitelist", strret);
-    if (log_verbosity >= 2) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
+    if (LOG_ALLOW_INFO) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
     fprintf(out, _("  %sfilter:%s %s%s"), BOLD, RESET, buf, BOLD GRAY);
 
     struct filter_settings *a = &info.settings, *b = gs;
@@ -90,7 +92,10 @@ int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosit
     if (strlen(info.host) != 0) fprintf(out, _(" %s(resolved from %s)"), RESET GRAY, info.host);
     fprintf(out, RESET "\n");
   }
-  if (!iter.has_key) fprintf(out, _("  %sfilter:%s none\n"), BOLD, RESET);
+  if (!iter.has_key) {
+    if (LOG_ALLOW_INFO) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
+    fprintf(out, _("  %sfilter:%s none\n"), BOLD, RESET);
+  }
   return 0;
 }
 
