@@ -23,6 +23,8 @@
 #define max(x, y) ((x) < (y) ? (y) : (x))
 #define cmp(x, y) ((x) > (y) - (x) < (y))
 
+#define sizeof_array(arr) (sizeof(arr) / sizeof(arr[0]))
+
 #define swap(x, y)   \
   ({                 \
     typeof(x) t = x; \
@@ -202,22 +204,23 @@ struct filter {
 struct filter_settings {
   union {
     struct {
-      union { struct {
+      union { struct filter_handshake {
         union {
           struct { __s16 interval, retry; };
           struct { __s16 i, r; };
           __s16 array[2];
         };
       } handshake, h; };
-      union { struct {
+      union { struct filter_keepalive {
         union {
           struct { __s16 time, interval, retry, stale; };
           struct { __s16 t, i, r, s; };
           __s16 array[4];
         };
       } keepalive, k; };
+      __s16 padding;
     };
-    __s16 array[6];
+    __s16 array[7];
   };
 };
 // clang-format on
@@ -232,15 +235,16 @@ struct filter_info {
 static const struct filter_settings DEFAULT_SETTINGS = {
   .handshake.array = {2, 3},
   .keepalive.array = {180, 10, 3, 600},
+  .padding = 0,
 };
 
 static const struct filter_settings FALLBACK_SETTINGS = {
-  .array = {-1, -1, -1, -1, -1, -1},
+  .array = {-1, -1, -1, -1, -1, -1, -1},
 };
 
 static inline void filter_settings_apply(struct filter_settings* local,
                                          const struct filter_settings* global) {
-  for (int i = 0; i < 6; i++)
+  for (int i = 0; i < sizeof_array(local->array); i++)
     if (local->array[i] < 0) local->array[i] = global->array[i];
 }
 
@@ -260,12 +264,14 @@ struct connection {
       CONN_SYN_SENT,
       CONN_SYN_RECV,
       CONN_ESTABLISHED,
-    } state : 2;
+    } state : 3;
     bool keepalive_sent : 1;
-    __u8 padding_len : 5;
-    __u8 cooldown_mul;
-    __u16 peer_mss;
+    __u8 cooldown_mul : 4;
+    __u32 : 24;
+  };
+  struct {
     struct filter_settings settings;
+    __u16 peer_mss;
   };
 
   __u64 retry_tstamp, reset_tstamp, stale_tstamp;
@@ -276,7 +282,6 @@ static __always_inline struct connection conn_init(struct filter_settings* setti
   struct connection conn = {.cwnd = INIT_CWND};
   __builtin_memcpy(&conn.settings, settings, sizeof(*settings));
   conn.retry_tstamp = conn.reset_tstamp = conn.stale_tstamp = tstamp;
-  conn.padding_len = 0;  // TODO: expose padding
   return conn;
 }
 

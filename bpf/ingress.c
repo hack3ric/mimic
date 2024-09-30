@@ -303,7 +303,7 @@ int ingress_handler(struct xdp_md* xdp) {
   }
   if (will_drop) return XDP_DROP;
 
-  size_t reserve_len = TCP_UDP_HEADER_DIFF + conn->padding_len;
+  size_t reserve_len = TCP_UDP_HEADER_DIFF + conn->settings.padding;
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
     __be16 new_len = htons(ntohs(old_len) - reserve_len);
@@ -325,7 +325,7 @@ int ingress_handler(struct xdp_md* xdp) {
 
   __be32 csum_diff = 0;
   try_xdp(restore_data(xdp, ip_end + sizeof(*tcp), ip_end + ip_payload_len, &csum_diff,
-                       conn->padding_len));
+                       conn->settings.padding));
   decl_drop(struct udphdr, udp, ip_end, xdp);
   csum += u32_fold(ntohl(csum_diff));
 

@@ -4,6 +4,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -75,13 +76,25 @@ static int parse_host_port(char* str, char** host, __u16* port) {
   return 0;
 }
 
-static int parse_int(const char* str, int* dest) {
+static int parse_int(const char* str, int* dest, int min, int max) {
+  if (min > max) return -EINVAL;
   char* endptr;
   long parsed = strtol(str, &endptr, 10);
   if (*str == '\0' || *endptr != '\0') ret(-EINVAL, _("invalid integer: '%s'"), str);
-  if (parsed > INT_MAX || parsed < INT_MIN) ret(-E2BIG, _("integer out of range: '%ld'"), parsed);
+  if (parsed < min || parsed > max) ret(-E2BIG, _("integer out of range: '%ld'"), parsed);
   *dest = parsed;
   return 0;
+}
+
+static inline int parse_int_any(const char* str, int* dest) {
+  return parse_int(str, dest, INT_MIN, INT_MAX);
+}
+
+static inline int parse_int_non_neg(const char* str, int min, int max) {
+  if (min < 0) return -EINVAL;
+  int parsed;
+  try(parse_int(str, &parsed, min, max));
+  return parsed;
 }
 
 static int parse_int_seq(char* str, int* nums, size_t len) {
@@ -93,14 +106,7 @@ static int parse_int_seq(char* str, int* nums, size_t len) {
       char orig_char = str[i];
       if (nums_idx >= len) ret(-EINVAL, _("sequence length out of range: '%s'"), str);
       str[i] = '\0';
-      if (*head == '\0') {
-        nums[nums_idx++] = -1;
-      } else {
-        int num;
-        try(parse_int(head, &num));
-        if (num < 0 || num > 65535) ret(-EINVAL, _("integer out of range: '%d'"), num);
-        nums[nums_idx++] = num;
-      }
+      nums[nums_idx++] = *head == '\0' ? -1 : try(parse_int_non_neg(head, 0, INT16_MAX));
       head = str + i + 1;
       str[i] = orig_char;
     }
@@ -120,23 +126,25 @@ __attribute__((unused)) static int parse_bool(const char* str, bool* result) {
   return 0;
 }
 
-int parse_handshake(char* str, struct filter_settings* settings) {
-  if (!str || !settings) return -EINVAL;
+int parse_handshake(char* str, struct filter_handshake* h) {
+  if (!str || !h) return -EINVAL;
   int nums[2];
   try(parse_int_seq(str, nums, 2));
   for (int i = 0; i < 2; i++)
-    if (nums[i] >= 0) settings->handshake.array[i] = nums[i];
+    if (nums[i] >= 0) h->array[i] = nums[i];
   return 0;
 }
 
-int parse_keepalive(char* str, struct filter_settings* settings) {
-  if (!str || !settings) return -EINVAL;
+int parse_keepalive(char* str, struct filter_keepalive* k) {
+  if (!str || !k) return -EINVAL;
   int nums[4];
   try(parse_int_seq(str, nums, 4));
   for (int i = 0; i < 4; i++)
-    if (nums[i] >= 0) settings->keepalive.array[i] = nums[i];
+    if (nums[i] >= 0) k->array[i] = nums[i];
   return 0;
 }
+
+int parse_padding(const char* str) { return parse_int_non_neg(str, 0, MAX_PADDING_LEN); }
 
 int parse_filter(char* filter_str, struct filter* filters, struct filter_info* info, int size) {
   int ret;
@@ -194,9 +202,11 @@ int parse_filter(char* filter_str, struct filter* filters, struct filter_info* i
     if (next_delim) *next_delim = '\0';
     try(parse_kv(delim, &k, &v));
     if (strcmp("handshake", k) == 0)
-      try(parse_handshake(v, &info[0].settings));
+      try(parse_handshake(v, &info[0].settings.handshake));
     else if (strcmp("keepalive", k) == 0)
-      try(parse_keepalive(v, &info[0].settings));
+      try(parse_keepalive(v, &info[0].settings.keepalive));
+    else if (strcmp("padding", k) == 0)
+      info[0].settings.padding = parse_padding(v);
     else
       ret(-EINVAL, _("unsupported option type: '%s'"), k);
     if (!next_delim) break;
@@ -240,14 +250,15 @@ int parse_config_file(FILE* file, struct run_args* args) {
       log_verbosity = parsed;
 
     } else if (strcmp(k, "handshake") == 0) {
-      try(parse_handshake(v, &args->gsettings));
+      try(parse_handshake(v, &args->gsettings.handshake));
     } else if (strcmp(k, "keepalive") == 0) {
-      try(parse_keepalive(v, &args->gsettings));
+      try(parse_keepalive(v, &args->gsettings.keepalive));
     } else if (strcmp(k, "filter") == 0) {
       unsigned int fc = args->filter_count;
-      ret = parse_filter(v, &args->filters[fc], &args->info[fc], MAX_FILTER_COUNT - fc);
+      ret = parse_filter(v, &args->filters[fc], &args->info[fc], sizeof_array(args->filters) - fc);
       if (ret == -E2BIG)
-        ret(-E2BIG, _("currently only maximum of %d filters is supported"), MAX_FILTER_COUNT);
+        ret(-E2BIG, _("currently only maximum of %d filters is supported"),
+            sizeof_array(args->filters));
       else if (ret < 0)
         return ret;
       else
@@ -276,25 +287,24 @@ int parse_lock_file(FILE* file, struct lock_content* c) {
     try(parse_kv(line, &k, &v));
 
     if (strcmp(k, "version") == 0) {
-      if (strcmp(v, argp_program_version) != 0) {
+      if (strcmp(v, argp_program_version) != 0)
         ret(-EINVAL, _("current Mimic version is %s, but lock file's is '%s'"),
             argp_program_version, v);
-      }
       version_checked = true;
     } else if (strcmp(k, "pid") == 0)
-      try(parse_int(v, &c->pid));
+      try(parse_int_any(v, &c->pid));
     else if (strcmp(k, "egress_id") == 0)
-      try(parse_int(v, &c->egress_id));
+      try(parse_int_any(v, &c->egress_id));
     else if (strcmp(k, "ingress_id") == 0)
-      try(parse_int(v, &c->ingress_id));
+      try(parse_int_any(v, &c->ingress_id));
     else if (strcmp(k, "whitelist_id") == 0)
-      try(parse_int(v, &c->whitelist_id));
+      try(parse_int_any(v, &c->whitelist_id));
     else if (strcmp(k, "conns_id") == 0)
-      try(parse_int(v, &c->conns_id));
+      try(parse_int_any(v, &c->conns_id));
     else if (strcmp(k, "handshake") == 0)
-      try(parse_handshake(v, &c->settings));
+      try(parse_handshake(v, &c->settings.handshake));
     else if (strcmp(k, "keepalive") == 0)
-      try(parse_keepalive(v, &c->settings));
+      try(parse_keepalive(v, &c->settings.keepalive));
     else
       ret(-EINVAL, _("unknown key '%s'"), k);
   }

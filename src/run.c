@@ -40,6 +40,7 @@ static const struct argp_option options[] = {
    N_("Specify what packets to process. This may be specified for multiple times."), 1},
   {"handshake", 'h', N_("i:r"), 0, N_("Controls retry behaviour of initiating connection"), 2},
   {"keepalive", 'k', N_("t:i:r:s"), 0, N_("Controls keepalive mechanism"), 2},
+  {"padding", 'p', N_("bytes"), 0, N_("Padding size appended to each packet"), 2},
   {"file", 'F', N_("PATH"), 0, N_("Load configuration from file"), 3},
   {},
 };
@@ -56,29 +57,33 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       if (log_verbosity > 0) log_verbosity--;
       break;
     case 'f':
-      ret = parse_filter(arg, &args->filters[fc], &args->info[fc], MAX_FILTER_COUNT - fc);
+      ret =
+        parse_filter(arg, &args->filters[fc], &args->info[fc], sizeof_array(args->filters) - fc);
       if (ret == -E2BIG)
-        ret(-E2BIG, _("currently only maximum of %d filters is supported"), MAX_FILTER_COUNT);
+        ret(-E2BIG, _("currently only maximum of %d filters is supported"),
+            sizeof_array(args->filters));
       else if (ret < 0)
         return ret;
       else
         args->filter_count += ret;
       break;
     case 'h':
-      try(parse_handshake(arg, &args->gsettings));
+      try(parse_handshake(arg, &args->gsettings.handshake));
       break;
     case 'k':
-      try(parse_keepalive(arg, &args->gsettings));
+      try(parse_keepalive(arg, &args->gsettings.keepalive));
+      break;
+    case 'p':
+      args->gsettings.padding = parse_padding(arg);
       break;
     case 'F':
       args->file = arg;
       break;
     case ARGP_KEY_ARG:
-      if (!args->ifname) {
+      if (!args->ifname)
         args->ifname = arg;
-      } else {
+      else
         return ARGP_ERR_UNKNOWN;
-      }
       break;
     case ARGP_KEY_NO_ARGS:
       argp_usage(state);

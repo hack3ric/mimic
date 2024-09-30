@@ -37,7 +37,8 @@ static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_
     padding_len = min(padding_len, MAX_PADDING_LEN);
     if (padding_len < 2) padding_len = 1;
     if (padding_len < 3) padding_len = 2;
-    __builtin_memset(buf, ';', min(MAX_PADDING_LEN, sizeof(buf)));
+    for (int i = 0; i < padding_len / 4 + !!(padding_len % 4); i++)
+      ((__u32*)buf)[i] = bpf_get_prandom_u32();
     *csum_diff = bpf_csum_diff(NULL, 0, (__be32*)buf, padding_len, *csum_diff);
     try_shot(bpf_skb_store_bytes(skb, offset + TCP_UDP_HEADER_DIFF, buf, padding_len, 0));
   }
@@ -116,7 +117,7 @@ int egress_handler(struct __sk_buff* skb) {
   if (likely(conn->state == CONN_ESTABLISHED)) {
     seq = conn->seq;
     ack_seq = conn->ack_seq;
-    conn->seq += payload_len + conn->padding_len;
+    conn->seq += payload_len + conn->settings.padding;
   } else {
     if (conn->state == CONN_IDLE) {
       __u32 cooldown = conn_cooldown(conn);
@@ -159,7 +160,7 @@ int egress_handler(struct __sk_buff* skb) {
   conn_cwnd = conn->cwnd;
   bpf_spin_unlock(&conn->lock);
 
-  size_t reserve_len = TCP_UDP_HEADER_DIFF + conn->padding_len;
+  size_t reserve_len = TCP_UDP_HEADER_DIFF + conn->settings.padding;
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
     __be16 new_len = htons(ntohs(old_len) + reserve_len);
@@ -175,7 +176,7 @@ int egress_handler(struct __sk_buff* skb) {
   }
 
   __be32 csum_diff = 0;
-  try_tc(mangle_data(skb, ip_end + sizeof(*udp), &csum_diff, conn->padding_len));
+  try_tc(mangle_data(skb, ip_end + sizeof(*udp), &csum_diff, conn->settings.padding));
   decl_shot(struct tcphdr, tcp, ip_end, skb);
   update_tcp_header(tcp, payload_len, seq, ack_seq, conn_cwnd);
 
