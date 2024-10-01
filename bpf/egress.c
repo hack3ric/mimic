@@ -15,7 +15,7 @@ static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_
   __u16 data_len = skb->len - offset;
   size_t reserve_len = TCP_UDP_HEADER_DIFF + padding_len;
   try_shot(bpf_skb_change_tail(skb, skb->len + reserve_len, 0));
-  __u8 buf[MAX_RESERVE_LEN + 2] = {};
+  __u8 buf[MAX_RESERVE_LEN + 4] = {};
   __u32 copy_len = min(data_len, reserve_len);
 
   if (likely(copy_len > 0 && copy_len <= MAX_RESERVE_LEN)) {
@@ -29,14 +29,16 @@ static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_
 
     // Fix checksum when moved bytes does not align with u16 boundaries
     if (copy_len == reserve_len && data_len % 2 != 0) {
-      __u32 x = round_to_mul(copy_len, 4);
-      *csum_diff = bpf_csum_diff((__be32*)(buf + 1), x, (__be32*)buf, x + 4, *csum_diff);
+      __u32 l = min(round_to_mul(copy_len, 4), MAX_RESERVE_LEN);
+      *csum_diff = bpf_csum_diff((__be32*)(buf + 1), l, (__be32*)buf, l + 4, *csum_diff);
     }
   }
 
   if (padding_len > 0) {
     padding_len = min(padding_len, MAX_PADDING_LEN);
+    if (padding_len < 3) padding_len = 2;
     if (padding_len < 2) padding_len = 1;
+
     for (int i = 0; i < padding_len / 4 + !!(padding_len % 4); i++)
       ((__u32*)buf)[i] = bpf_get_prandom_u32();
     // HACK: prevent usage of __builtin_memset against variable size

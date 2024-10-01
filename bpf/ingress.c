@@ -20,7 +20,9 @@ static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, 
 
   if (padding_len > 0) {
     padding_len = min(padding_len, MAX_PADDING_LEN);
-    if (unlikely(padding_len < 2)) padding_len = 1;
+    if (padding_len < 3) padding_len = 2;
+    if (padding_len < 2) padding_len = 1;
+
     try_drop(bpf_xdp_load_bytes(xdp, offset, buf, padding_len));
     *csum_diff = bpf_csum_diff((__be32*)buf, round_to_mul(padding_len, 4), NULL, 0, *csum_diff);
     buf[0] = 0;
@@ -29,13 +31,14 @@ static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, 
   if (likely(copy_len > 0 && copy_len <= MAX_RESERVE_LEN)) {
     // HACK: see egress.c
     if (unlikely(copy_len < 2)) copy_len = 1;
+
     try_drop(bpf_xdp_load_bytes(xdp, buf_len - copy_len, buf + 1, copy_len));
     try_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf + 1, copy_len));
 
     // Fix checksum when moved bytes does not align with u16 boundaries
     if (copy_len == reserve_len && data_len % 2 != 0) {
-      __u32 x = round_to_mul(copy_len, 4);
-      *csum_diff = bpf_csum_diff((__be32*)buf, x + 4, (__be32*)(buf + 1), x, *csum_diff);
+      __u32 l = min(round_to_mul(copy_len, 4), MAX_RESERVE_LEN);
+      *csum_diff = bpf_csum_diff((__be32*)buf, l + 4, (__be32*)(buf + 1), l, *csum_diff);
     }
   }
 
