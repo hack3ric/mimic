@@ -206,7 +206,7 @@ int parse_filter(char* filter_str, struct filter* filters, struct filter_info* i
     else if (strcmp("keepalive", k) == 0)
       try(parse_keepalive(v, &info[0].settings.keepalive));
     else if (strcmp("padding", k) == 0)
-      info[0].settings.padding = parse_padding(v);
+      info[0].settings.padding = try(parse_padding(v));
     else
       ret(-EINVAL, _("unsupported option type: '%s'"), k);
     if (!next_delim) break;
