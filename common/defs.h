@@ -24,6 +24,7 @@
 #define cmp(x, y) ((x) > (y) - (x) < (y))
 
 #define sizeof_array(arr) (sizeof(arr) / sizeof(arr[0]))
+#define round_to_mul(val, mul) ((val) % (mul) == 0) ? (val) : ((val) + ((mul) - (val) % (mul)))
 
 #define swap(x, y)   \
   ({                 \
@@ -143,7 +144,7 @@ static inline void cleanup_malloc_str(char** ptr) { cleanup_malloc((void*)ptr); 
 // Mainly used for limiting loop counts
 #define MAX_PACKET_SIZE 10000
 
-#define MAX_PADDING_LEN 18
+#define MAX_PADDING_LEN 16
 
 // Used for reading packet data in bulk
 #define SEGMENT_SIZE 64

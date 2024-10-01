@@ -11,7 +11,7 @@
 
 // Extend socket buffer and move n bytes from front to back.
 static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_diff,
-                              __u8 padding_len) {
+                              __u32 padding_len) {
   __u16 data_len = skb->len - offset;
   size_t reserve_len = TCP_UDP_HEADER_DIFF + padding_len;
   try_shot(bpf_skb_change_tail(skb, skb->len + reserve_len, 0));
@@ -28,18 +28,32 @@ static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_
     try_shot(bpf_skb_store_bytes(skb, skb->len - copy_len, buf + 1, copy_len, 0));
 
     // Fix checksum when moved bytes does not align with u16 boundaries
-    if (copy_len == reserve_len && data_len % 2 != 0)
-      *csum_diff =
-        bpf_csum_diff((__be32*)(buf + 1), copy_len, (__be32*)buf, sizeof(buf), *csum_diff);
+    if (copy_len == reserve_len && data_len % 2 != 0) {
+      __u32 x = round_to_mul(copy_len, 4);
+      *csum_diff = bpf_csum_diff((__be32*)(buf + 1), x, (__be32*)buf, x + 4, *csum_diff);
+    }
   }
 
   if (padding_len > 0) {
     padding_len = min(padding_len, MAX_PADDING_LEN);
     if (padding_len < 2) padding_len = 1;
-    if (padding_len < 3) padding_len = 2;
     for (int i = 0; i < padding_len / 4 + !!(padding_len % 4); i++)
       ((__u32*)buf)[i] = bpf_get_prandom_u32();
-    *csum_diff = bpf_csum_diff(NULL, 0, (__be32*)buf, padding_len, *csum_diff);
+    // HACK: prevent usage of __builtin_memset against variable size
+    switch (padding_len % 4) {
+      case 1:
+        buf[padding_len + 2] = 0;
+        fallthrough;
+      case 2:
+        buf[padding_len + 1] = 0;
+        fallthrough;
+      case 3:
+        buf[padding_len + 0] = 0;
+        fallthrough;
+      default:
+        break;
+    }
+    *csum_diff = bpf_csum_diff(NULL, 0, (__be32*)buf, round_to_mul(padding_len, 4), *csum_diff);
     try_shot(bpf_skb_store_bytes(skb, offset + TCP_UDP_HEADER_DIFF, buf, padding_len, 0));
   }
 

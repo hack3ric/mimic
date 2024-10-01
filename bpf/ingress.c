@@ -12,9 +12,9 @@
 //
 // XXX: Not handling TCP options appended by middleboxes
 static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, __be32* csum_diff,
-                               __u8 padding_len) {
+                               __u32 padding_len) {
   size_t reserve_len = TCP_UDP_HEADER_DIFF + padding_len;
-  __u8 buf[MAX_RESERVE_LEN + 2] = {};
+  __u8 buf[MAX_RESERVE_LEN + 4] = {};
   __u16 data_len = buf_len - offset - padding_len;
   __u32 copy_len = min(data_len, reserve_len);
 
@@ -22,7 +22,7 @@ static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, 
     padding_len = min(padding_len, MAX_PADDING_LEN);
     if (unlikely(padding_len < 2)) padding_len = 1;
     try_drop(bpf_xdp_load_bytes(xdp, offset, buf, padding_len));
-    *csum_diff = bpf_csum_diff((__be32*)buf, padding_len, NULL, 0, *csum_diff);
+    *csum_diff = bpf_csum_diff((__be32*)buf, round_to_mul(padding_len, 4), NULL, 0, *csum_diff);
     buf[0] = 0;
   }
 
@@ -33,9 +33,10 @@ static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, 
     try_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf + 1, copy_len));
 
     // Fix checksum when moved bytes does not align with u16 boundaries
-    if (copy_len == reserve_len && data_len % 2 != 0)
-      *csum_diff =
-        bpf_csum_diff((__be32*)buf, sizeof(buf), (__be32*)(buf + 1), copy_len, *csum_diff);
+    if (copy_len == reserve_len && data_len % 2 != 0) {
+      __u32 x = round_to_mul(copy_len, 4);
+      *csum_diff = bpf_csum_diff((__be32*)buf, x + 4, (__be32*)(buf + 1), x, *csum_diff);
+    }
   }
 
   try_drop(bpf_xdp_adjust_tail(xdp, -(int)reserve_len));
@@ -55,11 +56,11 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
                                    struct tcp_options* opt) {
   __u8 opt_buf[80] = {};
   __u32 len = (tcp->doff << 2) - sizeof(*tcp);
-  if (unlikely(len > 80)) {  // TCP options too large
+  if (unlikely(len > 80))  // TCP options too large
     return XDP_DROP;
-  } else if (len == 0) {  // prevent zero-sized read
+  else if (len == 0)  // prevent zero-sized read
     return XDP_PASS;
-  } else {
+  else {
     if (unlikely(len < 2)) len = 1;
     try_drop(bpf_xdp_load_bytes(xdp, ip_end + sizeof(*tcp), opt_buf, len));
   }
