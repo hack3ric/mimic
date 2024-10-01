@@ -253,6 +253,8 @@ int parse_config_file(FILE* file, struct run_args* args) {
       try(parse_handshake(v, &args->gsettings.handshake));
     } else if (strcmp(k, "keepalive") == 0) {
       try(parse_keepalive(v, &args->gsettings.keepalive));
+    } else if (strcmp(k, "padding") == 0) {
+      args->gsettings.padding = try(parse_padding(v));
     } else if (strcmp(k, "filter") == 0) {
       unsigned int fc = args->filter_count;
       ret = parse_filter(v, &args->filters[fc], &args->info[fc], sizeof_array(args->filters) - fc);
