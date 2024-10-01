@@ -145,6 +145,7 @@ static inline void cleanup_malloc_str(char** ptr) { cleanup_malloc((void*)ptr); 
 #define MAX_PACKET_SIZE 10000
 
 #define MAX_PADDING_LEN 16
+#define PADDING_RANDOM (-127)
 
 // Used for reading packet data in bulk
 #define SEGMENT_SIZE 64
@@ -246,7 +247,7 @@ static const struct filter_settings FALLBACK_SETTINGS = {
 static inline void filter_settings_apply(struct filter_settings* local,
                                          const struct filter_settings* global) {
   for (int i = 0; i < sizeof_array(local->array); i++)
-    if (local->array[i] < 0) local->array[i] = global->array[i];
+    if (local->array[i] == -1) local->array[i] = global->array[i];
 }
 
 struct conn_tuple {

@@ -74,7 +74,7 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       try(parse_keepalive(arg, &args->gsettings.keepalive));
       break;
     case 'p':
-      args->gsettings.padding = try(parse_padding(arg));
+      try(parse_padding(arg, &args->gsettings.padding));
       break;
     case 'F':
       args->file = arg;

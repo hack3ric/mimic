@@ -131,7 +131,7 @@ int parse_handshake(char* str, struct filter_handshake* h) {
   int nums[2];
   try(parse_int_seq(str, nums, 2));
   for (int i = 0; i < 2; i++)
-    if (nums[i] >= 0) h->array[i] = nums[i];
+    if (nums[i] != -1) h->array[i] = nums[i];
   return 0;
 }
 
@@ -140,11 +140,29 @@ int parse_keepalive(char* str, struct filter_keepalive* k) {
   int nums[4];
   try(parse_int_seq(str, nums, 4));
   for (int i = 0; i < 4; i++)
-    if (nums[i] >= 0) k->array[i] = nums[i];
+    if (nums[i] != -1) k->array[i] = nums[i];
   return 0;
 }
 
-int parse_padding(const char* str) { return parse_int_non_neg(str, 0, MAX_PADDING_LEN); }
+int parse_padding(const char* str, __s16* padding) {
+  if (strcmp(str, "random") == 0)
+    *padding = PADDING_RANDOM;
+  else
+    *padding = try(parse_int_non_neg(str, 0, MAX_PADDING_LEN));
+  return 0;
+}
+
+static int parse_setting(const char* k, char* v, struct filter_settings* settings) {
+  if (strcmp("handshake", k) == 0)
+    try(parse_handshake(v, &settings->handshake));
+  else if (strcmp("keepalive", k) == 0)
+    try(parse_keepalive(v, &settings->keepalive));
+  else if (strcmp("padding", k) == 0)
+    try(parse_padding(v, &settings->padding));
+  else
+    return 0;
+  return 1;
+}
 
 int parse_filter(char* filter_str, struct filter* filters, struct filter_info* info, int size) {
   int ret;
@@ -201,13 +219,7 @@ int parse_filter(char* filter_str, struct filter* filters, struct filter_info* i
     next_delim = strchr(delim, ',');
     if (next_delim) *next_delim = '\0';
     try(parse_kv(delim, &k, &v));
-    if (strcmp("handshake", k) == 0)
-      try(parse_handshake(v, &info[0].settings.handshake));
-    else if (strcmp("keepalive", k) == 0)
-      try(parse_keepalive(v, &info[0].settings.keepalive));
-    else if (strcmp("padding", k) == 0)
-      info[0].settings.padding = try(parse_padding(v));
-    else
+    if (!try(parse_setting(k, v, &info[0].settings)))
       ret(-EINVAL, _("unsupported option type: '%s'"), k);
     if (!next_delim) break;
   }
@@ -249,12 +261,6 @@ int parse_config_file(FILE* file, struct run_args* args) {
       }
       log_verbosity = parsed;
 
-    } else if (strcmp(k, "handshake") == 0) {
-      try(parse_handshake(v, &args->gsettings.handshake));
-    } else if (strcmp(k, "keepalive") == 0) {
-      try(parse_keepalive(v, &args->gsettings.keepalive));
-    } else if (strcmp(k, "padding") == 0) {
-      args->gsettings.padding = try(parse_padding(v));
     } else if (strcmp(k, "filter") == 0) {
       unsigned int fc = args->filter_count;
       ret = parse_filter(v, &args->filters[fc], &args->info[fc], sizeof_array(args->filters) - fc);
@@ -265,7 +271,8 @@ int parse_config_file(FILE* file, struct run_args* args) {
         return ret;
       else
         args->filter_count += ret;
-    } else {
+
+    } else if (!try(parse_setting(k, v, &args->gsettings))) {
       ret(-EINVAL, _("unknown key '%s'"), k);
     }
   }
@@ -303,11 +310,7 @@ int parse_lock_file(FILE* file, struct lock_content* c) {
       try(parse_int_any(v, &c->whitelist_id));
     else if (strcmp(k, "conns_id") == 0)
       try(parse_int_any(v, &c->conns_id));
-    else if (strcmp(k, "handshake") == 0)
-      try(parse_handshake(v, &c->settings.handshake));
-    else if (strcmp(k, "keepalive") == 0)
-      try(parse_keepalive(v, &c->settings.keepalive));
-    else
+    else if (!try(parse_setting(k, v, &c->settings)))
       ret(-EINVAL, _("unknown key '%s'"), k);
   }
   if (!version_checked) ret(-EINVAL, _("no version found in lock file"));
@@ -324,5 +327,6 @@ int write_lock_file(int fd, const struct lock_content* c) {
   try(dprintf(fd, "handshake=%d:%d\n", c->settings.h.i, c->settings.h.r));
   try(dprintf(fd, "keepalive=%d:%d:%d:%d\n", c->settings.k.t, c->settings.k.i, c->settings.k.r,
               c->settings.k.s));
+  try(dprintf(fd, "padding=%d", c->settings.padding));
   return 0;
 }

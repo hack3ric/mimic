@@ -58,7 +58,10 @@ int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosit
   if (LOG_ALLOW_INFO) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
   fprintf(out, _("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d"), BOLD, RESET, gs->h.i,
           gs->h.r, gs->k.t, gs->k.i, gs->k.r, gs->k.s);
-  if (gs->padding) fprintf(out, _(", padding %d"), gs->padding);
+  if (gs->padding == PADDING_RANDOM)
+    fprintf(out, _(", padding random"));
+  else if (gs->padding)
+    fprintf(out, _(", padding %d"), gs->padding);
   fprintf(out, "\n");
 
   char buf[FILTER_FMT_MAX_LEN];
@@ -88,7 +91,12 @@ int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosit
         if (i < 3) fprintf(out, ":");
       }
     }
-    if (a->padding != b->padding) fprintf(out, ",padding=%d", info.settings.padding);
+    if (a->padding != b->padding) {
+      if (info.settings.padding == PADDING_RANDOM)
+        fprintf(out, ",padding=random");
+      else
+        fprintf(out, ",padding=%d", info.settings.padding);
+    }
     if (strlen(info.host) != 0) fprintf(out, _(" %s(resolved from %s)"), RESET GRAY, info.host);
     fprintf(out, RESET "\n");
   }
