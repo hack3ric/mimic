@@ -157,4 +157,19 @@ static inline bool ipv6_is_ext(__u8 nexthdr) {
   }
 }
 
+// HACK: make verifier happy
+// Probably related:
+// https://lore.kernel.org/bpf/f464186c-0353-9f9e-0271-e70a30e2fcdb@linux.dev/T/
+#define bpf_gt0_hack1(val)              \
+  ({                                    \
+    if ((val) < 2) (val) = 1; \
+  })
+#define bpf_gt0_hack2(val) \
+  ({                       \
+    if ((val) < 2)         \
+      (val) = 1;           \
+    else if ((val) < 3)    \
+      (val) = 2;           \
+  })
+
 #endif  // _MIMIC_BPF_MIMIC_H

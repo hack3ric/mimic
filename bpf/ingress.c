@@ -19,9 +19,8 @@ static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, 
   __u32 copy_len = min(data_len, reserve_len);
 
   if (padding_len > 0) {
+    bpf_gt0_hack2(padding_len);
     padding_len = min(padding_len, MAX_PADDING_LEN);
-    if (padding_len < 3)
-      if (padding_len < 2) padding_len = 1;
 
     try_drop(bpf_xdp_load_bytes(xdp, offset, buf, padding_len));
     *csum_diff = bpf_csum_diff((__be32*)buf, round_to_mul(padding_len, 4), NULL, 0, *csum_diff);
@@ -29,9 +28,7 @@ static inline int restore_data(struct xdp_md* xdp, __u16 offset, __u32 buf_len, 
   }
 
   if (likely(copy_len > 0 && copy_len <= MAX_RESERVE_LEN)) {
-    // HACK: see egress.c
-    if (unlikely(copy_len < 2)) copy_len = 1;
-
+    bpf_gt0_hack1(copy_len);
     try_drop(bpf_xdp_load_bytes(xdp, buf_len - copy_len, buf + 1, copy_len));
     try_drop(bpf_xdp_store_bytes(xdp, offset - TCP_UDP_HEADER_DIFF, buf + 1, copy_len));
 
@@ -64,7 +61,7 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
   else if (len == 0)  // prevent zero-sized read
     return XDP_PASS;
   else {
-    if (unlikely(len < 2)) len = 1;
+    bpf_gt0_hack1(len);
     try_drop(bpf_xdp_load_bytes(xdp, ip_end + sizeof(*tcp), opt_buf, len));
   }
 
