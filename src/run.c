@@ -382,7 +382,7 @@ static int do_routine(int conns_fd, const char* ifname) {
       if (!remove) {
         struct packet_buf* orig_pktbuf = (typeof(orig_pktbuf))(uintptr_t)conn.pktbuf;
         conn.pktbuf = 0;
-        conn_reset(&conn, tstamp);
+        conn_reset(&conn, tstamp, true);
         bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
         packet_buf_free(orig_pktbuf);
       }

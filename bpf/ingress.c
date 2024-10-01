@@ -154,7 +154,7 @@ int ingress_handler(struct xdp_md* xdp) {
       __u32 cooldown;
       bpf_spin_lock(&conn->lock);
       swap(pktbuf, conn->pktbuf);
-      conn_reset(conn, tstamp);
+      conn_reset(conn, tstamp, true);
       cooldown = conn_cooldown(conn);
       bpf_spin_unlock(&conn->lock);
       use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
@@ -286,7 +286,7 @@ int ingress_handler(struct xdp_md* xdp) {
     fsm_error:
       flags |= TCP_FLAG_RST;
       swap(pktbuf, conn->pktbuf);
-      conn_reset(conn, tstamp);
+      conn_reset(conn, tstamp, true);
       cooldown = conn_cooldown(conn);
       seq = conn->seq;
       break;

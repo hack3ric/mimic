@@ -286,14 +286,14 @@ static __always_inline struct connection conn_init(struct filter_settings* setti
   return conn;
 }
 
-static __always_inline void conn_reset(struct connection* conn, __u64 tstamp) {
+static __always_inline void conn_reset(struct connection* conn, __u64 tstamp, bool inc_cd) {
   conn->state = CONN_IDLE;
   conn->seq = conn->ack_seq = 0;
   // conn->pktbuf should be swapped out prior
   conn->cwnd = INIT_CWND;
   conn->peer_mss = 0;
   conn->keepalive_sent = false;
-  if (conn->cooldown_mul < 11) conn->cooldown_mul += 1;
+  if (inc_cd && conn->cooldown_mul < 11) conn->cooldown_mul += 1;
   conn->retry_tstamp = conn->reset_tstamp = conn->stale_tstamp = tstamp;
 }
 
