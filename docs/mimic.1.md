@@ -34,7 +34,7 @@
 : Controls keepalive mechanism (see [**CONFIGURATION/Handshake and Keepalive Parameters**](#handshake-and-keepalive-parameters))
 
 `-p, --padding`
-: Padding size appended to each packet
+: Padding size appended to each packet. Pass 'random' to use random padding.
 
 `-F, --file=PATH`
 : Load configuration from file

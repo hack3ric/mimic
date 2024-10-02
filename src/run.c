@@ -40,7 +40,8 @@ static const struct argp_option options[] = {
    N_("Specify what packets to process. This may be specified for multiple times."), 1},
   {"handshake", 'h', N_("i:r"), 0, N_("Controls retry behaviour of initiating connection"), 2},
   {"keepalive", 'k', N_("t:i:r:s"), 0, N_("Controls keepalive mechanism"), 2},
-  {"padding", 'p', N_("bytes"), 0, N_("Padding size appended to each packet"), 2},
+  {"padding", 'p', N_("bytes"), 0,
+   N_("Padding size appended to each packet. Pass 'random' to use random padding."), 2},
   {"file", 'F', N_("PATH"), 0, N_("Load configuration from file"), 3},
   {},
 };
