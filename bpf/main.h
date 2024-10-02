@@ -75,7 +75,7 @@ static void log_any(enum log_level level, enum log_type type, union log_info* in
   if (unlikely(!item)) return;
   item->type = RB_ITEM_LOG_EVENT;
   item->log_event = (struct log_event){.level = level, .type = type};
-  __builtin_memcpy(&item->log_event.info, info, sizeof(*info));
+  item->log_event.info = *info;
   bpf_ringbuf_submit(item, 0);
   return;
 }
