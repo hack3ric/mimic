@@ -307,6 +307,10 @@ static __always_inline __u32 conn_cooldown_display(struct connection* conn) {
   return conn->initiator ? conn_cooldown(conn) : 0;
 }
 
+static __always_inline __u32 conn_padding(struct connection* conn, __u32 seq, __u32 ack_seq) {
+  return conn->settings.padding == PADDING_RANDOM ? (seq + ack_seq) % 11 : conn->settings.padding;
+}
+
 static __always_inline int time_diff_sec(__u64 a, __u64 b) {
   if (a <= b) return 0;
   if ((a - b) % SECOND < SECOND / 2)

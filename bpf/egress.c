@@ -129,8 +129,7 @@ int egress_handler(struct __sk_buff* skb) {
   if (likely(conn->state == CONN_ESTABLISHED)) {
     seq = conn->seq;
     ack_seq = conn->ack_seq;
-    padding =
-      conn->settings.padding == PADDING_RANDOM ? (seq + ack_seq) % 11 : conn->settings.padding;
+    padding = conn_padding(conn, seq, ack_seq);
     conn->seq += payload_len + padding;
   } else {
     if (conn->state == CONN_IDLE) {
