@@ -151,8 +151,8 @@ int ingress_handler(struct xdp_md* xdp) {
       __u32 cooldown;
       bpf_spin_lock(&conn->lock);
       swap(pktbuf, conn->pktbuf);
-      conn_reset(conn, tstamp, true);
-      cooldown = conn_cooldown(conn);
+      conn_reset(conn, tstamp);
+      cooldown = conn_cooldown_display(conn);
       bpf_spin_unlock(&conn->lock);
       use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);
       if (tcp->rst) {
@@ -192,6 +192,7 @@ int ingress_handler(struct xdp_md* xdp) {
     case CONN_IDLE:
       if (likely(tcp->syn && !tcp->ack)) {
         conn->state = CONN_SYN_RECV;
+        conn->initiator = false;
         flags |= TCP_FLAG_SYN | TCP_FLAG_ACK;
         seq = conn->seq = random;
         ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
@@ -283,8 +284,8 @@ int ingress_handler(struct xdp_md* xdp) {
     fsm_error:
       flags |= TCP_FLAG_RST;
       swap(pktbuf, conn->pktbuf);
-      conn_reset(conn, tstamp, true);
-      cooldown = conn_cooldown(conn);
+      conn_reset(conn, tstamp);
+      cooldown = conn_cooldown_display(conn);
       seq = conn->seq;
       break;
   }

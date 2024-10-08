@@ -267,9 +267,10 @@ struct connection {
       CONN_SYN_RECV,
       CONN_ESTABLISHED,
     } state : 3;
-    bool keepalive_sent : 1;
     __u8 cooldown_mul : 4;
-    __u32 : 24;
+    bool keepalive_sent : 1;
+    bool initiator : 1;
+    __u32 : 23;
   };
   struct {
     struct filter_settings settings;
@@ -287,19 +288,23 @@ static __always_inline struct connection conn_init(struct filter_settings* setti
   return conn;
 }
 
-static __always_inline void conn_reset(struct connection* conn, __u64 tstamp, bool inc_cd) {
+static __always_inline void conn_reset(struct connection* conn, __u64 tstamp) {
   conn->state = CONN_IDLE;
   conn->seq = conn->ack_seq = 0;
   // conn->pktbuf should be swapped out prior
   conn->cwnd = INIT_CWND;
   conn->peer_mss = 0;
   conn->keepalive_sent = false;
-  if (inc_cd && conn->cooldown_mul < 11) conn->cooldown_mul += 1;
+  if (conn->initiator && conn->cooldown_mul < 11) conn->cooldown_mul += 1;
   conn->retry_tstamp = conn->reset_tstamp = conn->stale_tstamp = tstamp;
 }
 
 static __always_inline __u32 conn_cooldown(struct connection* conn) {
   return conn->cooldown_mul ? DEFAULT_COOLDOWN * (1 << (conn->cooldown_mul - 1)) : 0;
+}
+
+static __always_inline __u32 conn_cooldown_display(struct connection* conn) {
+  return conn->initiator ? conn_cooldown(conn) : 0;
 }
 
 static __always_inline int time_diff_sec(__u64 a, __u64 b) {

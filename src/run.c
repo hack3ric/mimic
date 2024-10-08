@@ -383,11 +383,11 @@ static int do_routine(int conns_fd, const char* ifname) {
       if (!remove) {
         struct packet_buf* orig_pktbuf = (typeof(orig_pktbuf))(uintptr_t)conn.pktbuf;
         conn.pktbuf = 0;
-        conn_reset(&conn, tstamp, true);
+        conn_reset(&conn, tstamp);
         bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
         packet_buf_free(orig_pktbuf);
       }
-      log_destroy(LOG_WARN, &key, DESTROY_TIMED_OUT, conn_cooldown(&conn));
+      log_destroy(LOG_WARN, &key, DESTROY_TIMED_OUT, conn_cooldown_display(&conn));
       send_ctrl_packet(&key, TCP_FLAG_RST, conn.seq, 0, 0, ifname);
     }
     if (remove) {
