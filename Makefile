@@ -167,9 +167,9 @@ out/.options.%:
 
 bpf/vmlinux/system.h:
 ifneq ($(KERNEL_VMLINUX),)
-	$(BPFTOOL) btf dump file $(KERNEL_VMLINUX) format c > $@
+	$(BPFTOOL) btf dump file $(KERNEL_VMLINUX) format c >$@
 else
-	@echo vmlinux file not found and KERNEL_VMLINUX not specified >2
+	@echo vmlinux file not found and KERNEL_VMLINUX not specified >&2
 	@exit 1
 endif
 
@@ -184,7 +184,7 @@ ifneq ($(STRIP_BTF_EXT),)
 endif
 
 src/bpf_skel.h: out/mimic.bpf.o
-	$(BPFTOOL) gen skeleton out/mimic.bpf.o > $@
+	$(BPFTOOL) gen skeleton out/mimic.bpf.o >$@
 
 $(filter src/%.o, $(mimic_obj)): src/%.o: $(mimic_headers) $(check_options)
 
@@ -206,7 +206,7 @@ $(foreach _tool,$(mimic_tools),$(eval $(call generate_tool_rule,$(_tool))))
 
 out/mimic.1.gz: docs/mimic.1.md
 	$(mkdir_p)
-	ronn -r --pipe $< | gzip -c > $@
+	ronn -r --pipe $< | gzip -c >$@
 
 out/mimic.pot:
 	$(mkdir_p)
