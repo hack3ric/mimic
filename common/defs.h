@@ -266,11 +266,10 @@ struct connection {
       CONN_SYN_SENT,
       CONN_SYN_RECV,
       CONN_ESTABLISHED,
-    } state : 3;
-    __u8 cooldown_mul : 4;
-    bool keepalive_sent : 1;
-    bool initiator : 1;
-    __u32 : 23;
+    } state;
+    __u8 cooldown_mul;
+    bool keepalive_sent;
+    bool initiator;
   };
   struct {
     struct filter_settings settings;
