@@ -47,8 +47,20 @@ mimic_link_libs += -largp
 endif
 
 # Whether to link CLI statically
-ifneq ($(STATIC),)
+ifneq ($(STATIC)$(STATIC_EXCEPT_LIBC),)
 mimic_link_libs += -lelf -lzstd -lz
+endif
+
+ifneq ($(STATIC_EXCEPT_LIBC),)
+LDFLAGS += -Wl,-Bstatic
+endif
+
+LDFLAGS += $(mimic_link_libs)
+
+ifneq ($(STATIC_EXCEPT_LIBC),)
+LDFLAGS += -Wl,-Bdynamic
+endif
+ifneq ($(STATIC),)
 LDFLAGS += -static
 endif
 
@@ -178,7 +190,7 @@ $(filter src/%.o, $(mimic_obj)): src/%.o: $(mimic_headers) $(check_options)
 
 out/mimic: $(mimic_obj)
 	$(mkdir_p)
-	$(CC) $(CFLAGS) $(mimic_obj) -o $@ $(LDFLAGS) $(mimic_link_libs)
+	$(CC) $(CFLAGS) $(mimic_obj) -o $@ $(LDFLAGS)
 
 out/mimic.ko: .FORCE build-tools
 	$(mkdir_p)
