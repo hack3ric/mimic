@@ -56,7 +56,7 @@ int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosit
   FILE* out = log_verbosity >= 0 ? stderr : stdout;
 
   if (LOG_ALLOW_INFO) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
-  fprintf(out, _("  %ssettings:%s handshake %d:%d, keepalive %d:%d:%d:%d"), BOLD, RESET, gs->h.i,
+  fprintf(out, _("  %sSettings:%s handshake %d:%d, keepalive %d:%d:%d:%d"), BOLD, RESET, gs->h.i,
           gs->h.r, gs->k.t, gs->k.i, gs->k.r, gs->k.s);
   if (gs->padding == PADDING_RANDOM)
     fprintf(out, _(", padding random"));
@@ -74,7 +74,7 @@ int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosit
     try(bpf_map_lookup_elem(whitelist_fd, &filter, &info),
         _("failed to get value from map '%s': %s"), "mimic_whitelist", strret);
     if (LOG_ALLOW_INFO) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
-    fprintf(out, _("  %sfilter:%s %s%s"), BOLD, RESET, buf, BOLD GRAY);
+    fprintf(out, _("  %sFilter:%s %s%s"), BOLD, RESET, buf, BOLD GRAY);
 
     struct filter_settings *a = &info.settings, *b = gs;
     if (memcmp(&a->h, &b->h, sizeof(a->h)) != 0) {
@@ -102,7 +102,7 @@ int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosit
   }
   if (!iter.has_key) {
     if (LOG_ALLOW_INFO) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
-    fprintf(out, _("  %sfilter:%s none\n"), BOLD, RESET);
+    fprintf(out, _("  %sFilter:%s none\n"), BOLD, RESET);
   }
   return 0;
 }
@@ -136,7 +136,7 @@ int subcmd_show(struct show_args* args) {
 
   if (args->show_process) {
     printf(_("%sMimic%s running on %s\n"), BOLD GREEN, RESET, args->ifname);
-    printf(_("  %spid:%s %d\n"), BOLD, RESET, lock_content.pid);
+    printf(_("  %sPID:%s %d\n"), BOLD, RESET, lock_content.pid);
     _cleanup_fd int whitelist_fd =
       try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
           "mimic_whitelist", strret);
@@ -161,9 +161,9 @@ int subcmd_show(struct show_args* args) {
       try(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK),
           _("failed to get value from map '%s': %s"), "mimic_conns", strret);
 
-      printf(_("  %sstate:%s %s\n"), BOLD, RESET, gettext(conn_state_to_str(conn.state)));
-      if (conn.peer_mss != 0) printf(_("  %speer mss:%s %d\n"), BOLD, RESET, conn.peer_mss);
-      printf(_("  %ssequence:%s seq %08x, ack %08x\n"), BOLD, RESET, conn.seq, conn.ack_seq);
+      printf(_("  %sState:%s %s\n"), BOLD, RESET, gettext(conn_state_to_str(conn.state)));
+      if (conn.peer_mss != 0) printf(_("  %sPeer MSS:%s %d\n"), BOLD, RESET, conn.peer_mss);
+      printf(_("  %sSequence:%s seq %08x, ack %08x\n"), BOLD, RESET, conn.seq, conn.ack_seq);
       printf("\n");
     }
     if (!iter.has_key) printf(_("%sConnection%s no active connection\n\n"), BOLD YELLOW, RESET);

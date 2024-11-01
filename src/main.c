@@ -81,13 +81,13 @@ void filter_fmt(const struct filter* filter, char* dest) {
 const char* conn_state_to_str(enum conn_state s) {
   switch (s) {
     case CONN_IDLE:
-      return N_("idle");
+      return N_("Idle");
     case CONN_SYN_SENT:
       return N_("SYN sent");
     case CONN_SYN_RECV:
       return N_("SYN received");
     case CONN_ESTABLISHED:
-      return N_("established");
+      return N_("Established");
     default:
       return N_("(unknown)");
   }
