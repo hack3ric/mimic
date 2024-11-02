@@ -61,7 +61,7 @@ router_env_setup() {
     done
   done
 
-  sleep 2 # IPv6 addresses seem to need some warmup
+  sleep 3 # IPv6 addresses seem to need some warmup
 
   # This is a bit messy, but it basically sets correct route of the other side
   # through the "router" netns
