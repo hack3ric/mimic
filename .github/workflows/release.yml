@@ -33,5 +33,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd debian/artifacts
-          for _f in mimic*.deb mimic*.ddeb; do sudo mv "$_f" "${{ matrix.distro.codename }}_$_f"; done
-          gh release upload $(sed 's|refs/tags/||' <(echo ${{ github.ref }})) *.deb *.ddeb
+          for _f in mimic*.deb mimic*.ddeb; do
+            sudo mv "$_f" "${{ matrix.distro.codename }}_$_f";
+            sha256sum "${{ matrix.distro.codename }}_$_f" > "../${{ matrix.distro.codename }}_$_f.sha256"
+          done
+          gh release upload $(sed 's|refs/tags/||' <(echo ${{ github.ref }})) *.deb *.ddeb ../*.deb.sha256 ../*.ddeb.sha256
