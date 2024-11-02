@@ -1,5 +1,14 @@
 # Changelog for Mimic
 
+## 0.6.0 (2024-11-02)
+
+- Do not depend on bpf_xdp_get_buff_len for payload length; this could be larger than the actual packet length, and the real length should be retrieved from packet headers
+- Add kprobe checksum hacks, along with previous kfunc implementation
+- Enable XDP fragments support
+- RST is now sent to peers when Mimic is shutting down
+- Allow domain names in filters; they are only resolved when Mimic starts, and only resolved IPs are stored
+- Allow fixed or pseudo-random padding in packets
+
 ## 0.5.0 (2024-08-05)
 
 - Track TCP window size and send window change packets to prevent conntrack failure
