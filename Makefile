@@ -79,10 +79,10 @@ endif  # KERNEL_VMLINUX
 
 # Specify whether to use system vmlinux
 ifneq ($(BPF_USE_SYSTEM_VMLINUX),)
-BPF_CFLAGS += -D_MIMIC_BPF_USE_SYSTEM_VMLINUX
+BPF_CFLAGS += -DMIMIC_BPF_USE_SYSTEM_VMLINUX
 use_system_vmlinux_req := bpf/vmlinux/system.h
 else
-BPF_CFLAGS += -D_MIMIC_BPF_TARGET_ARCH_$(shell $(CC) -dumpmachine | sed 's/-.*//')
+BPF_CFLAGS += -DMIMIC_BPF_TARGET_ARCH_$(shell $(CC) -dumpmachine | sed 's/-.*//')
 endif  # BPF_USE_SYSTEM_VMLINUX
 
 # Mimic runtime directory, where the lock files are stored
@@ -174,7 +174,7 @@ else
 endif
 
 $(mimic_bpf_obj): bpf/%.o: bpf/%.c $(mimic_bpf_headers) $(use_system_vmlinux_req) $(check_options)
-	$(BPF_CC) $(BPF_CFLAGS) -D_MIMIC_BPF -c -o $@ $<
+	$(BPF_CC) $(BPF_CFLAGS) -DMIMIC_BPF -c -o $@ $<
 
 out/mimic.bpf.o: $(mimic_bpf_obj)
 	$(mkdir_p)

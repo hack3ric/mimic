@@ -38,9 +38,9 @@ EOF
 
 EOF
   /usr/sbin/bpftool btf dump file $build_path/vmlinux format c >bpf/vmlinux/$arch.h
-  echo -n "#elif defined(_MIMIC_BPF_TARGET_ARCH_${arch[0]})" >>bpf/vmlinux.h
+  echo -n "#elif defined(MIMIC_BPF_TARGET_ARCH_${arch[0]})" >>bpf/vmlinux.h
   for _arch in ${arch[@]:1}; do
-    echo -n " || defined(_MIMIC_BPF_TARGET_ARCH_$_arch)" >>bpf/vmlinux.h
+    echo -n " || defined(MIMIC_BPF_TARGET_ARCH_$_arch)" >>bpf/vmlinux.h
   done
   echo >>bpf/vmlinux.h
   echo "#include \"vmlinux/$arch.h\"  // IWYU pragma: export" >>bpf/vmlinux.h
@@ -56,7 +56,7 @@ cat >bpf/vmlinux.h <<EOF
 #ifndef _BPF_VMLINUX_H
 #define _BPF_VMLINUX_H
 
-#if defined(_MIMIC_BPF_USE_SYSTEM_VMLINUX)
+#if defined(MIMIC_BPF_USE_SYSTEM_VMLINUX)
 #include "vmlinux/system.h"  // IWYU pragma: export
 EOF
 

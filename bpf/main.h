@@ -1,5 +1,5 @@
-#ifndef _MIMIC_BPF_MIMIC_H
-#define _MIMIC_BPF_MIMIC_H
+#ifndef MIMIC_BPF_MIMIC_H
+#define MIMIC_BPF_MIMIC_H
 
 #include "vmlinux.h"
 
@@ -172,4 +172,4 @@ static inline bool ipv6_is_ext(__u8 nexthdr) {
       (val) = 2;           \
   })
 
-#endif  // _MIMIC_BPF_MIMIC_H
+#endif  // MIMIC_BPF_MIMIC_H

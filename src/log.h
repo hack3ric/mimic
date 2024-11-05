@@ -1,5 +1,5 @@
-#ifndef _MIMIC_LOG_H
-#define _MIMIC_LOG_H
+#ifndef MIMIC_LOG_H
+#define MIMIC_LOG_H
 
 #include <bpf/libbpf.h>
 #include <linux/tcp.h>
@@ -15,4 +15,4 @@ void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_typ
 int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list args);
 int handle_log_event(struct log_event* e);
 
-#endif  // _MIMIC_LOG_H
+#endif  // MIMIC_LOG_H

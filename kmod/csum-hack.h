@@ -1,18 +1,18 @@
-#ifndef _MIMIC_KMOD_CSUM_HACK_H
-#define _MIMIC_KMOD_CSUM_HACK_H
+#ifndef MIMIC_KMOD_CSUM_HACK_H
+#define MIMIC_KMOD_CSUM_HACK_H
 
-#if defined(_MIMIC_KMOD)
+#if defined(MIMIC_KMOD)
 #include <linux/stddef.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
-#elif defined(_MIMIC_BPF)
+#elif defined(MIMIC_BPF)
 // clang-format off
 #include "bpf/vmlinux.h"
 #include <bpf/bpf_helpers.h>
 // clang-format on
 #endif
 
-#ifdef _MIMIC_KMOD
+#ifdef MIMIC_KMOD
 int csum_hack_init(void);
 void csum_hack_exit(void);
 #endif
@@ -20,7 +20,7 @@ void csum_hack_exit(void);
 #define MAGIC_FLAG1 0xfc9e39d5
 #define MAGIC_FLAG2 0x4eb37b03751ff785
 
-#ifdef _MIMIC_KMOD
+#ifdef MIMIC_KMOD
 static inline int change_csum_offset(struct sk_buff* skb, __u16 proto) {
   if (skb->ip_summed != CHECKSUM_PARTIAL) return -1;
   switch (proto) {
@@ -37,7 +37,7 @@ static inline int change_csum_offset(struct sk_buff* skb, __u16 proto) {
 }
 #endif
 
-#ifdef _MIMIC_BPF
+#ifdef MIMIC_BPF
 #if defined(MIMIC_CHECKSUM_HACK_kfunc)
 static inline int mimic_skb_ip_summed(struct __sk_buff* skb) {
   struct sk_buff* mimic_inspect_skb(struct __sk_buff * skb) __ksym;
@@ -54,5 +54,5 @@ static inline int mimic_change_csum_offset(struct __sk_buff* skb, __u16 protocol
 }
 
 #endif  // MIMIC_CHECKSUM_HACK_*
-#endif  // _MIMIC_BPF
-#endif  // _MIMIC_KMOD_CSUM_HACK_H
+#endif  // MIMIC_BPF
+#endif  // MIMIC_KMOD_CSUM_HACK_H

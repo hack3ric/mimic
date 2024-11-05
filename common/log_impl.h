@@ -1,5 +1,5 @@
-#ifndef _COMMON_LOG_IMPL_H
-#define _COMMON_LOG_IMPL_H
+#ifndef MIMIC_COMMON_LOG_IMPL_H
+#define MIMIC_COMMON_LOG_IMPL_H
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -27,4 +27,4 @@ void log_any(int level, const char* fmt, ...) {
   va_end(ap);
 }
 
-#endif
+#endif  // MIMIC_COMMON_LOG_IMPL_H

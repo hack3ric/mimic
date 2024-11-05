@@ -1,7 +1,7 @@
-#ifndef _MIMIC_COMMON_TRY_H
-#define _MIMIC_COMMON_TRY_H
+#ifndef MIMIC_COMMON_TRY_H
+#define MIMIC_COMMON_TRY_H
 
-#ifdef _MIMIC_BPF
+#ifdef MIMIC_BPF
 #else
 #include <errno.h>
 #include <string.h>  // IWYU pragma: keep
@@ -93,7 +93,7 @@
   })
 
 // `errno` is not available in BPF
-#ifndef _MIMIC_BPF
+#ifndef MIMIC_BPF
 
 // Same as `try`, but returns -errno
 #define try_e(expr, ...)          \
@@ -139,7 +139,7 @@
     _ptr;                           \
   })
 
-#endif  // _MIMIC_BPF
+#endif  // MIMIC_BPF
 
 // Tests int return value from a function, but return a different value when failed.
 #define try_ret(expr, ret)              \
@@ -169,4 +169,4 @@
 
 #define strret strerror(-_ret)
 
-#endif  // _MIMIC_COMMON_TRY_H
+#endif  // MIMIC_COMMON_TRY_H

@@ -1,5 +1,5 @@
-#ifndef _COMMON_LOG_H
-#define _COMMON_LOG_H
+#ifndef MIMIC_COMMON_LOG_H
+#define MIMIC_COMMON_LOG_H
 
 #include "defs.h"  // IWYU pragma: keep
 
@@ -22,4 +22,4 @@ void log_any(int level, const char* fmt, ...);
 #define log_debug(fmt, ...) log_any(LOG_DEBUG, fmt, ##__VA_ARGS__)
 #define log_trace(fmt, ...) log_any(LOG_TRACE, fmt, ##__VA_ARGS__)
 
-#endif
+#endif  // MIMIC_COMMON_LOG_H

@@ -1,5 +1,5 @@
-#ifndef _MIMIC_MIMIC_H
-#define _MIMIC_MIMIC_H
+#ifndef MIMIC_MAIN_H
+#define MIMIC_MAIN_H
 
 #include <bpf/bpf.h>
 #include <errno.h>
@@ -119,4 +119,4 @@ static inline int bpf_map_iter_next(struct bpf_map_iter* iter, void* key) {
   }
 }
 
-#endif  // _MIMIC_MIMIC_H
+#endif  // MIMIC_MAIN_H

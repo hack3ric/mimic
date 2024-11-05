@@ -1,7 +1,7 @@
-#ifndef _MIMIC_COMMON_DEFS_H
-#define _MIMIC_COMMON_DEFS_H
+#ifndef MIMIC_COMMON_DEFS_H
+#define MIMIC_COMMON_DEFS_H
 
-#ifdef _MIMIC_BPF
+#ifdef MIMIC_BPF
 // clang-format off
 #include "bpf/vmlinux.h"
 #include <bpf/bpf_helpers.h>
@@ -64,7 +64,7 @@
 #define br_likely
 #endif
 
-#ifdef _MIMIC_BPF
+#ifdef MIMIC_BPF
 
 // Some missing declaration of vmlinux.h
 
@@ -134,7 +134,7 @@ static inline void cleanup_malloc_str(char** ptr) { cleanup_malloc((void*)ptr); 
 #define _cleanup_malloc __attribute__((__cleanup__(cleanup_malloc)))
 #define _cleanup_malloc_str __attribute__((__cleanup__(cleanup_malloc_str)))
 
-#endif  // _MIMIC_BPF
+#endif  // MIMIC_BPF
 
 // max: "[%pI6]:%d\0"
 #define IP_PORT_MAX_LEN (INET6_ADDRSTRLEN + 2 + 5 + 1)
@@ -160,7 +160,7 @@ static inline void cleanup_malloc_str(char** ptr) { cleanup_malloc((void*)ptr); 
 // On eBPF, these markers are just for convenience, so that I can get a comprehensive list of texts.
 // In the future, logging should be rewritten so that eBPF should only send structurized information
 // and let userspace call gettext.
-#ifndef _MIMIC_BPF
+#ifndef MIMIC_BPF
 // #define _(text) text
 static inline __attribute__((__format_arg__(1))) const char* _(const char* text) { return text; }
 #define gettext(text) _(text)
@@ -397,4 +397,4 @@ struct rb_item {
   // additional buffer follows
 };
 
-#endif  // _MIMIC_COMMON_DEFS_H
+#endif  // MIMIC_COMMON_DEFS_H
