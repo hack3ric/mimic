@@ -48,7 +48,7 @@ The following shows how Mimic works visually:
 ### Environment
 
 - Host CPU Core i9-13900F, running Arch Linux (2023-11-13)
-- Two VMs running Debian 12 on libvirt QEMU/KVM, with 4 vcores each, using emulated e1000e NIC ([see below](#sequence-number-syncing-will-fail-when-connecting-two-virtual-machines-on-the-same-virtual-network-bridge-both-with-virtio-net-nic))
+- Two VMs running Debian 12 on libvirt QEMU/KVM, with 4 vcores each, using emulated e1000e NIC
 - Test commands: `iperf3 -s` and `iperf3 -c <server IPv4> -t 20`
 - WireGuard tunnels run over IPv4
 
