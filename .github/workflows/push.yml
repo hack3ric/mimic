@@ -81,3 +81,4 @@ jobs:
       - name: Test Install
         run: |
           sudo apt install ./noble-packages/*.deb linux-headers-`uname -r`
+          sudo modprobe mimic
