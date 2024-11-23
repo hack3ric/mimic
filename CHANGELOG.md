@@ -1,5 +1,9 @@
 # Changelog for Mimic
 
+## 0.6.1 (2024-11-23)
+
+- Debian packaging fixes regarding DKMS
+
 ## 0.6.0 (2024-11-02)
 
 - Do not depend on bpf_xdp_get_buff_len for payload length; this could be larger than the actual packet length, and the real length should be retrieved from packet headers
