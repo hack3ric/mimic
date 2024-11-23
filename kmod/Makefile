@@ -85,6 +85,8 @@ clean:
 	[ ! -d $(SYSTEM_BUILD_DIR) ] || $(MAKE) -C $(SYSTEM_BUILD_DIR) M=$(CURDIR) clean
 
 dkms.conf: dkms.conf.in
-	sed 's|@@EXTRA_OPTS@@|CHECKSUM_HACK=$(CHECKSUM_HACK)|' $^ > $@
+	sed $^ \
+		-e 's|@@EXTRA_OPTS@@|CHECKSUM_HACK=$(CHECKSUM_HACK)|' \
+		-e 's|#MODULE_VERSION#|0.6.0|'> $@
 AKMBUILD: AKMBUILD.in
 	sed 's|@@EXTRA_OPTS@@|CHECKSUM_HACK=$(CHECKSUM_HACK)|' $^ > $@
