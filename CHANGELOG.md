@@ -1,5 +1,9 @@
 # Changelog for Mimic
 
+## 0.6.2 (2024-11-23)
+
+- More Debian packaging fixes
+
 ## 0.6.1 (2024-11-23)
 
 - Debian packaging fixes regarding DKMS

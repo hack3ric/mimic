@@ -1,4 +1,11 @@
-mimic (0.6.1-1) UNRELEASED; urgency=medium
+mimic (0.6.2-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Fix documentation installation
+
+ -- Eric Long <i@hack3r.moe>  Sat, 23 Nov 2024 23:59:40 +0800
+
+mimic (0.6.1-1) unstable; urgency=medium
 
   * New upstream release.
   * Fix DKMS packaging issues

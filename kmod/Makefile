@@ -87,6 +87,6 @@ clean:
 dkms.conf: dkms.conf.in
 	sed $^ \
 		-e 's|@@EXTRA_OPTS@@|CHECKSUM_HACK=$(CHECKSUM_HACK)|' \
-		-e 's|#MODULE_VERSION#|0.6.1|'> $@
+		-e 's|#MODULE_VERSION#|0.6.2|'> $@
 AKMBUILD: AKMBUILD.in
 	sed 's|@@EXTRA_OPTS@@|CHECKSUM_HACK=$(CHECKSUM_HACK)|' $^ > $@
