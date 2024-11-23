@@ -7,6 +7,10 @@ Files: *
 Copyright: 2024 Eric Long <i@hack3r.moe>
 License: GPL-2.0-only
 
+Files: tools/extract-vmlinux
+Copyright: 2009,2010 Dick Streefland <dick@streefland.net>, 2011 Corentin Chary <corentin.chary@gmail.com>
+License: GPL-2.0-only
+
 Files: debian/*
 Copyright: 2024 Eric Long <i@hack3r.moe>
 License: GPL-2.0-only
