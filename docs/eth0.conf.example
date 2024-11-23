@@ -1,5 +1,5 @@
 # This is an example configuration for Mimic. For each interface, you may
-# create <interface>.conf in this directory and in the following format to
+# create <interface>.conf in /etc/mimic and in the following format to
 # pass arguments to Mimic's systemd service (mimic@<interface>.service).
 #
 # Each configuration should be in the format of `key=value`. There might be

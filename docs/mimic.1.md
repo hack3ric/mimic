@@ -101,7 +101,7 @@ Configuration file passed using the `--file` contains lines of key-value pair in
     # You only shake hands once
     filter = local=192.0.2.1:6789,handshake=5:0
 
-See **/etc/mimic/eth0.conf.example** for detailed examples.
+See **/usr/share/doc/mimic/eth0.conf.example** for detailed examples.
 
 ### Available Configuration Keys
 
