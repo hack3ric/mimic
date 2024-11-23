@@ -18,7 +18,7 @@ override_dh_auto_configure:
 		-e 's|@@MIMIC_RUNTIME_DIR@@|mimic|' \
 		> debian/mimic@.service
 	sed kmod/dkms.conf.in \
-		-e 's|@@EXTRA_OPTS@@|CHECKSUM_HACK=$(CHECKSUM_HACK)|' \
+		-e 's|@@EXTRA_OPTS@@|CHECKSUM_HACK=kfunc|' \
 		> kmod/dkms.conf
 
 override_dh_auto_build:
