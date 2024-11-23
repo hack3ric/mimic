@@ -21,7 +21,7 @@ Vcs-Git: https://github.com/hack3ric/mimic.git
 Vcs-Browser: https://github.com/hack3ric/mimic
 
 Package: mimic
-Architecture: any
+Architecture: amd64 arm64 powerpc ppc64 ppc64el riscv64
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
@@ -37,7 +37,7 @@ Description: eBPF UDP -> TCP obfuscator
 
 Package: mimic-dkms
 Section: kernel
-Architecture: any
+Architecture: amd64 arm64 powerpc ppc64 ppc64el riscv64
 Provides: mimic-modules (= ${binary:Version})
 Conflicts: mimic-modules
 Depends:
