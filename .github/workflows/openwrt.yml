@@ -7,8 +7,9 @@ on:
 jobs:
   build-openwrt:
     name: Build ${{ matrix.revision }} packages for ${{ matrix.arch }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false
       matrix:
         arch:
           - x86_64

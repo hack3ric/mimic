@@ -4,14 +4,13 @@ include $(INCLUDE_DIR)/kernel.mk
 include $(INCLUDE_DIR)/version.mk
 
 PKG_NAME := mimic
-PKG_VERSION := 0.5.0-26-g2461506
+PKG_VERSION := 0.6.2
 PKG_RELEASE := 1
-commit := 24615062d166b0abc7ffffa2a0ac8ea298e15f3f
 
-PKG_BUILD_DIR := $(BUILD_DIR)/mimic-$(commit)
-PKG_SOURCE := $(commit).tar.gz
-PKG_SOURCE_URL := https://github.com/hack3ric/mimic/archive
-PKG_HASH := bfa95e729d86380f40734e2876bba4785897c5d8c7f85c1e3ce60771925ec889
+PKG_BUILD_DIR := $(BUILD_DIR)/mimic-$(PKG_VERSION)
+PKG_SOURCE := v$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL := https://github.com/hack3ric/mimic/archive/refs/tags
+PKG_HASH := f35be3289776c2b557b0f7782a19c9adafbc2b47c306fafe9b3d44c949f5a216
 
 PKG_BUILD_DEPENDS := argp-standalone bpf-headers bpftool/host
 
