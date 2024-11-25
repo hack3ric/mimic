@@ -14,6 +14,9 @@ PKG_HASH := f35be3289776c2b557b0f7782a19c9adafbc2b47c306fafe9b3d44c949f5a216
 
 PKG_BUILD_DEPENDS := argp-standalone bpf-headers bpftool/host
 
+# This should be added to bpftool/host upstream
+PKG_BUILD_DEPENDS += binutils/host
+
 include $(INCLUDE_DIR)/package.mk
 
 define Package/mimic
