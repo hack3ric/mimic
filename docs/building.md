@@ -23,6 +23,14 @@ $ make build-cli build-tools build-kmod
 
 To build statically linked CLI and tools, specify `STATIC=1`.
 
+Additionally, [checksum hacks](checksum-hacks.md) can be specified:
+
+```console
+$ make CHECKSUM_HACK=kfunc  # This is the default
+$ make CHECKSUM_HACK=kprobe
+$ make CHECKSUM_HACK=kprobe STRIP_BTF_EXT=1
+```
+
 ## Building Distro Packages
 
 Arch Linux users can use `mimic-bpf` or `mimic-bpf-git` packages in AUR:
