@@ -294,8 +294,10 @@ int ingress_handler(struct xdp_md* xdp) {
   bpf_spin_unlock(&conn->lock);
 
   if (flags & TCP_FLAG_SYN && flags & TCP_FLAG_ACK) log_conn(LOG_CONN_ACCEPT, &conn_key);
-  if (will_send_ctrl_packet)
-    send_ctrl_packet(&conn_key, flags, seq, ack_seq, flags & TCP_FLAG_RST ? 0 : cwnd);
+  if (will_send_ctrl_packet) {
+    __u32 out_cwnd = flags & TCP_FLAG_RST ? 0 : settings->max_window ? 0xffff << CWND_SCALE : cwnd;
+    send_ctrl_packet(&conn_key, flags, seq, ack_seq, out_cwnd);
+  }
   if (unlikely(flags & TCP_FLAG_RST)) {
     log_destroy(&conn_key, DESTROY_INVALID, cooldown);
     use_pktbuf(RB_ITEM_FREE_PKTBUF, pktbuf);

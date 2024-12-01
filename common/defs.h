@@ -221,8 +221,9 @@ struct filter_settings {
         };
       } keepalive, k; };
       __s16 padding;
+      __s16 max_window;
     };
-    __s16 array[7];
+    __s16 array[8];
   };
 };
 // clang-format on
@@ -238,10 +239,11 @@ static const struct filter_settings DEFAULT_SETTINGS = {
   .handshake.array = {2, 3},
   .keepalive.array = {180, 10, 3, 600},
   .padding = 0,
+  .max_window = true,
 };
 
 static const struct filter_settings FALLBACK_SETTINGS = {
-  .array = {-1, -1, -1, -1, -1, -1, -1},
+  .array = {-1, -1, -1, -1, -1, -1, -1, -1},
 };
 
 static inline void filter_settings_apply(struct filter_settings* local,

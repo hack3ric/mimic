@@ -42,6 +42,7 @@ static const struct argp_option options[] = {
   {"keepalive", 'k', N_("t:i:r:s"), 0, N_("Controls keepalive mechanism"), 2},
   {"padding", 'p', N_("bytes"), 0,
    N_("Padding size appended to each packet. Pass 'random' to use random padding."), 2},
+  {"max-window", 'W', NULL, 0, N_("Always use maximum window size in TCP packets"), 2},
   {"file", 'F', N_("PATH"), 0, N_("Load configuration from file"), 3},
   {},
 };
@@ -76,6 +77,9 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       break;
     case 'p':
       try(parse_padding(arg, &args->gsettings.padding));
+      break;
+    case 'W':
+      args->gsettings.max_window = true;
       break;
     case 'F':
       args->file = arg;
@@ -356,13 +360,14 @@ static int do_routine(int conns_fd, const char* ifname) {
             time_diff_sec(tstamp, conn.stale_tstamp) >= conn.settings.keepalive.stale) {
           reset = remove = true;
         } else if (conn.settings.keepalive.time > 0 && retry_secs >= conn.settings.keepalive.time) {
+          __u32 cwnd = conn.settings.max_window ? 0xffff << CWND_SCALE : conn.cwnd;
           if (conn.settings.keepalive.interval <= 0) {
             reset = true;
           } else if (conn.retry_tstamp >= conn.reset_tstamp) {
             log_conn(LOG_DEBUG, &key, _("sending keepalive"));
             conn.reset_tstamp = tstamp;
             conn.keepalive_sent = true;
-            send_ctrl_packet(&key, TCP_FLAG_ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
+            send_ctrl_packet(&key, TCP_FLAG_ACK, conn.seq - 1, conn.ack_seq, cwnd, ifname);
             bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
           } else {
             int reset_secs = time_diff_sec(tstamp, conn.reset_tstamp);
@@ -370,7 +375,7 @@ static int do_routine(int conns_fd, const char* ifname) {
               reset = true;
             } else if (reset_secs % conn.settings.keepalive.interval == 0) {
               log_conn(LOG_DEBUG, &key, _("sending keepalive"));
-              send_ctrl_packet(&key, TCP_FLAG_ACK, conn.seq - 1, conn.ack_seq, conn.cwnd, ifname);
+              send_ctrl_packet(&key, TCP_FLAG_ACK, conn.seq - 1, conn.ack_seq, cwnd, ifname);
             }
           }
         }

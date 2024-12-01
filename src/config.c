@@ -116,11 +116,11 @@ static int parse_int_seq(char* str, int* nums, size_t len) {
   return nums_idx;
 }
 
-__attribute__((unused)) static int parse_bool(const char* str, bool* result) {
+static int parse_bool(const char* str, __s16* result) {
   if (strcmp("true", str) == 0 || strcmp("1", str) == 0)
-    *result = true;
+    *result = 1;
   else if (strcmp("false", str) == 0 || strcmp("0", str) == 0)
-    *result = false;
+    *result = 0;
   else
     ret(-EINVAL, _("invalid boolean value: '%s'"), str);
   return 0;
@@ -159,6 +159,8 @@ static int parse_setting(const char* k, char* v, struct filter_settings* setting
     try(parse_keepalive(v, &settings->keepalive));
   else if (strcmp("padding", k) == 0)
     try(parse_padding(v, &settings->padding));
+  else if (strcmp("max_window", k) == 0)
+    try(parse_bool(v, &settings->max_window));
   else
     return 0;
   return 1;

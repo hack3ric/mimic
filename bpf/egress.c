@@ -192,7 +192,8 @@ int egress_handler(struct __sk_buff* skb) {
   __be32 csum_diff = 0;
   try_tc(mangle_data(skb, ip_end + sizeof(*udp), &csum_diff, padding));
   decl_shot(struct tcphdr, tcp, ip_end, skb);
-  update_tcp_header(tcp, payload_len, seq, ack_seq, conn_cwnd);
+  update_tcp_header(tcp, payload_len, seq, ack_seq,
+                    settings->max_window ? 0xffff << CWND_SCALE : conn_cwnd);
 
   __u32 csum_off = ip_end + offsetof(struct tcphdr, check);
   redecl_shot(struct tcphdr, tcp, ip_end, skb);

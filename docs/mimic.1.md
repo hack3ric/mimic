@@ -36,6 +36,9 @@
 `-p, --padding`
 : Padding size appended to each packet. Pass 'random' to use random padding.
 
+`-W, --max-window`
+: Always use maximum window size in TCP packets.
+
 `-F, --file=PATH`
 : Load configuration from file
 
@@ -108,7 +111,7 @@ See **/usr/share/doc/mimic/eth0.conf.example** for detailed examples.
 `log.verbosity`
 : Controls how much information should be printed. Log level equal to or higher (in number) than log verbosity will be discarded. Both number and string matching log levels are accepted. Number must be greater than or equal to 0. Defaults to info (2). Available levels are: 0 - error (cannot be discarded), 1 - warn, 2 - info, 3 - debug, 4 - trace.
 
-`handshake`, `keepalive`, `padding`
+`handshake`, `keepalive`, `padding`, `max_window`
 : See [**OPTIONS**](#options).
 
 `filter`

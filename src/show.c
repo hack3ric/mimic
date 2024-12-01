@@ -62,6 +62,7 @@ int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosit
     fprintf(out, _(", padding random"));
   else if (gs->padding)
     fprintf(out, _(", padding %d"), gs->padding);
+  if (gs->max_window) fprintf(out, _(", max window"));
   fprintf(out, "\n");
 
   char buf[FILTER_FMT_MAX_LEN];
@@ -96,6 +97,9 @@ int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosit
         fprintf(out, ",padding=random");
       else
         fprintf(out, ",padding=%d", info.settings.padding);
+    }
+    if (a->max_window != b->max_window) {
+      fprintf(out, _(",max_window=%s"), info.settings.max_window ? "true" : "false");
     }
     if (strlen(info.host) != 0) fprintf(out, _(" %s(resolved from %s)"), RESET GRAY, info.host);
     fprintf(out, RESET "\n");
