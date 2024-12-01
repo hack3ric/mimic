@@ -268,7 +268,7 @@ int ingress_handler(struct xdp_md* xdp) {
         conn->ack_seq = next_ack_seq(tcp, payload_len);
         __u32 peer_mss = conn->peer_mss ?: 1460;
         __u32 upper_bound = 20 * peer_mss;
-        __u32 lower_bound = 2 * peer_mss;
+        __u32 lower_bound = 4 * peer_mss;
         if (random % (upper_bound - lower_bound) + lower_bound >= conn->cwnd) {
           will_send_ctrl_packet = true;
           flags |= TCP_FLAG_ACK;
