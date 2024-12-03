@@ -143,6 +143,14 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
   // and they will be forwarded to the socket and discarded anyway.
   _cleanup_fd int sk = try(socket(ip_proto(&s->conn.local), SOCK_RAW | SOCK_NONBLOCK, IPPROTO_TCP));
 
+  int level = SOL_IP, opt = IP_FREEBIND, yes = 1;
+  if (ip_proto(&s->conn.local) == AF_INET6) {
+    level = SOL_IPV6;
+    opt = IPV6_FREEBIND;
+  }
+  try(setsockopt(sk, level, opt, &yes, sizeof(yes)), _("failed to set IP free bind: %s"),
+      strret);
+
   struct sockaddr_storage saddr, daddr;
   conn_tuple_to_addrs(&s->conn, &saddr, &daddr);
 
