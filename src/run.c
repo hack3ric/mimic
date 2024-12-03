@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <ffi.h>
 #include <linux/bpf.h>
+#include <linux/if_link.h>
 #include <linux/tcp.h>
 #include <linux/types.h>
 #include <net/if.h>
@@ -112,8 +113,8 @@ static inline int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* 
   return ret ?: bpf_tc_hook_destroy(hook);
 }
 
-static inline int tc_hook_create_bind(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts,
-                                      const struct bpf_program* prog) {
+static inline int tc_hook_create_attach(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts,
+                                        const struct bpf_program* prog) {
   // EEXIST causes libbpf_print_fn to log harmless 'libbpf: Kernel error message: Exclusivity flag
   // on, cannot modify'
   int retcode = bpf_tc_hook_create(hook);
@@ -463,9 +464,9 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   int mimic_whitelist_fd = -1, mimic_conns_fd = -1, mimic_rb_fd = -1;
 
   bool tc_hook_created = false;
+  bool xdp_attached = false;
   struct bpf_tc_hook tc_hook_egress;
   struct bpf_tc_opts tc_opts_egress;
-  struct bpf_link* xdp_ingress = NULL;
   struct ring_buffer* rb = NULL;
   ffi_closure* closure = NULL;
   ffi_cif cif;
@@ -526,15 +527,19 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   rb = try2_p(ring_buffer__new(mimic_rb_fd, handle_rb_event(&ctx, &cif, &closure), NULL, NULL),
               _("failed to attach BPF ring buffer '%s': %s"), "mimic_rb", strret);
 
-  // TC and XDP
+  // TC
   tc_hook_egress = (typeof(tc_hook_egress)){
     .sz = sizeof(tc_hook_egress), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
   tc_opts_egress =
     (typeof(tc_opts_egress)){.sz = sizeof(tc_opts_egress), .handle = 1, .priority = 1};
   tc_hook_created = true;
-  try2(tc_hook_create_bind(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler));
-  xdp_ingress = try2_p(bpf_program__attach_xdp(skel->progs.ingress_handler, ifindex),
-                       _("failed to attach XDP program: %s"), strret);
+  try2(tc_hook_create_attach(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler));
+
+  // XDP
+  // TODO: pass flags
+  try2(bpf_xdp_attach(ifindex, bpf_program__fd(skel->progs.ingress_handler), 0 , NULL),
+       _("failed to attach XDP program: %s"), strret);
+  xdp_attached = true;
 
   retcode = notify_ready();
   if (retcode < 0)
@@ -613,7 +618,7 @@ cleanup:
   terminate_all_conns(mimic_conns_fd, ifname);
   sigprocmask(SIG_SETMASK, NULL, NULL);
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
-  if (xdp_ingress) bpf_link__destroy(xdp_ingress);
+  if (xdp_attached) bpf_xdp_detach(ifindex, 0, NULL);
   if (rb) ring_buffer__free(rb);
   if (closure) ffi_closure_free(closure);
   if (skel) mimic_bpf__destroy(skel);
