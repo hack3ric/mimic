@@ -239,7 +239,7 @@ static const struct filter_settings DEFAULT_SETTINGS = {
   .handshake.array = {2, 3},
   .keepalive.array = {180, 10, 3, 600},
   .padding = 0,
-  .max_window = true,
+  .max_window = false,
 };
 
 static const struct filter_settings FALLBACK_SETTINGS = {

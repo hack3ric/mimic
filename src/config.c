@@ -330,5 +330,6 @@ int write_lock_file(int fd, const struct lock_content* c) {
   try(dprintf(fd, "keepalive=%d:%d:%d:%d\n", c->settings.k.t, c->settings.k.i, c->settings.k.r,
               c->settings.k.s));
   try(dprintf(fd, "padding=%d", c->settings.padding));
+  try(dprintf(fd, "max_window=%d", c->settings.max_window));
   return 0;
 }
