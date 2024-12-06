@@ -39,6 +39,7 @@ static const struct argp_option options[] = {
   {"quiet", 'q', NULL, 0, N_("Output less information"), 0},
   {"filter", 'f', N_("FILTER"), 0,
    N_("Specify what packets to process. This may be specified for multiple times."), 1},
+  {"xdp-mode", 'x', N_("MODE"), 0, N_("Force XDP attach mode, either skb or native"), 1},
   {"handshake", 'h', N_("i:r"), 0, N_("Controls retry behaviour of initiating connection"), 2},
   {"keepalive", 'k', N_("t:i:r:s"), 0, N_("Controls keepalive mechanism"), 2},
   {"padding", 'p', N_("bytes"), 0,
@@ -69,6 +70,9 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
         return ret;
       else
         args->filter_count += ret;
+      break;
+    case 'x':
+      args->xdp_mode = try(parse_xdp_mode(arg));
       break;
     case 'h':
       try(parse_handshake(arg, &args->gsettings.handshake));
@@ -543,8 +547,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   try2(tc_hook_create_attach(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler));
 
   // XDP
-  // TODO: pass flags
-  try2(bpf_xdp_attach(ifindex, bpf_program__fd(skel->progs.ingress_handler), 0, NULL),
+  try2(bpf_xdp_attach(ifindex, bpf_program__fd(skel->progs.ingress_handler), args->xdp_mode, NULL),
        _("failed to attach XDP program: %s"), strret);
   xdp_attached = true;
 
@@ -620,12 +623,12 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   }
 
   retcode = 0;
-cleanup:
   log_info(_("cleaning up"));
+cleanup:
   terminate_all_conns(mimic_conns_fd, ifname);
   sigprocmask(SIG_SETMASK, NULL, NULL);
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
-  if (xdp_attached) bpf_xdp_detach(ifindex, 0, NULL);
+  if (xdp_attached) bpf_xdp_detach(ifindex, args->xdp_mode, NULL);
   if (rb) ring_buffer__free(rb);
   if (closure) ffi_closure_free(closure);
   if (skel) mimic_bpf__destroy(skel);

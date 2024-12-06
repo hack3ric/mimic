@@ -27,6 +27,9 @@
 `-f, --filter=FILTER`
 : Specify what packets to process. This may be specified for multiple times. (see [**CONFIGURATION/Filters**](#filters))
 
+`-x, --xdp-mode`
+: Force XDP attach mode, either skb or native
+
 `-h, --handshake`
 : Controls retry behaviour of initiating connection (see [**CONFIGURATION/Handshake and Keepalive Parameters**](#handshake-and-keepalive-parameters))
 

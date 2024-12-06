@@ -1,6 +1,7 @@
 #include <argp.h>
 #include <errno.h>
 #include <limits.h>
+#include <linux/if_link.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdbool.h>
@@ -230,6 +231,14 @@ ret:
   return i;
 }
 
+int parse_xdp_mode(const char* mode) {
+  if (strcmp(mode, "skb") == 0)
+    return XDP_FLAGS_SKB_MODE;
+  else if (strcmp(mode, "native") == 0)
+    return XDP_FLAGS_DRV_MODE;
+  ret(-EINVAL, _("invalid XDP attach mode: '%s'"), mode);
+}
+
 int parse_config_file(FILE* file, struct run_args* args) {
   int ret;
   _cleanup_malloc_str char* line = NULL;
@@ -273,6 +282,9 @@ int parse_config_file(FILE* file, struct run_args* args) {
         return ret;
       else
         args->filter_count += ret;
+
+    } else if (strcmp(k, "xdp_mode") == 0) {
+      args->xdp_mode = try(parse_xdp_mode(v));
 
     } else if (!try(parse_setting(k, v, &args->gsettings))) {
       ret(-EINVAL, _("unknown key '%s'"), k);
