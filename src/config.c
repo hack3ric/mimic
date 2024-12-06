@@ -329,7 +329,7 @@ int write_lock_file(int fd, const struct lock_content* c) {
   try(dprintf(fd, "handshake=%d:%d\n", c->settings.h.i, c->settings.h.r));
   try(dprintf(fd, "keepalive=%d:%d:%d:%d\n", c->settings.k.t, c->settings.k.i, c->settings.k.r,
               c->settings.k.s));
-  try(dprintf(fd, "padding=%d", c->settings.padding));
-  try(dprintf(fd, "max_window=%d", c->settings.max_window));
+  try(dprintf(fd, "padding=%d\n", c->settings.padding));
+  try(dprintf(fd, "max_window=%d\n", c->settings.max_window));
   return 0;
 }
