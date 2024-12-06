@@ -148,8 +148,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
     level = SOL_IPV6;
     opt = IPV6_FREEBIND;
   }
-  try(setsockopt(sk, level, opt, &yes, sizeof(yes)), _("failed to set IP free bind: %s"),
-      strret);
+  try(setsockopt(sk, level, opt, &yes, sizeof(yes)), _("failed to set IP free bind: %s"), strret);
 
   struct sockaddr_storage saddr, daddr;
   conn_tuple_to_addrs(&s->conn, &saddr, &daddr);
@@ -545,7 +544,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
 
   // XDP
   // TODO: pass flags
-  try2(bpf_xdp_attach(ifindex, bpf_program__fd(skel->progs.ingress_handler), 0 , NULL),
+  try2(bpf_xdp_attach(ifindex, bpf_program__fd(skel->progs.ingress_handler), 0, NULL),
        _("failed to attach XDP program: %s"), strret);
   xdp_attached = true;
 
@@ -559,7 +558,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   if (args->filter_count <= 0)
     log_warn(_("no filter specified"));
   else
-    show_overview(mimic_whitelist_fd, &args->gsettings, log_verbosity);
+    show_overview(ifindex, mimic_whitelist_fd, &args->gsettings, log_verbosity);
 
   struct epoll_event ev;
   struct epoll_event events[EPOLL_MAX_EVENTS];

@@ -1,7 +1,9 @@
 #include <argp.h>
 #include <bpf/bpf.h>
+#include <bpf/libbpf.h>
 #include <errno.h>
 #include <linux/bpf.h>
+#include <linux/if_link.h>
 #include <net/if.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -9,6 +11,7 @@
 #include <unistd.h>
 
 #include "common/defs.h"
+#include "common/log.h"
 #include "common/try.h"
 #include "log.h"
 #include "main.h"
@@ -51,9 +54,36 @@ const struct argp show_argp = {
   N_("\vSee mimic(1) for detailed usage."),
 };
 
-int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosity) {
+int show_overview(int ifindex, int whitelist_fd, struct filter_settings* gs, int log_verbosity) {
   if (log_verbosity >= 0 && !LOG_ALLOW_INFO) return 0;
   FILE* out = log_verbosity >= 0 ? stderr : stdout;
+
+  struct bpf_xdp_query_opts xdp_opts = {.sz = sizeof(xdp_opts)};
+  try(bpf_xdp_query(ifindex, 0, &xdp_opts), _("failed to query XDP: %s"), strret);
+  if (LOG_ALLOW_INFO) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
+  fprintf(out, _("  %sXDP Attach Mode:%s "), BOLD, RESET);
+  switch (xdp_opts.attach_mode) {
+    case XDP_ATTACHED_SKB:
+      fprintf(out, _("skb"));
+      break;
+    case XDP_ATTACHED_DRV:
+      fprintf(out, _("native"));
+      break;
+    case XDP_ATTACHED_HW:
+      fprintf(out, _("hardware"));
+      break;
+    case XDP_ATTACHED_MULTI:
+      if (xdp_opts.drv_prog_id)
+        fprintf(out, _("native"));
+      else if (xdp_opts.skb_prog_id)
+        fprintf(out, _("skb"));
+      else
+        fprintf(out, _("hardware"));
+    default:
+      fprintf(out, _("unknown %d"), xdp_opts.attach_mode);
+      break;
+  }
+  fprintf(out, "\n");
 
   if (LOG_ALLOW_INFO) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
   fprintf(out, _("  %sSettings:%s handshake %d:%d, keepalive %d:%d:%d:%d"), BOLD, RESET, gs->h.i,
@@ -98,9 +128,8 @@ int show_overview(int whitelist_fd, struct filter_settings* gs, int log_verbosit
       else
         fprintf(out, ",padding=%d", info.settings.padding);
     }
-    if (a->max_window != b->max_window) {
+    if (a->max_window != b->max_window)
       fprintf(out, _(",max_window=%s"), info.settings.max_window ? "true" : "false");
-    }
     if (strlen(info.host) != 0) fprintf(out, _(" %s(resolved from %s)"), RESET GRAY, info.host);
     fprintf(out, RESET "\n");
   }
@@ -144,7 +173,7 @@ int subcmd_show(struct show_args* args) {
     _cleanup_fd int whitelist_fd =
       try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
           "mimic_whitelist", strret);
-    show_overview(whitelist_fd, &lock_content.settings, -1);
+    show_overview(ifindex, whitelist_fd, &lock_content.settings, -1);
     printf("\n");
   }
 
