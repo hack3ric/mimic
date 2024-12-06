@@ -13,8 +13,8 @@ jobs:
         flags:
           - flags: CHECKSUM_HACK=kfunc
             desc: kfunc
-          - flags: CHECKSUM_HACK=kprobe
-            desc: kprobe
+          - flags: CHECKSUM_HACK=kfunc USE_LIBXDP=1
+            desc: kfunc-libxdp
           - flags: CHECKSUM_HACK=kprobe STRIP_BTF_EXT=1
             desc: kprobe-strip-btf-ext
     steps:
@@ -24,7 +24,7 @@ jobs:
         run: |
           sudo apt install python3 clang-15 llvm pahole \
             bats bc conntrack ethtool iperf3 jq socat tshark wireguard-tools \
-            libbpf-dev libffi-dev libelf-dev
+            libbpf-dev libffi-dev libelf-dev libxdp-dev
       - name: Build & Test
         run: |
           export BPF_CC=clang-15

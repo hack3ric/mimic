@@ -33,6 +33,12 @@ else ifeq ($(MODE), release)
 CFLAGS += -O2
 endif
 
+ifneq ($(USE_LIBXDP),)
+BPF_CFLAGS += -DMIMIC_USE_LIBXDP
+CFLAGS += -DMIMIC_USE_LIBXDP
+mimic_link_libs += -lxdp
+endif
+
 # Whether to use argp-standalone
 #
 # If host glibc is detected, the option is automatically enabled. This

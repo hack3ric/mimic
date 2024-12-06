@@ -26,6 +26,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifdef MIMIC_USE_LIBXDP
+#include <xdp/libxdp.h>
+#endif
+
 #include "bpf_skel.h"
 #include "common/checksum.h"
 #include "common/defs.h"
@@ -454,6 +458,7 @@ static inline bool is_kmod_loaded() {
 }
 
 static inline int terminate_all_conns(int mimic_conns_fd, const char* ifname) {
+  if (mimic_conns_fd < 0) return 0;
   struct conn_tuple key;
   struct connection conn;
   struct bpf_map_iter iter = {.map_fd = mimic_conns_fd, .map_name = "mimic_conns"};
@@ -475,9 +480,29 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   int mimic_whitelist_fd = -1, mimic_conns_fd = -1, mimic_rb_fd = -1;
 
   bool tc_hook_created = false;
-  bool xdp_attached = false;
   struct bpf_tc_hook tc_hook_egress;
   struct bpf_tc_opts tc_opts_egress;
+
+  bool xdp_attached = false;
+#ifdef MIMIC_USE_LIBXDP
+  struct xdp_program* xdp_ingress = NULL;
+  enum xdp_attach_mode xdp_mode;
+  switch (args->xdp_mode) {
+    case XDP_FLAGS_SKB_MODE:
+      xdp_mode = XDP_MODE_SKB;
+      break;
+    case XDP_FLAGS_DRV_MODE:
+      xdp_mode = XDP_MODE_NATIVE;
+      break;
+    case XDP_FLAGS_HW_MODE:
+      xdp_mode = XDP_MODE_HW;
+      break;
+    default:
+      xdp_mode = XDP_MODE_UNSPEC;
+      break;
+  }
+#endif
+
   struct ring_buffer* rb = NULL;
   ffi_closure* closure = NULL;
   ffi_cif cif;
@@ -494,20 +519,55 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   }
 #endif
 
-  retcode = mimic_bpf__load(skel);
+  skel->bss->log_verbosity = log_verbosity;
+
+  // XDP
+#ifdef MIMIC_USE_LIBXDP
+  xdp_ingress = try2_p(xdp_program__from_bpf_obj(skel->obj, "xdp.frags"),
+                       _("failed to create XDP program: %s"), strret);
+  // libxdp loads the BPF object when attaching.
+  retcode = xdp_program__attach(xdp_ingress, ifindex, xdp_mode, 0);
   if (retcode < 0) {
-    log_error(_("failed to load BPF program: %s"), strerror(-retcode));
+    log_error(_("failed to attach XDP program: %s"), strerror(-retcode));
 #ifdef MIMIC_CHECKSUM_HACK_kfunc
-    if (-retcode == EINVAL && !is_kmod_loaded())
+    if (retcode == -EINVAL && !is_kmod_loaded())
       log_error(_("hint: did you load the Mimic kernel module?"));
 #endif
     cleanup(retcode);
   }
+#else
+  retcode = mimic_bpf__load(skel);
+  if (retcode < 0) {
+    log_error(_("failed to load BPF program: %s"), strerror(-retcode));
+#ifdef MIMIC_CHECKSUM_HACK_kfunc
+    if (retcode == -EINVAL && !is_kmod_loaded())
+      log_error(_("hint: did you load the Mimic kernel module?"));
+#endif
+    cleanup(retcode);
+  }
+  try2(bpf_xdp_attach(ifindex, bpf_program__fd(skel->progs.ingress_handler), args->xdp_mode, NULL),
+       _("failed to attach XDP program: %s"), strret);
+#endif
+  xdp_attached = true;
 
-  // Save state to lock file
+  // TC
+  tc_hook_egress = (typeof(tc_hook_egress)){
+    .sz = sizeof(tc_hook_egress), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
+  tc_opts_egress =
+    (typeof(tc_opts_egress)){.sz = sizeof(tc_opts_egress), .handle = 1, .priority = 1};
+  tc_hook_created = true;
+  try2(tc_hook_create_attach(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler));
+
+  // ring buffer
   struct bpf_prog_info prog_info = {};
   struct bpf_map_info map_info = {};
   __u32 prog_len = sizeof(prog_info), map_len = sizeof(map_info);
+  _get_map_id(mimic_rb);
+  struct handle_rb_event_ctx ctx = {.conns = skel->maps.mimic_conns, .ifname = ifname};
+  rb = try2_p(ring_buffer__new(mimic_rb_fd, handle_rb_event(&ctx, &cif, &closure), NULL, NULL),
+              _("failed to attach BPF ring buffer '%s': %s"), "mimic_rb", strret);
+
+  // Save state to lock file
   struct lock_content lock_content = {
     .pid = getpid(),
     .egress_id = _get_prog_id(egress_handler),
@@ -516,10 +576,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
     .conns_id = _get_map_id(mimic_conns),
     .settings = args->gsettings,
   };
-  _get_map_id(mimic_rb);
   try2(write_lock_file(lock_fd, &lock_content));
-
-  skel->bss->log_verbosity = log_verbosity;
 
   for (int i = 0; i < args->filter_count; i++) {
     filter_settings_apply(&args->info[i].settings, &args->gsettings);
@@ -532,24 +589,6 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
       if (retcode) cleanup(retcode, _("failed to add filter `%s`: %s"), fmt, strerror(-retcode));
     }
   }
-
-  // Get ring buffers in advance so we can return earlier if error
-  struct handle_rb_event_ctx ctx = {.conns = skel->maps.mimic_conns, .ifname = ifname};
-  rb = try2_p(ring_buffer__new(mimic_rb_fd, handle_rb_event(&ctx, &cif, &closure), NULL, NULL),
-              _("failed to attach BPF ring buffer '%s': %s"), "mimic_rb", strret);
-
-  // TC
-  tc_hook_egress = (typeof(tc_hook_egress)){
-    .sz = sizeof(tc_hook_egress), .ifindex = ifindex, .attach_point = BPF_TC_EGRESS};
-  tc_opts_egress =
-    (typeof(tc_opts_egress)){.sz = sizeof(tc_opts_egress), .handle = 1, .priority = 1};
-  tc_hook_created = true;
-  try2(tc_hook_create_attach(&tc_hook_egress, &tc_opts_egress, skel->progs.egress_handler));
-
-  // XDP
-  try2(bpf_xdp_attach(ifindex, bpf_program__fd(skel->progs.ingress_handler), args->xdp_mode, NULL),
-       _("failed to attach XDP program: %s"), strret);
-  xdp_attached = true;
 
   retcode = notify_ready();
   if (retcode < 0)
@@ -623,12 +662,16 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   }
 
   retcode = 0;
-  log_info(_("cleaning up"));
 cleanup:
   terminate_all_conns(mimic_conns_fd, ifname);
   sigprocmask(SIG_SETMASK, NULL, NULL);
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
+#ifdef MIMIC_USE_LIBXDP
+  if (xdp_attached) xdp_program__detach(xdp_ingress, ifindex, xdp_mode, 0);
+  xdp_program__close(xdp_ingress);
+#else
   if (xdp_attached) bpf_xdp_detach(ifindex, args->xdp_mode, NULL);
+#endif
   if (rb) ring_buffer__free(rb);
   if (closure) ffi_closure_free(closure);
   if (skel) mimic_bpf__destroy(skel);
@@ -706,6 +749,9 @@ int subcmd_run(struct run_args* args) {
   int lock_fd = try(lock(lock_path, args->ifname));
 
   libbpf_set_print(libbpf_print_fn);
+#ifdef MIMIC_USE_LIBXDP
+  libxdp_set_print((libxdp_print_fn_t)libbpf_print_fn);
+#endif
   retcode = run_bpf(args, lock_fd, args->ifname, ifindex);
   close(lock_fd);
   unlink(lock_path);
