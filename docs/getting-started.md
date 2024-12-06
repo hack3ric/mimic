@@ -56,8 +56,12 @@ The general command of running a Mimic instance looks like:
 
 See [mimic(1)](mimic.1.md) for more information on command-line options and detailed configuration.
 
-## Notes on Firewall
+## Firewall
 
-Due to its transparent nature (i.e. UDP applications can work seamlessly with or without Mimic running), Mimic plays nice with existing firewall rules too.
+Mimic not only mangles packets from UDP to TCP transparently using eBPF, but also sends out control packets e.g. SYN and keepalive, using Linux's raw(7) socket. As TC eBPF happens after netfilter's output hook, and XDP before input hook, the former is recognized as UDP by netfilter. However, the latter is still regarded as TCP (as it really is). To make firewall work with Mimic, one should treat Mimic's traffic as *both TCP and UDP*.
 
-However, do note that since both TC happens after netfilter's output hook, and XDP before input hook, one should *treat traffic through Mimic as UDP instead of TCP*. TCP rules have no effect on Mimic's fake TCP traffic.
+## Notes on XDP Native Mode
+
+Some network drivers, like Intel's e1000, igb, igc and Nvidia (Mellanox)'s mlx4, mlx5 have XDP offload function, running XDP programs in their drivers (native mode) in contrast to running in the Linux kernel (skb mode). However, one may exhibit unstable traffic when using Mimic on such drivers (especially Intel ones). I encountered several times on my router with Intel i225 NIC (igc driver), but none on another one using Realtek R8111 (r8169 driver), which does not support native mode and always falls back to skb mode. If you encounter sudden traffic loss, you may want to specify `xdp_mode = skb` in your configuration file, or pass `--xdp-mode skb` as arguments when running Mimic.
+
+XDP can also directly run on NIC hardware (hardware mode), but only a handful of SmartNICs support it. I don't have them so I can't test them.
