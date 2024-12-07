@@ -1,3 +1,5 @@
+#ifdef MIMIC_USE_LIBXDP
+
 #include <dlfcn.h>
 #include <errno.h>
 #include <xdp/libxdp.h>
@@ -62,3 +64,5 @@ int dlopen_libxdp() {
     &libxdp_dl, "libxdp.so.1", DLSYM_ARG(libxdp_set_print), DLSYM_ARG(xdp_program__from_bpf_obj),
     DLSYM_ARG(xdp_program__attach), DLSYM_ARG(xdp_program__detach), DLSYM_ARG(xdp_program__close));
 }
+
+#endif  // MIMIC_USE_LIBXDP

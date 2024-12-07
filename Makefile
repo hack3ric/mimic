@@ -33,7 +33,7 @@ else ifeq ($(MODE), release)
 CFLAGS += -O2
 endif
 
-ifneq ($(USE_LIBXDP),)
+ifeq ($(USE_LIBXDP),1)
 BPF_CFLAGS += -DMIMIC_USE_LIBXDP
 CFLAGS += -DMIMIC_USE_LIBXDP
 # mimic_link_libs += -lxdp
