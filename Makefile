@@ -36,7 +36,7 @@ endif
 ifneq ($(USE_LIBXDP),)
 BPF_CFLAGS += -DMIMIC_USE_LIBXDP
 CFLAGS += -DMIMIC_USE_LIBXDP
-mimic_link_libs += -lxdp
+# mimic_link_libs += -lxdp
 endif
 
 # Whether to use argp-standalone

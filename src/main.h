@@ -26,6 +26,7 @@ struct args {
       struct filter_settings gsettings;
       unsigned int filter_count;
       int xdp_mode;
+      bool use_libxdp;
     } run;
     struct show_args {
       const char* ifname;

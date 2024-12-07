@@ -27,7 +27,7 @@
 #include <unistd.h>
 
 #ifdef MIMIC_USE_LIBXDP
-#include <xdp/libxdp.h>
+#include "libxdp.h"
 #endif
 
 #include "bpf_skel.h"
@@ -44,6 +44,9 @@ static const struct argp_option options[] = {
   {"filter", 'f', N_("FILTER"), 0,
    N_("Specify what packets to process. This may be specified for multiple times."), 1},
   {"xdp-mode", 'x', N_("MODE"), 0, N_("Force XDP attach mode, either skb or native"), 1},
+#ifdef MIMIC_USE_LIBXDP
+  {"use-libxdp", 'X', NULL, 0, N_("Use libxdp instead of libbpf to load XDP program"), 1},
+#endif
   {"handshake", 'h', N_("i:r"), 0, N_("Controls retry behaviour of initiating connection"), 2},
   {"keepalive", 'k', N_("t:i:r:s"), 0, N_("Controls keepalive mechanism"), 2},
   {"padding", 'p', N_("bytes"), 0,
@@ -78,6 +81,11 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
     case 'x':
       args->xdp_mode = try(parse_xdp_mode(arg));
       break;
+#ifdef MIMIC_USE_LIBXDP
+    case 'X':
+      args->use_libxdp = true;
+      break;
+#endif
     case 'h':
       try(parse_handshake(arg, &args->gsettings.handshake));
       break;
@@ -523,31 +531,35 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
 
   // XDP
 #ifdef MIMIC_USE_LIBXDP
-  xdp_ingress = try2_p(xdp_program__from_bpf_obj(skel->obj, "xdp.frags"),
-                       _("failed to create XDP program: %s"), strret);
-  // libxdp loads the BPF object when attaching.
-  retcode = xdp_program__attach(xdp_ingress, ifindex, xdp_mode, 0);
-  if (retcode < 0) {
-    log_error(_("failed to attach XDP program: %s"), strerror(-retcode));
+  if (args->use_libxdp) {
+    xdp_ingress = try2_p(sym_xdp_program__from_bpf_obj(skel->obj, "xdp.frags"),
+                         _("failed to create XDP program: %s"), strret);
+    // libxdp loads the BPF object when attaching.
+    retcode = sym_xdp_program__attach(xdp_ingress, ifindex, xdp_mode, 0);
+    if (retcode < 0) {
+      log_error(_("failed to attach XDP program: %s"), strerror(-retcode));
 #ifdef MIMIC_CHECKSUM_HACK_kfunc
-    if (retcode == -EINVAL && !is_kmod_loaded())
-      log_error(_("hint: did you load the Mimic kernel module?"));
+      if (retcode == -EINVAL && !is_kmod_loaded())
+        log_error(_("hint: did you load the Mimic kernel module?"));
 #endif
-    cleanup(retcode);
-  }
-#else
-  retcode = mimic_bpf__load(skel);
-  if (retcode < 0) {
-    log_error(_("failed to load BPF program: %s"), strerror(-retcode));
+      cleanup(retcode);
+    }
+  } else
+#endif
+  {
+    retcode = mimic_bpf__load(skel);
+    if (retcode < 0) {
+      log_error(_("failed to load BPF program: %s"), strerror(-retcode));
 #ifdef MIMIC_CHECKSUM_HACK_kfunc
-    if (retcode == -EINVAL && !is_kmod_loaded())
-      log_error(_("hint: did you load the Mimic kernel module?"));
+      if (retcode == -EINVAL && !is_kmod_loaded())
+        log_error(_("hint: did you load the Mimic kernel module?"));
 #endif
-    cleanup(retcode);
+      cleanup(retcode);
+    }
+    try2(
+      bpf_xdp_attach(ifindex, bpf_program__fd(skel->progs.ingress_handler), args->xdp_mode, NULL),
+      _("failed to attach XDP program: %s"), strret);
   }
-  try2(bpf_xdp_attach(ifindex, bpf_program__fd(skel->progs.ingress_handler), args->xdp_mode, NULL),
-       _("failed to attach XDP program: %s"), strret);
-#endif
   xdp_attached = true;
 
   // TC
@@ -667,11 +679,14 @@ cleanup:
   sigprocmask(SIG_SETMASK, NULL, NULL);
   if (tc_hook_created) tc_hook_cleanup(&tc_hook_egress, &tc_opts_egress);
 #ifdef MIMIC_USE_LIBXDP
-  if (xdp_attached) xdp_program__detach(xdp_ingress, ifindex, xdp_mode, 0);
-  xdp_program__close(xdp_ingress);
-#else
-  if (xdp_attached) bpf_xdp_detach(ifindex, args->xdp_mode, NULL);
+  if (args->use_libxdp) {
+    if (xdp_attached) sym_xdp_program__detach(xdp_ingress, ifindex, xdp_mode, 0);
+    sym_xdp_program__close(xdp_ingress);
+  } else
 #endif
+  {
+    if (xdp_attached) bpf_xdp_detach(ifindex, args->xdp_mode, NULL);
+  }
   if (rb) ring_buffer__free(rb);
   if (closure) ffi_closure_free(closure);
   if (skel) mimic_bpf__destroy(skel);
@@ -750,7 +765,10 @@ int subcmd_run(struct run_args* args) {
 
   libbpf_set_print(libbpf_print_fn);
 #ifdef MIMIC_USE_LIBXDP
-  libxdp_set_print((libxdp_print_fn_t)libbpf_print_fn);
+  if (args->use_libxdp) {
+    dlopen_libxdp();
+    sym_libxdp_set_print((libxdp_print_fn_t)libbpf_print_fn);
+  }
 #endif
   retcode = run_bpf(args, lock_fd, args->ifname, ifindex);
   close(lock_fd);

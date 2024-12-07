@@ -83,6 +83,9 @@ void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_typ
     log_conn(level, conn, _("connection destroyed (%s)"), reason);
 }
 
+// TODO: filter other messages like:
+// - turn 'libbpf: elf: skipping unrecognized data section' into Trace
+// - turn 'libxdp: Error attaching XDP program ...' and 'XDP mode not supported; try using SKB mode' into Warn
 int libbpf_print_fn(enum libbpf_print_level bpf_level, const char* format, va_list args) {
   int ret = 0;
   if (bpf_level == LIBBPF_WARN && LOG_ALLOW_WARN) {

@@ -30,6 +30,10 @@
 `-x, --xdp-mode`
 : Force XDP attach mode, either skb or native
 
+`-X, --use-libxdp`
+: Use libxdp Use libxdp instead of libbpf to load XDP program.
+: libxdp supports chaining multiple XDP programs on one interface. Mimic loads libxdp dynamically using dlopen.
+
 `-h, --handshake`
 : Controls retry behaviour of initiating connection (see [**CONFIGURATION/Handshake and Keepalive Parameters**](#handshake-and-keepalive-parameters))
 
@@ -114,7 +118,7 @@ See **/usr/share/doc/mimic/eth0.conf.example** for detailed examples.
 `log.verbosity`
 : Controls how much information should be printed. Log level equal to or higher (in number) than log verbosity will be discarded. Both number and string matching log levels are accepted. Number must be greater than or equal to 0. Defaults to info (2). Available levels are: 0 - error (cannot be discarded), 1 - warn, 2 - info, 3 - debug, 4 - trace.
 
-`handshake`, `keepalive`, `padding`, `max_window`
+`xdp_mode`, `use_libxdp`, `handshake`, `keepalive`, `padding`, `max_window`
 : See [**OPTIONS**](#options).
 
 `filter`
