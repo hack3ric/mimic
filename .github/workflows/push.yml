@@ -6,16 +6,22 @@ on:
 
 jobs:
   test:
-    name: Run tests with ${{ matrix.flags.flags }}
+    name: Run tests with ${{ matrix.flags.flags }} ${{ matrix.flags.args }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
         flags:
           - flags: CHECKSUM_HACK=kfunc
+            args: ''
             desc: kfunc
           - flags: CHECKSUM_HACK=kfunc USE_LIBXDP=1
-            desc: kfunc-libxdp
+            args: --use-libxdp
+            desc: kfunc-libxdp-use-libbpf
+          - flags: CHECKSUM_HACK=kfunc USE_LIBXDP=1
+            args: --use-libxdp
+            desc: kfunc-libxdp-use-libxdp
           - flags: CHECKSUM_HACK=kprobe STRIP_BTF_EXT=1
+            args: ''
             desc: kprobe-strip-btf-ext
     steps:
       - name: Checkout

@@ -35,7 +35,7 @@ setup_mimic_socat() {
     fi
 
     ip netns exec ${netns[$_i]} "$BATS_TEST_DIRNAME/../out/mimic" \
-      run ${veth[$_i]} -flocal="$self_ip_port" \
+      run ${veth[$_i]} -flocal="$self_ip_port" $MIMIC_TEST_EXTRA_ARGS \
       &
     mimic_pid[$_i]=$!
     echo "$! is mimic"
