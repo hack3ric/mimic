@@ -15,7 +15,7 @@ jobs:
             args: ''
             desc: kfunc
           - flags: CHECKSUM_HACK=kfunc USE_LIBXDP=1
-            args: --use-libxdp
+            args: ''
             desc: kfunc-libxdp-use-libbpf
           - flags: CHECKSUM_HACK=kfunc USE_LIBXDP=1
             args: --use-libxdp
@@ -38,7 +38,7 @@ jobs:
           make -j ${{ matrix.flags.flags }}
           sudo nft delete table filter  # Docker's nftables rule drops IPv4 packets in tests
           sudo insmod out/mimic.ko
-          sudo make test ${{ matrix.flags.flags }}
+          sudo env MIMIC_TEST_EXTRA_ARGS=\"${{ matrix.flags.args }}\" make test ${{ matrix.flags.flags }}
       - name: Upload captured packets
         uses: actions/upload-artifact@v4
         if: always()
