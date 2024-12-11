@@ -106,20 +106,13 @@ int main(int argc, char** argv) {
     __u32 type_off = x32toh(x, hdr->type_off), type_len = x32toh(x, hdr->type_len);
     __u32 str_off = x32toh(x, hdr->str_off), str_len = x32toh(x, hdr->str_len);
 
-    if (hdr->version != BTF_VERSION || str_len > BTF_MAX_NAME_OFFSET) {
-      goto cont;
-    }
-
     if (hdr->version != BTF_VERSION || hdr_len != sizeof(*hdr) || str_len > BTF_MAX_NAME_OFFSET ||
-        str_len <= 0) {
+        str_len <= 0)
       goto cont;
-    }
 
     char* type = search_ptr + sizeof(*hdr) + type_off;
     char* str = search_ptr + sizeof(*hdr) + str_off;
-    if (type + type_len > buf + size || str + str_len > buf + size || str[0] != '\0') {
-      goto cont;
-    }
+    if (type + type_len > buf + size || str + str_len > buf + size || str[0] != '\0') goto cont;
 
     log_info("found BTF blob: pos=%lx, flags=%u, type_len=%u, type_off=%u, str_len=%u, str_off=%u",
              search_ptr - buf, hdr->flags, type_len, type_off, str_len, str_off);
