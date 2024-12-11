@@ -149,7 +149,7 @@ static inline void freep(void** ptr) {
 }
 static inline void freestrp(char** ptr) { freep((void*)ptr); }
 
-#define drop(f) __attribute__((__cleanup__(f)))
+#define raii(f) __attribute__((__cleanup__(f)))
 
 #endif  // MIMIC_BPF
 

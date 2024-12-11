@@ -157,7 +157,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
   //
   // Maybe setting reception buffer size to 0 will help, but it's just prevent packets from storing
   // and they will be forwarded to the socket and discarded anyway.
-  int sk drop(closep) =
+  int sk raii(closep) =
     try(socket(ip_proto(&s->conn.local), SOCK_RAW | SOCK_NONBLOCK, IPPROTO_TCP));
 
   int level = SOL_IP, opt = IP_FREEBIND, yes = 1;
@@ -184,7 +184,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
   size_t buf_len = sizeof(struct tcphdr) + (flags & TCP_FLAG_SYN ? 3 * 4 : 0);
   csum += buf_len;
 
-  void* buf drop(freep) = malloc(buf_len);
+  void* buf raii(freep) = malloc(buf_len);
   struct tcphdr* tcp = (typeof(tcp))buf;
   *tcp = (typeof(*tcp)){
     .source = htons(s->conn.local_port),
@@ -459,7 +459,7 @@ cleanup:;
           _("failed to get info of map '%s': %s"))
 
 static inline bool is_kmod_loaded() {
-  FILE* modules drop(fclosep) = fopen("/proc/modules", "r");
+  FILE* modules raii(fclosep) = fopen("/proc/modules", "r");
   char buf[256];
   while (fgets(buf, sizeof(buf), modules))
     if (strncmp("mimic ", buf, 6) == 0) return true;
@@ -482,7 +482,7 @@ static inline int terminate_all_conns(int mimic_conns_fd, const char* ifname) {
 static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname, int ifindex) {
   int retcode;
   struct mimic_bpf* skel = NULL;
-  drop(closep) int epfd = -1, sfd = -1, timer = -1;
+  raii(closep) int epfd = -1, sfd = -1, timer = -1;
 
   // These fds are actually reference of skel, so no need to use _cleanup_fd
   int egress_handler_fd = -1, ingress_handler_fd = -1;
@@ -702,7 +702,7 @@ static inline int _lock(const char* restrict lock_path, const char* restrict ifn
   bool check_lock = false, check_process = false;
   struct lock_content lock_content;
   if (errno == EEXIST) {
-    FILE* lock_file drop(fclosep) = fopen(lock_path, "r");
+    FILE* lock_file raii(fclosep) = fopen(lock_path, "r");
     if (lock_file) {
       if (parse_lock_file(lock_file, &lock_content) == 0) {
         char proc_path[32];
@@ -741,7 +741,7 @@ int subcmd_run(struct run_args* args) {
   if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
 
   if (args->file) {
-    FILE* conf drop(fclosep) = fopen(args->file, "r");
+    FILE* conf raii(fclosep) = fopen(args->file, "r");
     if (conf) {
       try(parse_config_file(conf, args), _("failed to read configuration file"));
     } else if (errno == ENOENT) {
