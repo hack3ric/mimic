@@ -4,7 +4,7 @@
 #include <errno.h>
 #include <xdp/libxdp.h>
 
-#include "common/try.h"
+#include "common/log.h"
 #include "libxdp.h"
 
 static void *libxdp_dl = NULL;
@@ -25,7 +25,10 @@ static int dlsym_many_or_warnv(void *dl, va_list ap) {
     symbol = va_arg(ap, typeof(symbol));
 
     tfn = (typeof(tfn))dlsym(dl, symbol);
-    if (!tfn) ret(-ELIBBAD, "can't find symbol '%s': %s", symbol, dlerror());
+    if (!tfn) {
+      log_warn(_("cannot find symbol '%s': %s"), symbol, dlerror());
+      return -ELIBBAD;
+    }
     *fn = tfn;
   }
 
@@ -39,7 +42,10 @@ static int dlopen_many_sym_or_warn_sentinel(void **dlp, const char *filename, ..
   if (*dlp) return 0;
 
   dl = dlopen(filename, RTLD_NOW | RTLD_NODELETE);
-  if (!dl) ret(-EOPNOTSUPP, "%s is not installed: %s", filename, dlerror());
+  if (!dl) {
+    log_warn(_("%s is not installed: %s"), filename, dlerror());
+    return -EOPNOTSUPP;
+  }
 
   log_debug("loaded '%s' via dlopen()", filename);
 

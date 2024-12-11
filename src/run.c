@@ -766,8 +766,12 @@ int subcmd_run(struct run_args* args) {
   libbpf_set_print(libbpf_print_fn);
 #ifdef MIMIC_USE_LIBXDP
   if (args->use_libxdp) {
-    dlopen_libxdp();
-    sym_libxdp_set_print((libxdp_print_fn_t)libbpf_print_fn);
+    if (dlopen_libxdp() < 0) {
+      log_warn(_("fall back to using libbpf for loading XDP programs"));
+      args->use_libxdp = false;
+    } else {
+      sym_libxdp_set_print((libxdp_print_fn_t)libbpf_print_fn);
+    }
   }
 #endif
   retcode = run_bpf(args, lock_fd, args->ifname, ifindex);

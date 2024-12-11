@@ -33,6 +33,11 @@ else ifeq ($(MODE), release)
 CFLAGS += -O2
 endif
 
+ifeq ($(USE_LIBXDP),)
+ifeq ($(shell pkg-config --exists 'libxdp >= 1' 'libxdp < 2' >/dev/null 2>&1; echo $$?),0)
+USE_LIBXDP := 1
+endif
+endif
 ifeq ($(USE_LIBXDP),1)
 BPF_CFLAGS += -DMIMIC_USE_LIBXDP
 CFLAGS += -DMIMIC_USE_LIBXDP
