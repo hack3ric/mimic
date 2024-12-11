@@ -1,3 +1,4 @@
+#include <alloca.h>
 #include <arpa/inet.h>
 #include <bpf/libbpf.h>
 #include <linux/tcp.h>
@@ -83,22 +84,38 @@ void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_typ
     log_conn(level, conn, _("connection destroyed (%s)"), reason);
 }
 
-// TODO: filter other messages like:
-// - turn 'libbpf: elf: skipping unrecognized data section' into Trace
-// - turn 'libxdp: Error attaching XDP program ...' and 'XDP mode not supported; try using SKB mode' into Warn
 int libbpf_print_fn(enum libbpf_print_level bpf_level, const char* format, va_list args) {
   int ret = 0;
-  if (bpf_level == LIBBPF_WARN && LOG_ALLOW_WARN) {
-    // Get rid of harmless warning when tc qdisc already exists
-    // This is dirty, but there is no other way to filter it
-    // See https://www.spinics.net/lists/bpf/msg44842.html
+  char* content = NULL;
+
+  if ((bpf_level == LIBBPF_WARN && LOG_ALLOW_WARN) ||
+      (bpf_level == LIBBPF_INFO && LOG_ALLOW_INFO)) {
     va_list backup_args;
     va_copy(backup_args, args);
-    char buf[128];
-    ret = vsnprintf(buf, sizeof(buf), format, backup_args);
+    char* buf = alloca(128);
+    ret = vsnprintf(buf, 128, format, backup_args);
     if (ret < 0) return ret;
-    if (strstr(buf, "Exclusivity flag on, cannot modify")) return 0;
+    if (strlen(buf) < 127) content = buf;
+
+    // Get rid of harmless warning when tc qdisc already exists
+    // See https://www.spinics.net/lists/bpf/msg44842.html
+    if (bpf_level == LIBBPF_WARN &&
+        strcmp(buf, "libbpf: Kernel error message: Exclusivity flag on, cannot modify\n") == 0)
+      bpf_level = LIBBPF_DEBUG;
+
+    // libxdp injects some additional sections to the original BPF object file
+    if (bpf_level == LIBBPF_INFO &&
+        strstr(buf, "libbpf: elf: skipping unrecognized data section") == buf)
+      bpf_level = LIBBPF_DEBUG;
+
+    // These shows when `-x native` is specified, but underlying driver does not support XDP in
+    // native mode
+    if (bpf_level == LIBBPF_INFO &&
+        (strstr(buf, "libxdp: Error attaching XDP program to ifindex ") == buf ||
+         strstr(buf, "libxdp: XDP mode not supported; try using SKB mode") == buf))
+      bpf_level = LIBBPF_WARN;
   }
+
   if ((bpf_level == LIBBPF_WARN && LOG_ALLOW_WARN) ||
       (bpf_level == LIBBPF_INFO && LOG_ALLOW_INFO) ||
       (bpf_level == LIBBPF_DEBUG && LOG_ALLOW_TRACE)) {
@@ -116,7 +133,10 @@ int libbpf_print_fn(enum libbpf_print_level bpf_level, const char* format, va_li
     }
     ret = fprintf(stderr, "%s%s " RESET, log_prefixes[level][0], gettext(log_prefixes[level][1]));
     if (level >= LOG_TRACE) ret = ret < 0 ? ret : fprintf(stderr, GRAY);
-    ret = ret < 0 ? ret : vfprintf(stderr, format, args);
+    if (content)
+      ret = ret < 0 ? ret : fputs(content, stderr);
+    else
+      ret = ret < 0 ? ret : vfprintf(stderr, format, args);
     if (level >= LOG_TRACE) ret = ret < 0 ? ret : fprintf(stderr, RESET);
   }
   return ret < 0 ? ret : 0;
