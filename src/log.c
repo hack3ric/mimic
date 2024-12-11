@@ -139,7 +139,7 @@ int libbpf_print_fn(enum libbpf_print_level bpf_level, const char* format, va_li
       ret = ret < 0 ? ret : vfprintf(stderr, format, args);
     if (level >= LOG_TRACE) ret = ret < 0 ? ret : fprintf(stderr, RESET);
   }
-  return ret < 0 ? ret : 0;
+  return min(ret, 0);
 }
 
 static inline const char* log_type_to_str(enum log_type type) {

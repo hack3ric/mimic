@@ -148,7 +148,7 @@ int subcmd_show(struct show_args* args) {
   struct lock_content lock_content;
   get_lock_file_name(lock_path, sizeof(lock_path), ifindex);
   {
-    _cleanup_file FILE* lock_file =
+    FILE* lock_file drop(fclosep) =
       try_p(fopen(lock_path, "r"), _("failed to open lock file at %s: %s"), lock_path, strret);
     try(parse_lock_file(lock_file, &lock_content));
   }
@@ -170,7 +170,7 @@ int subcmd_show(struct show_args* args) {
   if (args->show_process) {
     printf(_("%sMimic%s running on %s\n"), BOLD GREEN, RESET, args->ifname);
     printf(_("  %sPID:%s %d\n"), BOLD, RESET, lock_content.pid);
-    _cleanup_fd int whitelist_fd =
+    int whitelist_fd drop(closep) =
       try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
           "mimic_whitelist", strret);
     show_overview(ifindex, whitelist_fd, &lock_content.settings, -1);
@@ -178,8 +178,8 @@ int subcmd_show(struct show_args* args) {
   }
 
   if (args->show_command) {
-    _cleanup_fd int conns_fd = try(bpf_map_get_fd_by_id(lock_content.conns_id),
-                                   _("failed to get fd of map '%s': %s"), "mimic_conns", strret);
+    int conns_fd drop(closep) = try(bpf_map_get_fd_by_id(lock_content.conns_id),
+                                    _("failed to get fd of map '%s': %s"), "mimic_conns", strret);
 
     char local[IP_PORT_MAX_LEN], remote[IP_PORT_MAX_LEN];
     struct conn_tuple key;

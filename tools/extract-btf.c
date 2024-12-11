@@ -85,11 +85,11 @@ int main(int argc, char** argv) {
     ret(-1, "unknown endianness '%s'", argv[2]);
 
   const char* path = argv[1];
-  FILE* file _cleanup_file =
+  FILE* file drop(fclosep) =
     try_p(fopen(path, "rb"), "failed to open file at %s: %s", path, strret);
 
   long size = try(get_file_size(file), "failed to get file size: %s", strret);
-  char* buf _cleanup_malloc_str = try_p(malloc(size), "cannot malloc: %s", strret);
+  char* buf drop(freestrp) = try_p(malloc(size), "cannot malloc: %s", strret);
   try_e(fread(buf, 1, size, file), "failed to read file content: %s", strret);
 
   struct btf_header* btf_hdr = NULL;

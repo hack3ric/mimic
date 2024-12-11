@@ -241,7 +241,7 @@ int parse_xdp_mode(const char* mode) {
 
 int parse_config_file(FILE* file, struct run_args* args) {
   int ret;
-  _cleanup_malloc_str char* line = NULL;
+  char* line drop(freestrp) = NULL;
   size_t len = 0;
   ssize_t read;
 
@@ -301,7 +301,7 @@ int parse_config_file(FILE* file, struct run_args* args) {
 }
 
 int parse_lock_file(FILE* file, struct lock_content* c) {
-  _cleanup_malloc_str char* line = NULL;
+  char* line drop(freestrp) = NULL;
   size_t len = 0;
   ssize_t read;
 

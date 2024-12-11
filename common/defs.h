@@ -19,12 +19,32 @@
 #include <unistd.h>
 #endif
 
-#define min(x, y) ((x) < (y) ? (x) : (y))
-#define max(x, y) ((x) < (y) ? (y) : (x))
-#define cmp(x, y) ((x) > (y) - (x) < (y))
+#define min(x, y)       \
+  ({                    \
+    typeof(x) _x = (x); \
+    typeof(y) _y = (y); \
+    _x < _y ? _x : _y;  \
+  })
+#define max(x, y)       \
+  ({                    \
+    typeof(x) _x = (x); \
+    typeof(y) _y = (y); \
+    _x < _y ? _y : _x;  \
+  })
+#define cmp(x, y)       \
+  ({                    \
+    typeof(x) _x = (x); \
+    typeof(y) _y = (y); \
+    _x > _y - _x < _y;  \
+  })
 
 #define sizeof_array(arr) (sizeof(arr) / sizeof(arr[0]))
-#define round_to_mul(val, mul) ((val) % (mul) == 0) ? (val) : ((val) + ((mul) - (val) % (mul)))
+#define round_to_mul(val, mul)                                \
+  ({                                                          \
+    typeof(val) _val = (val);                                 \
+    typeof(mul) _mul = (mul);                                 \
+    (_val % _mul == 0) ? _val : (_val + (_mul - _val % mul)); \
+  })
 
 #define swap(x, y)   \
   ({                 \
@@ -118,21 +138,18 @@
 
 // Cleanup utilities
 
-static inline void cleanup_fd(int* fd) {
+static inline void closep(int* fd) {
   if (*fd >= 0) close(*fd);
 }
-static inline void cleanup_file(FILE** file) {
+static inline void fclosep(FILE** file) {
   if (*file) fclose(*file);
 }
-static inline void cleanup_malloc(void** ptr) {
+static inline void freep(void** ptr) {
   if (*ptr) free(*ptr);
 }
-static inline void cleanup_malloc_str(char** ptr) { cleanup_malloc((void*)ptr); }
+static inline void freestrp(char** ptr) { freep((void*)ptr); }
 
-#define _cleanup_fd __attribute__((__cleanup__(cleanup_fd)))
-#define _cleanup_file __attribute__((__cleanup__(cleanup_file)))
-#define _cleanup_malloc __attribute__((__cleanup__(cleanup_malloc)))
-#define _cleanup_malloc_str __attribute__((__cleanup__(cleanup_malloc_str)))
+#define drop(f) __attribute__((__cleanup__(f)))
 
 #endif  // MIMIC_BPF
 

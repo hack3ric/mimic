@@ -27,7 +27,7 @@ static int notify_systemd(const char* msg) {
   memcpy(addr.sun_path, socket_path, sizeof(addr.sun_path));
   if (socket_path[0] == '@') addr.sun_path[0] = 0;
 
-  _cleanup_fd int sk = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+  int sk drop(closep) = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
   if (sk < 0) return -errno;
 
   socklen_t sock_len = offsetof(struct sockaddr_un, sun_path) + path_len;

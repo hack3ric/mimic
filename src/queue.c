@@ -97,7 +97,8 @@ int packet_buf_consume(struct packet_buf* buf, bool* consumed) {
     return 0;
   }
 
-  _cleanup_fd int sk = try(socket(ip_proto(&buf->conn.local), SOCK_RAW | SOCK_NONBLOCK, IPPROTO_UDP));
+  int sk drop(closep) =
+    try(socket(ip_proto(&buf->conn.local), SOCK_RAW | SOCK_NONBLOCK, IPPROTO_UDP));
   struct sockaddr_storage saddr, daddr;
   conn_tuple_to_addrs(&buf->conn, &saddr, &daddr);
 
