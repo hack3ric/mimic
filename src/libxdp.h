@@ -5,7 +5,6 @@
 #include <xdp/libxdp.h>
 
 #define DLSYM_PROTOTYPE(symbol) typeof(symbol)* sym_##symbol
-
 #define DLSYM_ARG(arg)                                                     \
   ({                                                                       \
     assert(__builtin_types_compatible_p(typeof(sym_##arg), typeof(&arg))); \

@@ -19,12 +19,8 @@ static int dlsym_many_or_warnv(void *dl, va_list ap) {
   void (**fn)(void);
 
   while ((fn = va_arg(ap, typeof(fn)))) {
-    void (*tfn)(void);
-    const char *symbol;
-
-    symbol = va_arg(ap, typeof(symbol));
-
-    tfn = (typeof(tfn))dlsym(dl, symbol);
+    const char* symbol = va_arg(ap, typeof(symbol));
+    void (*tfn)(void) = dlsym(dl, symbol);
     if (!tfn) {
       log_warn(_("cannot find symbol '%s': %s"), symbol, dlerror());
       return -ELIBBAD;
@@ -36,12 +32,10 @@ static int dlsym_many_or_warnv(void *dl, va_list ap) {
 }
 
 static int dlopen_many_sym_or_warn_sentinel(void **dlp, const char *filename, ...) {
-  void *dl = NULL;
   int retcode;
-
   if (*dlp) return 0;
 
-  dl = dlopen(filename, RTLD_NOW | RTLD_NODELETE);
+  void* dl = dlopen(filename, RTLD_NOW | RTLD_NODELETE);
   if (!dl) {
     log_warn(_("%s is not installed: %s"), filename, dlerror());
     return -EOPNOTSUPP;
