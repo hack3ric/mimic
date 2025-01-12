@@ -65,7 +65,7 @@ cleanup:
 
 int dlopen_libxdp() {
   ELF_NOTE_DLOPEN("libxdp", "Use libxdp for loading XDP programs",
-                  ELF_NOTE_DLOPEN_PRIORITY_RECOMMENDED, "libxdp.so.1");
+                  ELF_NOTE_DLOPEN_PRIORITY_SUGGESTED, "libxdp.so.1");
 
   return dlopen_many_sym_or_warn(
     &libxdp_dl, "libxdp.so.1", DLSYM_ARG(libxdp_set_print), DLSYM_ARG(xdp_program__from_bpf_obj),
