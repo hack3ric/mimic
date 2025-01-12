@@ -30,11 +30,13 @@ ifeq ($(IS_UBUNTU), 0)
 	dh_auto_build -- build-cli build-tools generate-manpage \
 		MODE= \
 		BPF_CC=clang-16 \
+		USE_LIBXDP=1 \
 		BPFTOOL=linux-source-*/tools/bpf/bpftool/bpftool
 else
 	dh_auto_build -- build-cli build-tools generate-manpage \
 		MODE= \
-		BPF_CC=clang-16
+		BPF_CC=clang-16 \
+		USE_LIBXDP=1
 endif
 	make -C linux-source-*/tools/bpf/resolve_btfids
 
