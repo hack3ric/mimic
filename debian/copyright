@@ -4,11 +4,16 @@ Upstream-Contact: Eric Long <i@hack3r.moe>
 Source: https://github.com/hack3ric/mimic
 
 Files: *
-Copyright: 2024 Eric Long <i@hack3r.moe>
+Copyright: 2024- Eric Long <i@hack3r.moe>
 License: GPL-2.0-only
 
 Files: tools/extract-vmlinux
 Copyright: 2009,2010 Dick Streefland <dick@streefland.net>, 2011 Corentin Chary <corentin.chary@gmail.com>
+License: GPL-2.0-only
+
+Files: src/libxdp.h
+       src/libxdp.c
+Copyright: 2020-2024 systemd developers
 License: GPL-2.0-only
 
 Files: debian/*

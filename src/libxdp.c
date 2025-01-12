@@ -1,3 +1,7 @@
+// Part of this file is derived from systemd, which is licensed under LGPL-2.1-or-later.
+//
+// Copyright (c) 2020-2024 systemd developers
+
 #ifdef MIMIC_USE_LIBXDP
 
 #include <dlfcn.h>
