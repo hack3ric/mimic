@@ -5,6 +5,7 @@ Maintainer: Eric Long <i@hack3r.moe>
 Build-Depends:
  debhelper-compat (= 13),
  dh-sequence-dkms,
+ dh-sequence-dlopenlibdeps,
  dh-exec,
  clang-16,
  python3,
@@ -12,6 +13,7 @@ Build-Depends:
  ronn,
  libbpf-dev,
  libffi-dev,
+ libxdp-dev,
  linux-source,
  linux-headers-generic
 Standards-Version: 4.7.0
@@ -26,6 +28,8 @@ Depends:
  ${misc:Depends},
  ${shlibs:Depends},
  mimic-modules (= ${binary:Version})
+Recommends: ${dlopen:Recommends}
+Suggests: ${dlopen:Suggests}
 Description: eBPF UDP -> TCP obfuscator
  Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP
  QoS and port blocking. Based on eBPF, it directly mangles data inside

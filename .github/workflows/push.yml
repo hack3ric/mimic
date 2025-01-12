@@ -9,6 +9,7 @@ jobs:
     name: Run tests with ${{ matrix.flags.flags }} ${{ matrix.flags.args }}
     runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false
       matrix:
         flags:
           - flags: CHECKSUM_HACK=kfunc
@@ -49,14 +50,19 @@ jobs:
     name: Build .deb packages for ${{ matrix.distro.name }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         distro:
           - name: Debian 12
             codename: bookworm
             image: debian:bookworm-slim
+            extra-repos: |
+              deb http://deb.debian.org/debian bookworm-backports main
           - name: Ubuntu 24.04
             codename: noble
             image: ubuntu:noble
+            extra-repos: |
+              deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,6 +71,7 @@ jobs:
         with:
           buildpackage-opts: -b -us -uc
           docker-image: ${{ matrix.distro.image }}
+          extra-repos: ${{ matrix.distro.extra-repos }}
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
