@@ -51,7 +51,7 @@ Depends:
  pahole
 Recommends:
  gzip,
- xz,
+ xz-utils,
  bzip2,
  lzma,
  lzop,
