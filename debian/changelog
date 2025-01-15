@@ -1,3 +1,10 @@
+mimic (0.6.3-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Add libxdp as suggested dependency through dlopen ELF metadata
+
+ -- Eric Long <i@hack3r.moe>  Wed, 15 Jan 2025 13:42:49 +0800
+
 mimic (0.6.2-1) unstable; urgency=medium
 
   * New upstream release.
