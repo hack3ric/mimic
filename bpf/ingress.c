@@ -8,6 +8,14 @@
 #include "common/try.h"
 #include "main.h"
 
+#ifdef MIMIC_USE_LIBXDP
+#include <xdp/xdp_helpers.h>
+struct {
+  __uint(priority, 5);
+  __uint(XDP_PASS, 1);
+} XDP_RUN_CONFIG(mimic_xdp);
+#endif
+
 // Move back n bytes, shrink socket buffer and restore data.
 //
 // XXX: Not handling TCP options appended by middleboxes

@@ -26,7 +26,9 @@ struct args {
       struct filter_settings gsettings;
       unsigned int filter_count;
       int xdp_mode;
+#ifdef MIMIC_USE_LIBXDP
       bool use_libxdp;
+#endif
     } run;
     struct show_args {
       const char* ifname;
@@ -41,7 +43,8 @@ extern const struct argp show_argp;
 
 int subcmd_run(struct run_args* args);
 
-int show_overview(int ifindex, int whitelist_fd, struct filter_settings* gsettings, int log_verbosity);
+int show_overview(int ifindex, int whitelist_fd, struct filter_settings* gsettings,
+                  int log_verbosity);
 int subcmd_show(struct show_args* args);
 
 struct lock_content {
