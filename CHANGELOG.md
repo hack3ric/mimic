@@ -1,5 +1,15 @@
 # Changelog for Mimic
 
+## 0.6.3 (2025-01-15)
+
+- Add libxdp support via dlopen(3)
+- Add `--max-window` flag for disabling variable window mechanism (mainly for debugging purposes)
+- Add `--xdp-mode={skb,native}` option for forcing XDP attach mode
+  - Some VMs may encounter errors when loading Mimic, similar to that of https://github.com/hack3ric/mimic/issues/11. Use `--xdp-mode=skb` to work around them.
+  - Some Intel NICs have XDP native mode for offloading XDP programs in drivers (e1000e, igb, igc, etc.), but may sometimes experience sudden connection breaks that last for minutes. `--xdp-mode=skb` may help by disabling offload.
+- Allow IP free bind to enable scenarios like https://github.com/hack3ric/mimic/issues/7.
+- Various bug fixes
+
 ## 0.6.2 (2024-11-23)
 
 - More Debian packaging fixes

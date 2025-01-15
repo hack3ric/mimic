@@ -7,7 +7,7 @@
 #include "log.h"
 #include "main.h"
 
-const char* argp_program_version = "0.6.2";
+const char* argp_program_version = "0.6.3";
 const char* argp_program_bug_address = "https://github.com/hack3ric/mimic/issues";
 
 /* mimic (global options) */
