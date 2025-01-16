@@ -35,4 +35,6 @@ jobs:
           name: ${{ matrix.arch }}-${{ matrix.revision }}
           path: |
             bin/packages/*/action/*.ipk
+            bin/packages/*/action/*.apk
             bin/targets/*/*/packages/kmod-mimic*.ipk
+            bin/targets/*/*/packages/kmod-mimic*.apk
