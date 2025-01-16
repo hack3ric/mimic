@@ -18,6 +18,7 @@ jobs:
           - mipsel_24kc
         revision:
           - SNAPSHOT
+          - openwrt-24.10
     steps:
       - uses: actions/checkout@v4
         with:
