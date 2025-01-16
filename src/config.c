@@ -286,10 +286,12 @@ int parse_config_file(FILE* file, struct run_args* args) {
     } else if (strcmp(k, "xdp_mode") == 0) {
       args->xdp_mode = try(parse_xdp_mode(v));
 
+#ifdef MIMIC_USE_LIBXDP
     } else if (strcmp(k, "use_libxdp") == 0) {
       __s16 result = 0;
       try(parse_bool(v, &result));
       args->use_libxdp = result;
+#endif
 
     } else if (!try(parse_setting(k, v, &args->gsettings))) {
       ret(-EINVAL, _("unknown key '%s'"), k);

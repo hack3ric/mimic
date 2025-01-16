@@ -15,6 +15,9 @@ jobs:
           - flags: CHECKSUM_HACK=kfunc
             args: ''
             desc: kfunc
+          - flags: CHECKSUM_HACK=kfunc USE_LIBXDP=0
+            args: ''
+            desc: kfunc-no-libxdp
           - flags: CHECKSUM_HACK=kfunc USE_LIBXDP=1
             args: ''
             desc: kfunc-libxdp-use-libbpf
