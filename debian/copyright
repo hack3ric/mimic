@@ -4,7 +4,7 @@ Upstream-Contact: Eric Long <i@hack3r.moe>
 Source: https://github.com/hack3ric/mimic
 
 Files: *
-Copyright: 2024- Eric Long <i@hack3r.moe>
+Copyright: 2024 Eric Long <i@hack3r.moe>
 License: GPL-2.0-only
 
 Files: tools/extract-vmlinux

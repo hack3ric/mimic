@@ -50,7 +50,6 @@ Depends:
  binutils,
  pahole
 Recommends:
- gzip,
  xz-utils,
  bzip2,
  lzma,

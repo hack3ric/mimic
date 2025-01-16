@@ -1,5 +1,0 @@
-# gzip here, along with other compression packages, is needed to extract
-# BTF from compressed kernel image (with respective algorithm) inside
-# /boot. I don't think version is necessary here, since it's only
-# accessed through CLI.
-mimic-dkms: depends-on-essential-package-without-using-version Recommends: gzip
