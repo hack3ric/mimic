@@ -4,7 +4,7 @@ include $(INCLUDE_DIR)/kernel.mk
 include $(INCLUDE_DIR)/version.mk
 
 PKG_NAME := mimic
-PKG_VERSION := 0.6.3.r2.5c8cf13
+PKG_VERSION := 0.6.3.20250116
 PKG_RELEASE := 1
 
 commit := 5c8cf13f28027648b8b6ec2c5581ffc47f41c1c5
