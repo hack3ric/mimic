@@ -30,7 +30,6 @@
 #include "libxdp.h"
 #endif
 
-#include "bpf_skel.h"
 #include "common/checksum.h"
 #include "common/defs.h"
 #include "common/log.h"
@@ -38,12 +37,18 @@
 #include "log.h"
 #include "main.h"
 
+#include "bpf_skel.h"
+
 static const struct argp_option options[] = {
   {"verbose", 'v', NULL, 0, N_("Output more information"), 0},
   {"quiet", 'q', NULL, 0, N_("Output less information"), 0},
   {"filter", 'f', N_("FILTER"), 0,
    N_("Specify what packets to process. This may be specified for multiple times."), 1},
-  {"xdp-mode", 'x', N_("MODE"), 0, N_("Force XDP attach mode, either skb or native"), 1},
+  {"link-type", 'L', N_("TYPE"), 0,
+   N_("Specify link layer type, can be 'eth' (Ethernet, default) or 'none' (no L2 header, like PPP "
+      "or TUN)"),
+   1},
+  {"xdp-mode", 'x', N_("MODE"), 0, N_("Force XDP attach mode, either 'skb' or 'native'"), 1},
 #ifdef MIMIC_USE_LIBXDP
   {"use-libxdp", 'X', NULL, 0, N_("Use libxdp instead of libbpf to load XDP program"), 1},
 #endif
@@ -77,6 +82,9 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
         return ret;
       else
         args->filter_count += ret;
+      break;
+    case 'L':
+      try(parse_link(arg, &args->link_type));
       break;
     case 'x':
       args->xdp_mode = try(parse_xdp_mode(arg));
@@ -529,6 +537,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
 #endif
 
   skel->bss->log_verbosity = log_verbosity;
+  skel->bss->link_type = args->link_type;
 
   // XDP
 #ifdef MIMIC_USE_LIBXDP

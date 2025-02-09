@@ -2,30 +2,56 @@
 #define MIMIC_COMMON_TRY_H
 
 #ifdef MIMIC_BPF
+#include "bpf/vmlinux.h"
+
+#include <bpf/bpf_helpers.h>
 #else
 #include <errno.h>
+#include <stddef.h>
 #include <string.h>  // IWYU pragma: keep
 #include "common/log.h"
 #endif
 
 #include "common/defs.h"
 
-#define redecl(_type, _name, _off, _ctx, _ret)                                        \
-  _name = ({                                                                          \
-    _type* _ptr = (void*)(__u64)(_ctx)->data + (_off);                                \
-    if (unlikely((__u64)_ptr + sizeof(_type) > (__u64)(_ctx)->data_end)) return _ret; \
-    _ptr;                                                                             \
-  })
-#define redecl_ok(type, name, off, skb) redecl(type, name, off, skb, TC_ACT_OK)
-#define redecl_shot(type, name, off, skb) redecl(type, name, off, skb, TC_ACT_SHOT)
-#define redecl_pass(type, name, off, xdp) redecl(type, name, off, xdp, XDP_PASS)
-#define redecl_drop(type, name, off, xdp) redecl(type, name, off, xdp, XDP_DROP)
+static __always_inline void* skb_data_end(const struct __sk_buff* ctx) {
+  void* data_end;
+  asm volatile("%[res] = *(u32 *)(%[base] + %[offset])"
+               : [res] "=r"(data_end)
+               : [base] "r"(ctx), [offset] "i"(offsetof(struct __sk_buff, data_end)), "m"(*ctx));
+  return data_end;
+}
 
-#define decl(type, name, off, ctx, ret) type* redecl(type, name, off, ctx, ret)
-#define decl_ok(type, name, off, skb) decl(type, name, off, skb, TC_ACT_OK)
-#define decl_shot(type, name, off, skb) decl(type, name, off, skb, TC_ACT_SHOT)
-#define decl_pass(type, name, off, xdp) decl(type, name, off, xdp, XDP_PASS)
-#define decl_drop(type, name, off, xdp) decl(type, name, off, xdp, XDP_DROP)
+static __always_inline void* xdp_data_end(const struct xdp_md* ctx) {
+  void* data_end;
+  asm volatile("%[res] = *(u32 *)(%[base] + %[offset])"
+               : [res] "=r"(data_end)
+               : [base] "r"(ctx), [offset] "i"(offsetof(struct xdp_md, data_end)), "m"(*ctx));
+  return data_end;
+}
+
+#define redecl(_type, _name, _off, _ctx, _ret, _method)                            \
+  _name = ({                                                                       \
+    _type* _ptr = (void*)(__u64)(_ctx)->data + (_off);                             \
+    if (unlikely((__u64)_ptr + sizeof(_type) > (__u64)_method(_ctx))) return _ret; \
+    _ptr;                                                                          \
+  })
+#define redecl_skb(_type, _name, _off, _ctx, _ret) \
+  redecl(_type, _name, _off, _ctx, _ret, skb_data_end)
+#define redecl_xdp(_type, _name, _off, _ctx, _ret) \
+  redecl(_type, _name, _off, _ctx, _ret, xdp_data_end)
+
+#define redecl_ok(type, name, off, skb) redecl_skb(type, name, off, skb, TC_ACT_OK)
+#define redecl_shot(type, name, off, skb) redecl_skb(type, name, off, skb, TC_ACT_SHOT)
+#define redecl_pass(type, name, off, xdp) redecl_xdp(type, name, off, xdp, XDP_PASS)
+#define redecl_drop(type, name, off, xdp) redecl_xdp(type, name, off, xdp, XDP_DROP)
+
+#define decl_skb(type, name, off, ctx, ret) type* redecl_skb(type, name, off, ctx, ret)
+#define decl_xdp(type, name, off, ctx, ret) type* redecl_xdp(type, name, off, ctx, ret)
+#define decl_ok(type, name, off, skb) decl_skb(type, name, off, skb, TC_ACT_OK)
+#define decl_shot(type, name, off, skb) decl_skb(type, name, off, skb, TC_ACT_SHOT)
+#define decl_pass(type, name, off, xdp) decl_xdp(type, name, off, xdp, XDP_PASS)
+#define decl_drop(type, name, off, xdp) decl_xdp(type, name, off, xdp, XDP_DROP)
 
 #define _get_macro(_0, _1, _2, _3, _4, _5, NAME, ...) NAME
 

@@ -269,6 +269,22 @@ static inline void filter_settings_apply(struct filter_settings* local,
     if (local->array[i] == -1) local->array[i] = global->array[i];
 }
 
+enum link_type {
+  LINK_ETH,  // default value
+  LINK_NONE,
+};
+
+static inline const char* link_type_str(enum link_type link) {
+  switch (link) {
+    case LINK_ETH:
+      return N_("Ethernet");
+    case LINK_NONE:
+      return N_("None");
+    default:
+      return N_("(unknown)");
+  }
+}
+
 struct conn_tuple {
   __u16 local_port, remote_port;
   struct in6_addr local, remote;

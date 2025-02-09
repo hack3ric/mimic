@@ -127,6 +127,16 @@ static int parse_bool(const char* str, __s16* result) {
   return 0;
 }
 
+int parse_link(const char* str, enum link_type* link) {
+  if (strcmp("eth", str) == 0)
+    *link = LINK_ETH;
+  else if (strcmp("none", str) == 0)
+    *link = LINK_NONE;
+  else
+    ret(-EINVAL, "unknown link type: '%s'", str);
+  return 0;
+}
+
 int parse_handshake(char* str, struct filter_handshake* h) {
   if (!str || !h) return -EINVAL;
   int nums[2];
