@@ -100,37 +100,61 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
 
 SEC("xdp.frags")
 int ingress_handler(struct xdp_md* xdp) {
-  decl_pass(struct ethhdr, eth, 0, xdp);
-  __u16 eth_proto = ntohs(eth->h_proto);
-
   struct iphdr* ipv4 = NULL;
   struct ipv6hdr* ipv6 = NULL;
-  __u32 ip_end, ip_payload_len, nexthdr = 0;
+  __u32 l2_end, ip_end, ip_payload_len, ip_proto = 0;
 
-  switch (eth_proto) {
-    case ETH_P_IP:
-      redecl_drop(struct iphdr, ipv4, ETH_HLEN, xdp);
-      ip_end = ETH_HLEN + (ipv4->ihl << 2);
-      ip_payload_len = ntohs(ipv4->tot_len) - (ipv4->ihl << 2);
-      break;
-    case ETH_P_IPV6:
-      redecl_drop(struct ipv6hdr, ipv6, ETH_HLEN, xdp);
-      nexthdr = ipv6->nexthdr;
-      ip_end = ETH_HLEN + sizeof(*ipv6);
-      struct ipv6_opt_hdr* opt = NULL;
-      for (int i = 0; i < 8; i++) {
-        if (!ipv6_is_ext(nexthdr)) break;
-        redecl_drop(struct ipv6_opt_hdr, opt, ip_end, xdp);
-        nexthdr = opt->nexthdr;
-        ip_end += (opt->hdrlen + 1) << 3;
+  switch (link_type) {
+    case LINK_ETH:
+      l2_end = ETH_HLEN;
+      decl_pass(struct ethhdr, eth, 0, xdp);
+      __u16 eth_proto = ntohs(eth->h_proto);
+      switch (eth_proto) {
+        case ETH_P_IP:
+          redecl_drop(struct iphdr, ipv4, l2_end, xdp);
+          break;
+        case ETH_P_IPV6:
+          redecl_drop(struct ipv6hdr, ipv6, l2_end, xdp);
+          break;
+        default:
+          return XDP_PASS;
       }
-      ip_payload_len = ntohs(ipv6->payload_len);
+      break;
+    case LINK_NONE:
+      l2_end = 0;
+      redecl_pass(struct iphdr, ipv4, l2_end, xdp);
+      switch (ipv4->version) {
+        case 4:
+          break;
+        case 6:
+          ipv4 = NULL;
+          redecl_pass(struct ipv6hdr, ipv6, 0, xdp);
+          break;
+        default:
+          return XDP_DROP;
+      }
       break;
     default:
-      return XDP_PASS;
+      return XDP_DROP;
   }
 
-  __u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? nexthdr : 0;
+  if (ipv4) {
+    ip_end = l2_end + (ipv4->ihl << 2);
+    ip_payload_len = ntohs(ipv4->tot_len) - (ipv4->ihl << 2);
+    ip_proto = ipv4->protocol;
+  } else if (ipv6) {
+    ip_proto = ipv6->nexthdr;
+    ip_end = l2_end + sizeof(*ipv6);
+    struct ipv6_opt_hdr* opt = NULL;
+    for (int i = 0; i < 8; i++) {
+      if (!ipv6_is_ext(ip_proto)) break;
+      redecl_drop(struct ipv6_opt_hdr, opt, ip_end, xdp);
+      ip_proto = opt->nexthdr;
+      ip_end += (opt->hdrlen + 1) << 3;
+    }
+    ip_payload_len = ntohs(ipv6->payload_len);
+  }
+
   if (ip_proto != IPPROTO_TCP) return XDP_PASS;
   decl_pass(struct tcphdr, tcp, ip_end, xdp);
 

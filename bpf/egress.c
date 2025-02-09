@@ -71,35 +71,59 @@ static inline void update_tcp_header(struct tcphdr* tcp, __u16 payload_len, __u3
 
 SEC("tc")
 int egress_handler(struct __sk_buff* skb) {
-  decl_ok(struct ethhdr, eth, 0, skb);
-  __u16 eth_proto = ntohs(eth->h_proto);
-
   struct iphdr* ipv4 = NULL;
   struct ipv6hdr* ipv6 = NULL;
-  __u32 ip_end, nexthdr = 0;
+  __u32 l2_end, ip_end, ip_proto = 0;
 
-  switch (eth_proto) {
-    case ETH_P_IP:
-      redecl_shot(struct iphdr, ipv4, ETH_HLEN, skb);
-      ip_end = ETH_HLEN + (ipv4->ihl << 2);
+  switch (link_type) {
+    case LINK_ETH:
+      l2_end = ETH_HLEN;
+      decl_ok(struct ethhdr, eth, 0, skb);
+      __u16 eth_proto = ntohs(eth->h_proto);
+      switch (eth_proto) {
+        case ETH_P_IP:
+          redecl_shot(struct iphdr, ipv4, l2_end, skb);
+          break;
+        case ETH_P_IPV6:
+          redecl_shot(struct ipv6hdr, ipv6, l2_end, skb);
+          break;
+        default:
+          return TC_ACT_OK;
+      }
       break;
-    case ETH_P_IPV6:
-      redecl_shot(struct ipv6hdr, ipv6, ETH_HLEN, skb);
-      nexthdr = ipv6->nexthdr;
-      ip_end = ETH_HLEN + sizeof(*ipv6);
-      struct ipv6_opt_hdr* opt = NULL;
-      for (int i = 0; i < 8; i++) {
-        if (!ipv6_is_ext(nexthdr)) break;
-        redecl_drop(struct ipv6_opt_hdr, opt, ip_end, skb);
-        nexthdr = opt->nexthdr;
-        ip_end += (opt->hdrlen + 1) << 3;
+    case LINK_NONE:
+      l2_end = 0;
+      redecl_ok(struct iphdr, ipv4, l2_end, skb);
+      switch (ipv4->version) {
+        case 4:
+          break;
+        case 6:
+          ipv4 = NULL;
+          redecl_ok(struct ipv6hdr, ipv6, 0, skb);
+          break;
+        default:
+          return TC_ACT_OK;
       }
       break;
     default:
-      return TC_ACT_OK;
+      return TC_ACT_SHOT;
   }
 
-  __u8 ip_proto = ipv4 ? ipv4->protocol : ipv6 ? nexthdr : 0;
+  if (ipv4) {
+    ip_end = l2_end + (ipv4->ihl << 2);
+    ip_proto = ipv4->protocol;
+  } else if (ipv6) {
+    ip_proto = ipv6->nexthdr;
+    ip_end = l2_end + sizeof(*ipv6);
+    struct ipv6_opt_hdr* opt = NULL;
+    for (int i = 0; i < 8; i++) {
+      if (!ipv6_is_ext(ip_proto)) break;
+      redecl_shot(struct ipv6_opt_hdr, opt, ip_end, skb);
+      ip_proto = opt->nexthdr;
+      ip_end += (opt->hdrlen + 1) << 3;
+    }
+  }
+
   if (ip_proto != IPPROTO_UDP) return TC_ACT_OK;
   decl_ok(struct udphdr, udp, ip_end, skb);
 
@@ -181,7 +205,7 @@ int egress_handler(struct __sk_buff* skb) {
     ipv4->tot_len = new_len;
     ipv4->protocol = IPPROTO_TCP;
 
-    int off = ETH_HLEN + IPV4_CSUM_OFF;
+    int off = l2_end + IPV4_CSUM_OFF;
     try_shot(bpf_l3_csum_replace(skb, off, old_len, new_len, 2));
     try_shot(bpf_l3_csum_replace(skb, off, htons(IPPROTO_UDP), htons(IPPROTO_TCP), 2));
   } else if (ipv6) {
