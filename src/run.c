@@ -84,7 +84,7 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
         args->filter_count += ret;
       break;
     case 'L':
-      try(parse_link(arg, &args->link_type));
+      try(parse_link_type(arg, &args->link_type));
       break;
     case 'x':
       args->xdp_mode = try(parse_xdp_mode(arg));
@@ -592,6 +592,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   // Save state to lock file
   struct lock_content lock_content = {
     .pid = getpid(),
+    .link_type = args->link_type,
     .egress_id = _get_prog_id(egress_handler),
     .ingress_id = _get_prog_id(ingress_handler),
     .whitelist_id = _get_map_id(mimic_whitelist),
@@ -619,7 +620,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
     log_trace(_("notified supervisor we are ready"));
 
   log_info(_("Mimic successfully deployed on %s"), args->ifname);
-  show_overview(ifindex, mimic_whitelist_fd, &args->gsettings, log_verbosity);
+  show_overview(ifindex, args->link_type, mimic_whitelist_fd, &args->gsettings, log_verbosity);
   if (args->filter_count <= 0) log_warn(_("no filter specified"));
 
   struct epoll_event ev;

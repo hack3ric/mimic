@@ -54,9 +54,13 @@ const struct argp show_argp = {
   N_("\vSee mimic(1) for detailed usage."),
 };
 
-int show_overview(int ifindex, int whitelist_fd, struct filter_settings* gs, int log_verbosity) {
+int show_overview(int ifindex, enum link_type link_type, int whitelist_fd,
+                  struct filter_settings* gs, int log_verbosity) {
   if (log_verbosity >= 0 && !LOG_ALLOW_INFO) return 0;
   FILE* out = log_verbosity >= 0 ? stderr : stdout;
+
+  if (LOG_ALLOW_INFO) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
+  fprintf(out, _("  %sLink Type:%s %s\n"), BOLD, RESET, link_type_str(link_type));
 
   struct bpf_xdp_query_opts xdp_opts = {.sz = sizeof(xdp_opts)};
   try(bpf_xdp_query(ifindex, 0, &xdp_opts), _("failed to query XDP: %s"), strret);
@@ -173,7 +177,7 @@ int subcmd_show(struct show_args* args) {
     int whitelist_fd raii(closep) =
       try(bpf_map_get_fd_by_id(lock_content.whitelist_id), _("failed to get fd of map '%s': %s"),
           "mimic_whitelist", strret);
-    show_overview(ifindex, whitelist_fd, &lock_content.settings, -1);
+    show_overview(ifindex, lock_content.link_type, whitelist_fd, &lock_content.settings, -1);
     printf("\n");
   }
 

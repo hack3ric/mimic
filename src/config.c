@@ -127,7 +127,7 @@ static int parse_bool(const char* str, __s16* result) {
   return 0;
 }
 
-int parse_link(const char* str, enum link_type* link) {
+int parse_link_type(const char* str, enum link_type* link) {
   if (strcmp("eth", str) == 0)
     *link = LINK_ETH;
   else if (strcmp("none", str) == 0)
@@ -282,6 +282,9 @@ int parse_config_file(FILE* file, struct run_args* args) {
       }
       log_verbosity = parsed;
 
+    } else if (strcmp(k, "link_type") == 0) {
+      try(parse_link_type(v, &args->link_type));
+
     } else if (strcmp(k, "filter") == 0) {
       unsigned int fc = args->filter_count;
       ret = parse_filter(v, &args->filters[fc], &args->info[fc], sizeof_array(args->filters) - fc);
@@ -333,6 +336,8 @@ int parse_lock_file(FILE* file, struct lock_content* c) {
       version_checked = true;
     } else if (strcmp(k, "pid") == 0)
       try(parse_int_any(v, &c->pid));
+    else if (strcmp(k, "link_type") == 0)
+      try(parse_link_type(v, &c->link_type));
     else if (strcmp(k, "egress_id") == 0)
       try(parse_int_any(v, &c->egress_id));
     else if (strcmp(k, "ingress_id") == 0)
@@ -351,6 +356,7 @@ int parse_lock_file(FILE* file, struct lock_content* c) {
 int write_lock_file(int fd, const struct lock_content* c) {
   try(dprintf(fd, "version=%s\n", argp_program_version));
   try(dprintf(fd, "pid=%d\n", c->pid));
+  try(dprintf(fd, "link_type=%s\n", link_type_str(c->link_type)));
   try(dprintf(fd, "egress_id=%d\n", c->egress_id));
   try(dprintf(fd, "ingress_id=%d\n", c->ingress_id));
   try(dprintf(fd, "whitelist_id=%d\n", c->whitelist_id));
