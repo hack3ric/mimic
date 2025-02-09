@@ -277,11 +277,11 @@ enum link_type {
 static inline const char* link_type_str(enum link_type link) {
   switch (link) {
     case LINK_ETH:
-      return N_("Ethernet");
+      return "eth";
     case LINK_NONE:
-      return N_("None");
+      return "none";
     default:
-      return N_("(unknown)");
+      return "(unknown)";
   }
 }
 

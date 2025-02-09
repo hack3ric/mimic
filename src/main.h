@@ -29,7 +29,7 @@ struct args {
 #ifdef MIMIC_USE_LIBXDP
       bool use_libxdp;
 #endif
-      enum link_type link_type;
+      enum link_type link_type;  // TODO: auto detect
     } run;
     struct show_args {
       const char* ifname;
@@ -44,19 +44,19 @@ extern const struct argp show_argp;
 
 int subcmd_run(struct run_args* args);
 
-int show_overview(int ifindex, int whitelist_fd, struct filter_settings* gsettings,
-                  int log_verbosity);
+int show_overview(int ifindex, enum link_type link_type, int whitelist_fd,
+                  struct filter_settings* gsettings, int log_verbosity);
 int subcmd_show(struct show_args* args);
 
 struct lock_content {
   pid_t pid;
-  enum link_type link;
+  enum link_type link_type;
   int egress_id, ingress_id;
   int whitelist_id, conns_id;
   struct filter_settings settings;
 };
 
-int parse_link(const char* str, enum link_type* link);
+int parse_link_type(const char* str, enum link_type* link);
 int parse_handshake(char* str, struct filter_handshake* h);
 int parse_keepalive(char* str, struct filter_keepalive* k);
 int parse_padding(const char* str, __s16* padding);
