@@ -6,6 +6,7 @@ Build-Depends:
  debhelper-compat (= 13),
  dh-sequence-dkms,
  dh-sequence-dlopenlibdeps,
+ dh-sequence-installsysusers,
  dh-exec,
  clang-16,
  python3,

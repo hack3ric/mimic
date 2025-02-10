@@ -2,7 +2,6 @@
 set -e
 
 if [ "$1" = "purge" ]; then
-  systemd-sysusers
   rmdir /run/mimic || true
 fi
 

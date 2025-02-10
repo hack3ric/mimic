@@ -20,6 +20,7 @@ override_dh_auto_configure:
 	sed kmod/dkms.conf.in \
 		-e 's|@@EXTRA_OPTS@@|CHECKSUM_HACK=kfunc|' \
 		> kmod/dkms.conf
+	mv install/mimic.sysusers debian/mimic.sysusers
 
 override_dh_auto_build:
 	tar xf `bash -c '_tarballs=(/usr/src/linux-source-*.tar.*); echo $${_tarballs[0]}'`
