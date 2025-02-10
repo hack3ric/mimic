@@ -541,7 +541,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
       log_error(_("failed to attach XDP program: %s"), strerror(-retcode));
 #ifdef MIMIC_CHECKSUM_HACK_kfunc
       if (retcode == -EINVAL && !is_kmod_loaded())
-        log_error(_("hint: did you load the Mimic kernel module?"));
+        log_error(_("hint: is the Mimic kernel module loaded?"));
 #endif
       cleanup(retcode);
     }
@@ -553,7 +553,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
       log_error(_("failed to load BPF program: %s"), strerror(-retcode));
 #ifdef MIMIC_CHECKSUM_HACK_kfunc
       if (retcode == -EINVAL && !is_kmod_loaded())
-        log_error(_("hint: did you load the Mimic kernel module?"));
+        log_error(_("hint: is the Mimic kernel module loaded?"));
 #endif
       cleanup(retcode);
     }

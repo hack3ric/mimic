@@ -64,7 +64,7 @@ static int parse_host_port(char* str, char** host, __u16* port) {
   *port = _port;
 
   if (strchr(str, ':') && (*str != '[' || port_str[-2] != ']'))
-    ret(-EINVAL, _("did you forget square brackets around an IPv6 address?"));
+    ret(-EINVAL, _("forgot square brackets around an IPv6 address?"));
   else if (*str == '[' && port_str[-2] != ']')
     ret(-EINVAL, _("missing ']': '%s'"), str);
   else if (*str != '[' && port_str[-2] == ']')
