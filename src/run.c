@@ -610,10 +610,8 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
     log_trace(_("notified supervisor we are ready"));
 
   log_info(_("Mimic successfully deployed on %s"), args->ifname);
-  if (args->filter_count <= 0)
-    log_warn(_("no filter specified"));
-  else
-    show_overview(ifindex, mimic_whitelist_fd, &args->gsettings, log_verbosity);
+  show_overview(ifindex, mimic_whitelist_fd, &args->gsettings, log_verbosity);
+  if (args->filter_count <= 0) log_warn(_("no filter specified"));
 
   struct epoll_event ev;
   struct epoll_event events[EPOLL_MAX_EVENTS];
