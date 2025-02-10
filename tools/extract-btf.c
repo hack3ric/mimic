@@ -55,7 +55,7 @@ static inline __u32 x32toh(enum endianness x, __u32 i) {
 //   return x == E_LITTLE_ENDIAN ? htole32(i) : i;
 // }
 static inline const char* btf_magic(enum endianness x) {
-  return x == E_LITTLE_ENDIAN ? BTF_MAGIC_LE : BTF_MAGIC_EE;
+  return x == E_LITTLE_ENDIAN ? BTF_MAGIC_LE : BTF_MAGIC_BE;
 }
 
 #else
