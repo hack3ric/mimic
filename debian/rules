@@ -49,4 +49,4 @@ override_dh_dkms:
 override_dh_auto_clean:
 	dh_auto_clean
 	rm -rf linux-source-*
-	rm -f debian/mimic@.service
+	rm -f debian/mimic@.service debian/mimic.sysusers
