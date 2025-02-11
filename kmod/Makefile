@@ -49,7 +49,7 @@ enable_build_hack := 1
 
 BWRAP := bwrap \
 	--dev-bind / / \
-	--ro-bind overlay $(SYSTEM_BUILD_DIR)
+	--ro-bind overlay $(shell realpath $(SYSTEM_BUILD_DIR))
 
 RESOLVE_BTFIDS ?= /usr/lib/mimic/resolve_btfids
 
