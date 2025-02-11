@@ -2,6 +2,12 @@
 
 ## 0.6.4 (2025-??-??)
 
+- Add support for interfaces without L2, e.g. PPP or TUN by specifying `--link-type=none`
+- Debian: fix install on non-systemd systems via dh_installsysusers
+- Debian: mimic-dkms: promote lz4, xz-utils to Depends as they are used in official kernels
+- Use bubblewrap for kernel module build hack, fixing issues with Linux 6.13 on Debian
+- Various bug fixes
+
 ## 0.6.3 (2025-01-15)
 
 - Add libxdp support via dlopen(3)

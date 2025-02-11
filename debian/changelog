@@ -2,6 +2,9 @@ mimic (0.6.4-1) UNRELEASED; urgency=medium
 
   [ Eric Long ]
   * New upstream release.
+  * Add autopkgtest integrated-tests
+  * Use dh_installsysusers to fix piuparts
+  * mimic-dkms: promote lz4 and xz-utils to Depends as they are used in official kernel 
 
   [ Andreas Beckmann ]
   * Declare Testsuite: autopkgtest-pkg-dkms.
