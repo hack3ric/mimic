@@ -1,0 +1,13 @@
+Tests: integration-tests
+Depends: @,
+ linux-image-generic,
+ linux-headers-generic,
+ bats,
+ bc,
+ conntrack,
+ ethtool,
+ jq,
+ socat,
+ tshark,
+ wireguard-tools,
+Restrictions: needs-root, isolation-machine, build-needed, allow-stderr
