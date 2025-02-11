@@ -12,22 +12,38 @@ endianness="$1"
 : "${BOOT_DIR:="/boot"}"
 
 if [ -f "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" ]; then
+  >&2 echo "Found vmlinuz at $BOOT_DIR/vmlinuz$VMLINUX_SUFFIX"
+
+  >&2 echo "Trying extract-vmlinux (only works on bzImage and with relevant decompressor installed)..."
   eval $EXTRACT_VMLINUX "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX"
-  [ $? -eq 0 ] || eval $EXTRACT_BTF "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" "$endianness"
+
+  if [ $? -ne 0 ]; then
+    >&2 echo "Trying extract-btf (directly extract BTF by looking for magic numbers)..."
+    eval $EXTRACT_BTF "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" "$endianness"
+  fi
+
   if [ $? -ne 0 ]; then
     >&2 echo "ERROR: cannot extract BTF from '$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX'"
     exit 1
   fi
+
 elif [ -f "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" ]; then
+  >&2 echo "Found vmlinux at $BOOT_DIR/vmlinux$VMLINUX_SUFFIX"
+
   if readelf -h "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" >/dev/null 2>&1; then
+    >&2 echo "Seems vmlinux is ELF, using it directly"
     cat "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX"
+
   else
+    >&2 echo "Trying extract-btf (directly extract BTF by looking for magic numbers)..."
     eval $EXTRACT_BTF "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" "$endianness"
+
     if [ $? -ne 0 ]; then
       >&2 echo "ERROR: cannot extract BTF from '$BOOT_DIR/vmlinux$VMLINUX_SUFFIX'"
       exit 1
     fi
   fi
+
 else
   >&2 echo "ERROR: no boot image found; specify BOOT_DIR and VMLINUX_SUFFIX to match \$BOOT_DIR/vmlinu{x,z}\$VMLINUX_SUFFIX"
   exit 1
