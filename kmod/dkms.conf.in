@@ -1,7 +1,7 @@
 PACKAGE_NAME="mimic"
 PACKAGE_VERSION="#MODULE_VERSION#"
 MAKE[0]="make KERNEL_UNAME=$kernelver @@EXTRA_OPTS@@"
-CLEAN="make clean"
+CLEAN="make clean KERNEL_UNAME=$kernelver"
 BUILT_MODULE_NAME[0]="mimic"
 DEST_MODULE_LOCATION[0]="/kernel/drivers/misc"
 AUTOINSTALL="yes"
