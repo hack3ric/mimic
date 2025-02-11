@@ -50,7 +50,8 @@ Depends:
  ${misc:Depends},
  ${shlibs:Depends},
  binutils,
- pahole
+ pahole,
+ bubblewrap
 Recommends:
  xz-utils,
  bzip2,
