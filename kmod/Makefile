@@ -44,10 +44,10 @@ resolve_btfids_exists := 0
 endif  # resolve_btfids
 
 ifeq ($(vmlinux_exists)$(resolve_btfids_exists),11)
-build_dir := $(SYSTEM_BUILD_DIR)
 else
 enable_build_hack := 1
-build_dir := build
+
+BWRAP := bwrap --dev-bind / / --ro-bind overlay
 
 RESOLVE_BTFIDS ?= /usr/lib/mimic/resolve_btfids
 
@@ -65,23 +65,23 @@ all: build
 .PHONY: build
 build:
 ifdef enable_build_hack
-	-cp -rL $(SYSTEM_BUILD_DIR) $(build_dir)
+	-cp -rL $(SYSTEM_BUILD_DIR) overlay
 ifeq ($(vmlinux_exists),0)
-	$(VMLINUX_TO_BTF) >$(build_dir)/vmlinux
+	$(VMLINUX_TO_BTF) >overlay/vmlinux
 endif
 ifeq ($(resolve_btfids_exists),0)
 ifeq ($(wildcard $(RESOLVE_BTFIDS)),)
-	@echo "ERROR: `resolve_btfids` not found; please compile it from Linux kernel source and re-run make with RESOLVE_BTFIDS=<path>"
+	@echo "ERROR: \`resolve_btfids\` not found; please compile it from Linux kernel source and re-run make with RESOLVE_BTFIDS=<path>"
 	@exit 1
 endif
-	install -Dm755 $(RESOLVE_BTFIDS) $(build_dir)/tools/bpf/resolve_btfids/resolve_btfids
+	install -Dm755 $(RESOLVE_BTFIDS) overlay/tools/bpf/resolve_btfids/resolve_btfids
 endif  # resolve_btfids_exists
 endif  # enable_build_hack
-	$(MAKE) -C $(build_dir) M=$(CURDIR) modules
+	$(BWRAP) $(MAKE) -C $(SYSTEM_BUILD_DIR) M=$(CURDIR) modules
 
 .PHONY: clean
 clean:
-	rm -rf build dkms.conf AKMBUILD
+	rm -rf overlay/ dkms.conf AKMBUILD
 	[ ! -d $(SYSTEM_BUILD_DIR) ] || $(MAKE) -C $(SYSTEM_BUILD_DIR) M=$(CURDIR) clean
 
 dkms.conf: dkms.conf.in
