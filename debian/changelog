@@ -1,6 +1,10 @@
 mimic (0.6.4-1) UNRELEASED; urgency=medium
 
+  [ Eric Long ]
   * New upstream release.
+
+  [ Andreas Beckmann ]
+  * Declare Testsuite: autopkgtest-pkg-dkms.
 
  -- Eric Long <i@hack3r.moe>  Tue, 11 Feb 2025 20:28:16 +0800
 
