@@ -83,7 +83,7 @@ endif  # enable_build_hack
 
 .PHONY: clean
 clean:
-	rm -rf overlay/ dkms.conf AKMBUILD
+	rm -rf overlay/
 	[ ! -d $(SYSTEM_BUILD_DIR) ] || $(MAKE) -C $(SYSTEM_BUILD_DIR) M=$(CURDIR) clean
 
 dkms.conf: dkms.conf.in

@@ -170,6 +170,7 @@ clean:
 	find . -type f -name *.o -delete
 	rm -f src/bpf_skel.h
 	rm -f bpf/vmlinux/system.h
+	rm -f kmod/dkms.conf kmod/AKMBUILD
 
 out/.options.%:
 	$(mkdir_p)
