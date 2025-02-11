@@ -1,5 +1,7 @@
 # Changelog for Mimic
 
+## 0.6.4 (2025-??-??)
+
 ## 0.6.3 (2025-01-15)
 
 - Add libxdp support via dlopen(3)
