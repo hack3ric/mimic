@@ -47,7 +47,9 @@ ifeq ($(vmlinux_exists)$(resolve_btfids_exists),11)
 else
 enable_build_hack := 1
 
-BWRAP := bwrap --dev-bind / / --ro-bind overlay
+BWRAP := bwrap \
+	--dev-bind / / \
+	--ro-bind overlay $(SYSTEM_BUILD_DIR)
 
 RESOLVE_BTFIDS ?= /usr/lib/mimic/resolve_btfids
 
