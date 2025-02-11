@@ -1,5 +1,3 @@
-#!/usr/bin/dh-exec
-
 out/mimic usr/bin
 docs/eth0.conf.example usr/share/doc/mimic
 docs/getting-started.md usr/share/doc/mimic
