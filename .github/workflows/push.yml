@@ -89,7 +89,7 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.distro.codename }}-packages
+          name: packages-${{ matrix.distro.codename }}
           path: |
             debian/artifacts/*.deb
             debian/artifacts/*.ddeb
@@ -103,11 +103,11 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: noble-packages
-          path: noble-packages
+          name: packages-noble
+          path: packages-noble
       - name: Test Install
         run: |
-          sudo apt install ./noble-packages/*.deb linux-headers-`uname -r`
+          sudo apt install ./packages-noble/*.deb linux-headers-`uname -r`
           sudo modprobe mimic
       - name: Upload log
         if: always()
