@@ -8,7 +8,7 @@ Build-Depends:
  dh-sequence-dlopenlibdeps,
  dh-sequence-installsysusers,
  dh-exec,
- clang-16,
+ clang,
  python3,
  bpftool,
  ronn,
