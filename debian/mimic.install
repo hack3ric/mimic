@@ -1,3 +1,3 @@
 out/mimic usr/bin
-docs/eth0.conf.example usr/share/doc/mimic
+docs/eth0.conf etc/mimic
 docs/getting-started.md usr/share/doc/mimic
