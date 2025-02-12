@@ -45,10 +45,13 @@ static const struct argp_option options[] = {
   {"filter", 'f', N_("FILTER"), 0,
    N_("Specify what packets to process. This may be specified for multiple times."), 1},
   {"link-type", 'L', N_("TYPE"), 0,
-   N_("Specify link layer type, can be 'eth' (Ethernet, default) or 'none' (no L2 header, like PPP "
-      "or TUN)"),
+   N_("Specify link layer type, can be 'eth' (Ethernet) or 'none' (no L2 header, like PPP "
+      "or TUN). Defaults to 'eth'."),
    1},
-  {"xdp-mode", 'x', N_("MODE"), 0, N_("Force XDP attach mode, either 'skb' or 'native'"), 1},
+  {"xdp-mode", 'x', N_("MODE"), 0,
+   N_("Force XDP attach mode, either 'skb' or 'native'. Defaults to 'native' if target interface "
+      "supports it, or 'skb'."),
+   1},
 #ifdef MIMIC_USE_LIBXDP
   {"use-libxdp", 'X', NULL, 0, N_("Use libxdp instead of libbpf to load XDP program"), 1},
 #endif

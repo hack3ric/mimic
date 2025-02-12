@@ -28,13 +28,13 @@
 : Specify what packets to process. This may be specified for multiple times. (see [**CONFIGURATION/Filters**](#filters))
 
 `-L, --link-type=TYPE`
-: Specify link layer type, can be 'eth' (Ethernet, default) or 'none' (no L2 header, like PPP or TUN)
+: Specify link layer type, can be 'eth' (Ethernet) or 'none' (no L2 header, like PPP or TUN). Defaults to 'eth'.
 
 `-x, --xdp-mode`
-: Force XDP attach mode, either skb or native
+: Force XDP attach mode, either 'skb' or 'native'. Defaults to 'native' if target interface supports it, or 'skb'.
 
 `-X, --use-libxdp`
-: Use libxdp Use libxdp instead of libbpf to load XDP program.
+: Use libxdp instead of libbpf to load XDP program.
 : libxdp supports chaining multiple XDP programs on one interface. Mimic loads libxdp dynamically using dlopen.
 : Only available when built with USE_LIBXDP=1.
 
