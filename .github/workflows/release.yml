@@ -20,6 +20,9 @@ jobs:
             image: debian:bookworm-slim
             extra-repos: |
               deb http://deb.debian.org/debian bookworm-backports main
+            extra-cmd: |
+              sed -i 's/clang/clang-16/' debian/control
+              sed -i 's/BPF_CC=clang/BPF_CC=clang-16/' debian/rules
           - name: Ubuntu 24.04
             codename: noble
             image: ubuntu:noble
@@ -28,6 +31,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Run pre-building script
+        run: ${{ matrix.distro.extra-cmd }}
       - name: Build
         uses: jtdor/build-deb-action@v1
         with:
