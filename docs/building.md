@@ -55,6 +55,7 @@ Then install with:
 ```
 
 Debian < 12 (bullseye, buster or earlier) and Ubuntu < 23.04 (kinetic, jammy or earlier) are not supported due to outdated libbpf 0.x and Linux kernel < 6.1.
+Debian 12 and Ubuntu before 24.10 need to enable Backports repository for the build dependency `dh-sequence-dlopenlibdeps`.
 
 ## Notes on Building Kernel Module
 
