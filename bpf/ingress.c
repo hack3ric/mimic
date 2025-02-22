@@ -74,6 +74,7 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
   }
 
   for (__u32 i = 0; i < len; i++) {
+    barrier_var(i);
     if (unlikely(i > 80 - 1)) return XDP_DROP;
     switch (opt_buf[i]) {
       case 0:  // end of option list
