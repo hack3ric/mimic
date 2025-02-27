@@ -14,7 +14,7 @@
 #endif
 
 static inline __u32 u32_fold(__u32 num) { return (num & 0xffff) + (num >> 16); }
-static inline __u16 csum_fold(__u32 csum) { return ~u32_fold(u32_fold(csum)); }
+static inline __u16 csum_fold(__u32 csum) { return ~u32_fold(u32_fold(csum)) ?: 0xffff; }
 
 #ifdef MIMIC_BPF
 
