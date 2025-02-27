@@ -1,0 +1,10 @@
+# Mimic Debian Packaging
+
+Mimic consists of userspace CLI, eBPF packet filter, and kernel module. It is the most convenient way to distribute them as Linux distro packages, which Mimic does for Debian in both upstream and in official repository, with the latter having suffix `+ds` indicating removal of upstream debian/ directory from its orig tarball.
+
+The two Mimic Debian packages share most of their content, but there are differences:
+
+- d/changelog is complete separate from each other
+- d/control's `Vcs-*` field is different: upstream one points to upstream directly, while Debian's official one should point to https://salsa.debian.org/hacker/mimic (currently)
+
+Make sure to check the above to adhere to Debian packaging guidelines.
