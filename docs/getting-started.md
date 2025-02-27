@@ -16,7 +16,7 @@ Deploying Mimic does not require changing much of your existing configuration, a
 
 Mimic ships systemd service in distro packages. It takes care of a lot of things such as loading [kernel module](#kernel-module) and running Mimic as a service.
 
-To use it, first create a configuration for an interface at `/etc/mimic/<interface>.conf`. See [`/usr/share/doc/mimic/eth0.conf.example`](eth0.conf.example) for example configuration.
+To use it, first create a configuration for an interface at `/etc/mimic/<interface>.conf`. See [`/usr/share/doc/mimic/eth0.conf.example`](../install/eth0.conf) for example configuration.
 
 Then simply start the per-interface service, `eth0` in the following example:
 
