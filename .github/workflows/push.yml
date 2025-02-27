@@ -114,4 +114,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dkms-make-log
-          path: /var/lib/dkms/mimic/0.6.4/build/make.log
+          path: /var/lib/dkms/mimic/0.6.5/build/make.log

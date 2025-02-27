@@ -1,5 +1,7 @@
 # Changelog for Mimic
 
+## 0.6.5 (2025-??-??)
+
 ## 0.6.4 (2025-02-19)
 
 - Add support for interfaces without L2, e.g. PPP or TUN by specifying `--link-type=none`
