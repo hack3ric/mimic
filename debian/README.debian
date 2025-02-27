@@ -13,5 +13,6 @@ differences:
 - d/control's `Vcs-*` field is different: upstream one points to upstream
   directly, while Debian's official one should point to
   https://salsa.debian.org/hacker/mimic (currently)
+- Debian's d/copyright contains one extra line: `Files-Excluded: debian`
 
 Make sure to check the above to adhere to Debian packaging guidelines.
