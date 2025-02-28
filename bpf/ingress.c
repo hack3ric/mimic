@@ -381,5 +381,17 @@ int ingress_handler(struct xdp_md* xdp) {
 
   udp->check = htons(csum_fold(csum));
 
+  decl_drop(struct tcphdr, wg_helper, ip_end, xdp);
+  bool oops = false;
+  bpf_spin_lock(&conn->lock);
+  // assume little endian
+  if (wg_helper->check - conn->wg_ctr > 100) {
+    oops = true;
+    conn->wg_ctr++;
+  } else
+    conn->wg_ctr = wg_helper->check;
+  bpf_spin_unlock(&conn->lock);
+  if (oops) log_error("Oops %d %x", wg_helper->check, ntohs(udp->check));
+
   return XDP_PASS;
 }

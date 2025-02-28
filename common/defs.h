@@ -305,6 +305,7 @@ struct connection {
     __u8 cooldown_mul;
     bool keepalive_sent;
     bool initiator;
+    __u16 wg_ctr;
   };
   struct {
     struct filter_settings settings;
