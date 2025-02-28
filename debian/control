@@ -18,7 +18,7 @@ Build-Depends:
  libxdp-dev,
  linux-source,
  linux-headers-generic,
-Standards-Version: 4.7.0
+Standards-Version: 4.7.2
 Homepage: https://github.com/hack3ric/mimic
 Rules-Requires-Root: no
 Vcs-Git: https://github.com/hack3ric/mimic.git
