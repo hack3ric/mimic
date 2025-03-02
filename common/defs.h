@@ -167,7 +167,7 @@ static inline void freestrp(char** ptr) { freep((void*)ptr); }
 // Used for reading packet data in bulk
 #define SEGMENT_SIZE 64
 
-#define INIT_CWND 0xffff
+#define INIT_CWND 212992  // Linux default
 #define CWND_SCALE 7
 
 #define SECOND 1000000000ul
@@ -294,6 +294,7 @@ struct connection {
   struct bpf_spin_lock lock;
   __u32 seq, ack_seq;
   __u32 cwnd;
+  __u32 peer_cwnd;
 
   struct {
     enum conn_state {

@@ -272,7 +272,7 @@ int ingress_handler(struct xdp_md* xdp) {
         seq = conn->seq;
         ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
         conn->peer_mss = opt.mss;
-        conn->cwnd = cwnd = 44 * opt.mss;
+        conn->cwnd = cwnd = INIT_CWND;
       } else {
         goto fsm_error;
       }
@@ -299,15 +299,14 @@ int ingress_handler(struct xdp_md* xdp) {
       } else br_likely {
         will_send_ctrl_packet = will_drop = false;
         conn->ack_seq = next_ack_seq(tcp, payload_len);
-        __u32 peer_mss = conn->peer_mss ?: 1460;
-        __u32 upper_bound = 20 * peer_mss;
-        __u32 lower_bound = 4 * peer_mss;
+        __u32 upper_bound = INIT_CWND / 2;
+        __u32 lower_bound = INIT_CWND / 4;
         if (random % (upper_bound - lower_bound) + lower_bound >= conn->cwnd) {
           will_send_ctrl_packet = true;
           flags |= TCP_FLAG_ACK;
           seq = conn->seq;
           ack_seq = conn->ack_seq;
-          conn->cwnd = cwnd = 44 * peer_mss;
+          conn->cwnd = cwnd = INIT_CWND;
         }
         conn->cwnd -= payload_len;
       }
