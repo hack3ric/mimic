@@ -335,7 +335,15 @@ int ingress_handler(struct xdp_md* xdp) {
 
   if (flags & TCP_FLAG_SYN && flags & TCP_FLAG_ACK) log_conn(LOG_CONN_ACCEPT, &conn_key);
   if (will_send_ctrl_packet) {
-    __u32 out_cwnd = flags & TCP_FLAG_RST ? 0 : settings->max_window ? 0xffff << CWND_SCALE : cwnd;
+    __u32 out_cwnd;
+    if (flags & TCP_FLAG_RST)
+      out_cwnd = 0;
+    else if (flags & TCP_FLAG_SYN)
+      out_cwnd = 0xffff;
+    else if (settings->max_window)
+      out_cwnd = 0xffff << CWND_SCALE;
+    else
+      out_cwnd = cwnd;
     send_ctrl_packet(&conn_key, flags, seq, ack_seq, out_cwnd);
   }
   if (unlikely(flags & TCP_FLAG_RST)) {

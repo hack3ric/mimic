@@ -209,7 +209,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
   };
   tcp_flag_word(tcp) = flags;
   tcp->doff = header_len >> 2;
-  tcp->window = htons(s->cwnd >> (flags & TCP_FLAG_ACK ? CWND_SCALE : 0));
+  tcp->window = htons(s->cwnd >> (flags & TCP_FLAG_SYN ? 0 : CWND_SCALE));
 
   if (flags & TCP_FLAG_SYN) {
     // Look up MTU in time for (probably) correctness
