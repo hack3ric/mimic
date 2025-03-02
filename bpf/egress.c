@@ -191,7 +191,6 @@ int egress_handler(struct __sk_buff* skb) {
       partial_pre_csum += ip_proto;
       partial_pre_csum += udp_len;
       udp->check = htons(~csum_fold(partial_pre_csum));
-      if (udp->check == 0) udp->check = 0xffff;
       ip_summed = CHECKSUM_PARTIAL;
     }
     return store_packet(skb, ip_end, &conn_key, ip_summed);

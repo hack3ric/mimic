@@ -380,6 +380,7 @@ int ingress_handler(struct xdp_md* xdp) {
   csum += u32_fold(ntohl(csum_diff));
 
   udp->check = htons(csum_fold(csum));
+  if (udp->check == 0) udp->check = 0xffff;
 
   return XDP_PASS;
 }
