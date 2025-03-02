@@ -281,8 +281,13 @@ int ingress_handler(struct xdp_md* xdp) {
     br_likely case CONN_ESTABLISHED:
       if (unlikely(tcp->syn)) {
         goto fsm_error;
-      } else if (ntohl(tcp->seq) == conn->ack_seq - 1) {
+      } else if (ntohl(tcp->seq) == conn->ack_seq - 1 && payload_len < 2) {
         // Received keepalive; send keepalive ACK
+        //
+        // XXX: There's a trivial edge case where the last transmitted data packet from peer is lost
+        // and `conn->ack_seq` is not updated. In this case keepalive packets are indistinguishable
+        // and connection will simply reset after peer's maximum keepalive tries reached. I guess
+        // it's fine.
         flags |= TCP_FLAG_ACK;
         is_keepalive = true;
         seq = conn->seq;
@@ -293,6 +298,9 @@ int ingress_handler(struct xdp_md* xdp) {
         will_send_ctrl_packet = false;
         is_keepalive = true;
         conn->keepalive_sent = false;
+      } else if (!tcp->psh && payload_len == 1) {
+        // TODO: handle window probe
+        will_send_ctrl_packet = false;
       } else if (!tcp->psh && payload_len == 0) {
         // Empty segment without PSH will be treated as control packet
         will_send_ctrl_packet = false;

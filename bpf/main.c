@@ -20,7 +20,7 @@ int send_ctrl_packet(struct conn_tuple* conn, __be32 flags, __u32 seq, __u32 ack
   item->type = RB_ITEM_SEND_OPTIONS;
   item->send_options = (struct send_options){
     .conn = *conn,
-    .flags = ntohl(flags) >> 16,
+    .flags = flags,
     .seq = seq,
     .ack_seq = ack_seq,
     .cwnd = cwnd,

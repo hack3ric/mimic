@@ -357,10 +357,22 @@ static __always_inline int time_diff_sec(__u64 a, __u64 b) {
 
 struct send_options {
   struct conn_tuple conn;
-  __u16 flags;
+  __be32 flags;
   __u32 seq, ack_seq;
   __u32 cwnd;
 };
+
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+enum {
+  TCP_FLAGS_MASK = 0x00ff0000,
+  TCP_GARBAGE_BYTE = 0x01000000,
+};
+#else
+enum {
+  TCP_FLAGS_MASK = 0x0000ff00,
+  TCP_GARBAGE_BYTE = 0x00000001,
+};
+#endif
 
 // need to define `log_verbosity` besides including this file.
 #define LOG_ALLOW_ERROR (log_verbosity >= LOG_ERROR)

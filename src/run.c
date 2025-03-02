@@ -189,10 +189,12 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
 
   try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strret);
 
-  __be32 flags = htonl(s->flags << 16);
+  __be32 flags = s->flags & TCP_FLAGS_MASK;
+  bool garbage_byte = s->flags & TCP_GARBAGE_BYTE;
 
   // TCP header + (MSS + window scale + SACK PERM) if SYN
-  size_t buf_len = sizeof(struct tcphdr) + (flags & TCP_FLAG_SYN ? 3 * 4 : 0);
+  size_t header_len = sizeof(struct tcphdr) + (flags & TCP_FLAG_SYN ? 3 * 4 : 0);
+  size_t buf_len = header_len + garbage_byte;
   csum += buf_len;
 
   void* buf raii(freep) = malloc(buf_len);
@@ -206,7 +208,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
     .urg_ptr = 0,
   };
   tcp_flag_word(tcp) = flags;
-  tcp->doff = buf_len >> 2;
+  tcp->doff = header_len >> 2;
   tcp->window = htons(s->cwnd >> (flags & TCP_FLAG_ACK ? CWND_SCALE : 0));
 
   if (flags & TCP_FLAG_SYN) {
@@ -226,6 +228,9 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
     memcpy(opt += 4, (__u8[]){1, 3, 3, CWND_SCALE}, 4);     // window scaling
     memcpy(opt += 4, (__u8[]){1, 1, 4, 2}, 4);              // SACK permitted
   }
+
+  // TODO: fill with random byte
+  if (garbage_byte) ((__u8*)buf)[buf_len - 1] = 0;
 
   csum += calc_csum(buf, buf_len);
   tcp->check = htons(csum_fold(csum));
