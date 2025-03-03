@@ -13,7 +13,8 @@ struct mimic_whitelist_map mimic_whitelist SEC(".maps");
 struct mimic_conns_map mimic_conns SEC(".maps");
 struct mimic_rb_map mimic_rb SEC(".maps");
 
-int send_ctrl_packet(struct conn_tuple* conn, __be32 flags, __u32 seq, __u32 ack_seq, __u32 cwnd) {
+int send_ctrl_packet(struct conn_tuple* conn, __be32 flags, __u32 seq, __u32 ack_seq,
+                     __u32 window) {
   if (!conn) return -1;
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
   if (!item) return -1;
@@ -23,7 +24,7 @@ int send_ctrl_packet(struct conn_tuple* conn, __be32 flags, __u32 seq, __u32 ack
     .flags = flags,
     .seq = seq,
     .ack_seq = ack_seq,
-    .cwnd = cwnd,
+    .window = window,
   };
   bpf_ringbuf_submit(item, 0);
   return 0;

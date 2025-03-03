@@ -57,7 +57,7 @@ static __always_inline __u32 next_ack_seq(struct tcphdr* tcp, __u16 payload_len)
 
 struct tcp_options {
   __u16 mss;
-  __u8 window_scale;
+  __u8 wscale;
   // more fields may be added in the future
 };
 
@@ -87,8 +87,8 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
         i += 3;
         break;
       case 3:  // window scale
-        if (unlikely(i > 80 - 3 || opt_buf[i + 1] != 3)) return XDP_DROP;
-        opt->window_scale = opt_buf[i + 2];
+        if (unlikely(i > 80 - 3 || opt_buf[i + 1] != 3 || opt_buf[i + 2] > 14)) return XDP_DROP;
+        opt->wscale = opt_buf[i + 2];
         i += 2;
         break;
       default:
@@ -219,13 +219,20 @@ int ingress_handler(struct xdp_md* xdp) {
   will_send_ctrl_packet = will_drop = true;
 
   __be32 flags = 0;
-  __u32 seq = 0, ack_seq = 0, cwnd = 0xffff, cooldown = 0;
+  __u32 seq = 0, ack_seq = 0, window = 0xffff, cooldown = 0;
   __u32 random = bpf_get_prandom_u32();
 
   bpf_spin_lock(&conn->lock);
 
   // Incoming traffic == activity
   conn->retry_tstamp = conn->reset_tstamp = tstamp;
+
+  // Update peer window against newest segment
+  if ((__s32)(ntohl(tcp->seq) - conn->ack_seq) >= 0) {
+    __u32 new = ntohs(tcp->window) << conn->peer_wscale;
+    conn->peer_window = new;
+    conn->wprobe_tstamp = 0;
+  }
 
   switch (conn->state) {
     case CONN_IDLE:
@@ -237,7 +244,7 @@ int ingress_handler(struct xdp_md* xdp) {
         ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
         conn->seq += 1;
         conn->peer_mss = opt.mss;
-        conn->peer_window_scale = opt.window_scale;
+        conn->peer_wscale = opt.wscale;
       } else {
         goto fsm_error;
       }
@@ -251,7 +258,7 @@ int ingress_handler(struct xdp_md* xdp) {
         seq = conn->seq++;
         ack_seq = new_ack_seq;
         conn->peer_mss = opt.mss;
-        conn->peer_window_scale = opt.window_scale;
+        conn->peer_wscale = opt.wscale;
       } else if (likely(!tcp->syn && tcp->ack)) {
         will_send_ctrl_packet = false;
         conn->state = CONN_ESTABLISHED;
@@ -280,8 +287,8 @@ int ingress_handler(struct xdp_md* xdp) {
         seq = conn->seq;
         ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
         conn->peer_mss = opt.mss;
-        conn->peer_window_scale = opt.window_scale;
-        conn->cwnd = cwnd = INIT_CWND;
+        conn->peer_wscale = opt.wscale;
+        conn->window = window = DEFAULT_WINDOW;
       } else {
         goto fsm_error;
       }
@@ -300,32 +307,39 @@ int ingress_handler(struct xdp_md* xdp) {
         flags |= TCP_FLAG_ACK;
         is_keepalive = true;
         seq = conn->seq;
-        ack_seq = conn->ack_seq;
-        cwnd = conn->cwnd;
+        ack_seq = conn->ack_seq;  // TODO: next_ack_seq?
+        window = conn->window;
       } else if (conn->keepalive_sent && payload_len == 0) {
         // Received keepalive ACK
         will_send_ctrl_packet = false;
         is_keepalive = true;
         conn->keepalive_sent = false;
       } else if (!tcp->psh && payload_len == 1) {
-        // TODO: handle window probe
-        will_send_ctrl_packet = false;
+        // Received window probe; send window update
+        if ((__s32)(ntohl(tcp->seq) - conn->ack_seq) >= -1) {
+          ack_seq = conn->ack_seq = next_ack_seq(tcp, 1);
+          flags |= TCP_FLAG_ACK;
+          seq = conn->seq;
+          window = conn->window;  // TODO: update window?
+        } else {
+          will_send_ctrl_packet = false;
+        }
       } else if (!tcp->psh && payload_len == 0) {
-        // Empty segment without PSH will be treated as control packet
+        // Empty segment without PSH will be treated as control packet (window update)
         will_send_ctrl_packet = false;
       } else br_likely {
         will_send_ctrl_packet = will_drop = false;
         conn->ack_seq = next_ack_seq(tcp, payload_len);
-        __u32 upper_bound = INIT_CWND / 2;
-        __u32 lower_bound = INIT_CWND / 4;
-        if (random % (upper_bound - lower_bound) + lower_bound >= conn->cwnd) {
+        __u32 upper_bound = DEFAULT_WINDOW / 2;
+        __u32 lower_bound = DEFAULT_WINDOW / 4;
+        if (random % (upper_bound - lower_bound) + lower_bound >= conn->window) {
           will_send_ctrl_packet = true;
           flags |= TCP_FLAG_ACK;
           seq = conn->seq;
           ack_seq = conn->ack_seq;
-          conn->cwnd = cwnd = INIT_CWND;
+          conn->window = window = DEFAULT_WINDOW;
         }
-        conn->cwnd -= payload_len;
+        conn->window -= payload_len;
       }
       break;
 
@@ -344,16 +358,16 @@ int ingress_handler(struct xdp_md* xdp) {
 
   if (flags & TCP_FLAG_SYN && flags & TCP_FLAG_ACK) log_conn(LOG_CONN_ACCEPT, &conn_key);
   if (will_send_ctrl_packet) {
-    __u32 out_cwnd;
+    __u32 out_window;
     if (flags & TCP_FLAG_RST)
-      out_cwnd = 0;
+      out_window = 0;
     else if (flags & TCP_FLAG_SYN)
-      out_cwnd = 0xffff;
+      out_window = 0xffff;
     else if (settings->max_window)
-      out_cwnd = 0xffff << CWND_SCALE;
+      out_window = 0xffff << WINDOW_SCALE;
     else
-      out_cwnd = cwnd;
-    send_ctrl_packet(&conn_key, flags, seq, ack_seq, out_cwnd);
+      out_window = window;
+    send_ctrl_packet(&conn_key, flags, seq, ack_seq, out_window);
   }
   if (unlikely(flags & TCP_FLAG_RST)) {
     log_destroy(&conn_key, DESTROY_INVALID, cooldown);

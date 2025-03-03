@@ -167,10 +167,8 @@ static inline void freestrp(char** ptr) { freep((void*)ptr); }
 // Used for reading packet data in bulk
 #define SEGMENT_SIZE 64
 
-#define INIT_CWND 212992  // Linux default
-#define CWND_SCALE 7
-
-#define SECOND 1000000000ul
+#define DEFAULT_WINDOW 212992  // Linux default
+#define WINDOW_SCALE 7
 
 // Reserved for gettext use in the future.
 //
@@ -293,8 +291,7 @@ struct conn_tuple {
 struct connection {
   struct bpf_spin_lock lock;
   __u32 seq, ack_seq;
-  __u32 cwnd;
-  __u32 peer_cwnd;
+  __u32 window, peer_window;
 
   struct {
     enum conn_state {
@@ -311,17 +308,19 @@ struct connection {
   struct {
     struct filter_settings settings;
     __u16 peer_mss;
-    __u8 peer_window_scale;
+    __u8 peer_wscale;
   };
 
   __u64 retry_tstamp, reset_tstamp, stale_tstamp;
+  __u64 wprobe_tstamp;
   __u64 pktbuf;
 };
 
 static __always_inline struct connection conn_init(struct filter_settings* settings, __u64 tstamp) {
-  struct connection conn = {.cwnd = 0xffff};
+  struct connection conn = {.window = 0xffff};
   __builtin_memcpy(&conn.settings, settings, sizeof(*settings));
   conn.retry_tstamp = conn.reset_tstamp = conn.stale_tstamp = tstamp;
+  conn.wprobe_tstamp = 0;
   return conn;
 }
 
@@ -331,10 +330,11 @@ static __always_inline void conn_reset(struct connection* conn, __u64 tstamp) {
   conn->state = CONN_IDLE;
   conn->seq = conn->ack_seq = 0;
   // conn->pktbuf should be swapped out prior
-  conn->cwnd = INIT_CWND;
+  conn->window = DEFAULT_WINDOW;
   conn->peer_mss = 0;
   conn->keepalive_sent = false;
   conn->retry_tstamp = conn->reset_tstamp = conn->stale_tstamp = tstamp;
+  conn->wprobe_tstamp = 0;
 }
 
 static __always_inline __u32 conn_cooldown(struct connection* conn) {
@@ -349,19 +349,19 @@ static __always_inline __u32 conn_padding(struct connection* conn, __u32 seq, __
   return conn->settings.padding == PADDING_RANDOM ? (seq + ack_seq) % 11 : conn->settings.padding;
 }
 
-static __always_inline int time_diff_sec(__u64 a, __u64 b) {
+#define SECOND 1000000000ul
+#define MILISECOND 1000000ul
+
+static __always_inline int time_diff(__u64 unit, __u64 a, __u64 b) {
   if (a <= b) return 0;
-  if ((a - b) % SECOND < SECOND / 2)
-    return (a - b) / SECOND;
-  else
-    return (a - b) / SECOND + 1;
+  return (a - b) / unit + !!((a - b) % unit < unit / 2);
 }
 
 struct send_options {
   struct conn_tuple conn;
   __be32 flags;
   __u32 seq, ack_seq;
-  __u32 cwnd;
+  __u32 window;
 };
 
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__

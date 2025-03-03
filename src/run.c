@@ -209,7 +209,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
   };
   tcp_flag_word(tcp) = flags;
   tcp->doff = header_len >> 2;
-  tcp->window = htons(s->cwnd >> (flags & TCP_FLAG_SYN ? 0 : CWND_SCALE));
+  tcp->window = htons(s->window >> (flags & TCP_FLAG_SYN ? 0 : WINDOW_SCALE));
 
   if (flags & TCP_FLAG_SYN) {
     // Look up MTU in time for (probably) correctness
@@ -225,7 +225,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
     };
     __u8* opt = (__u8*)(tcp + 1);
     memcpy(opt, &(struct _tlv_be16){2, 4, htons(mss)}, 4);  // MSS
-    memcpy(opt += 4, (__u8[]){1, 3, 3, CWND_SCALE}, 4);     // window scaling
+    memcpy(opt += 4, (__u8[]){1, 3, 3, WINDOW_SCALE}, 4);     // window scaling
     memcpy(opt += 4, (__u8[]){1, 1, 4, 2}, 4);              // SACK permitted
   }
 
@@ -242,13 +242,13 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
 }
 
 static inline int send_ctrl_packet(struct conn_tuple* conn, __be32 flags, __u32 seq, __u32 ack_seq,
-                                   __u32 cwnd, const char* ifname) {
+                                   __u32 window, const char* ifname) {
   struct send_options s = {
     .conn = *conn,
     .flags = flags,
     .seq = seq,
     .ack_seq = ack_seq,
-    .cwnd = cwnd,
+    .window = window,
   };
   return handle_send_ctrl_packet(&s, ifname);
 }
@@ -379,10 +379,10 @@ static int do_routine(int conns_fd, const char* ifname) {
     try2(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK),
          _("failed to get value from map '%s': %s"), "mimic_conns", strret);
 
-    int retry_secs = time_diff_sec(tstamp, conn.retry_tstamp);
+    int retry_secs = time_diff(SECOND, tstamp, conn.retry_tstamp);
     switch (conn.state) {
       case CONN_IDLE:
-        if (time_diff_sec(tstamp, conn.stale_tstamp) >= conn_cooldown(&conn) * 2) remove = true;
+        if (time_diff(SECOND, tstamp, conn.stale_tstamp) >= conn_cooldown(&conn) * 2) remove = true;
         break;
       case CONN_SYN_SENT:
         if (retry_secs >= (conn.settings.handshake.retry + 1) * conn.settings.handshake.interval) {
@@ -398,25 +398,25 @@ static int do_routine(int conns_fd, const char* ifname) {
         break;
       case CONN_ESTABLISHED:
         if (conn.settings.keepalive.stale > 0 &&
-            time_diff_sec(tstamp, conn.stale_tstamp) >= conn.settings.keepalive.stale) {
+            time_diff(SECOND, tstamp, conn.stale_tstamp) >= conn.settings.keepalive.stale) {
           reset = remove = true;
         } else if (conn.settings.keepalive.time > 0 && retry_secs >= conn.settings.keepalive.time) {
-          __u32 cwnd = conn.settings.max_window ? 0xffff << CWND_SCALE : conn.cwnd;
+          __u32 window = conn.settings.max_window ? 0xffff << WINDOW_SCALE : conn.window;
           if (conn.settings.keepalive.interval <= 0) {
             reset = true;
           } else if (conn.retry_tstamp >= conn.reset_tstamp) {
             log_conn(LOG_DEBUG, &key, _("sending keepalive"));
             conn.reset_tstamp = tstamp;
             conn.keepalive_sent = true;
-            send_ctrl_packet(&key, TCP_FLAG_ACK, conn.seq - 1, conn.ack_seq, cwnd, ifname);
+            send_ctrl_packet(&key, TCP_FLAG_ACK, conn.seq - 1, conn.ack_seq, window, ifname);
             bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
           } else {
-            int reset_secs = time_diff_sec(tstamp, conn.reset_tstamp);
+            int reset_secs = time_diff(SECOND, tstamp, conn.reset_tstamp);
             if (reset_secs >= conn.settings.keepalive.retry * conn.settings.keepalive.interval) {
               reset = true;
             } else if (reset_secs % conn.settings.keepalive.interval == 0) {
               log_conn(LOG_DEBUG, &key, _("sending keepalive"));
-              send_ctrl_packet(&key, TCP_FLAG_ACK, conn.seq - 1, conn.ack_seq, cwnd, ifname);
+              send_ctrl_packet(&key, TCP_FLAG_ACK, conn.seq - 1, conn.ack_seq, window, ifname);
             }
           }
         }

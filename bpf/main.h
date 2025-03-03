@@ -107,7 +107,7 @@ static inline void log_destroy(struct conn_tuple* conn, enum destroy_type type, 
           &(union log_info){.conn = *conn, .destroy_type = type, .cooldown = cooldown});
 }
 
-int send_ctrl_packet(struct conn_tuple* conn, __be32 flags, __u32 seq, __u32 ack_seq, __u32 cwnd);
+int send_ctrl_packet(struct conn_tuple* conn, __be32 flags, __u32 seq, __u32 ack_seq, __u32 window);
 int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key, int ip_summed);
 int use_pktbuf(enum rb_item_type type, __u64 buf);
 
