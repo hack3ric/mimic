@@ -364,7 +364,7 @@ int ingress_handler(struct xdp_md* xdp) {
   }
   if (will_drop) return XDP_DROP;
 
-  __u32 padding = conn_padding(conn, ntohl(tcp->seq), ntohl(tcp->ack));
+  __u32 padding = conn_padding(conn, ntohl(tcp->seq), ntohl(tcp->ack_seq));
   size_t reserve_len = TCP_UDP_HEADER_DIFF + padding;
   if (ipv4) {
     __be16 old_len = ipv4->tot_len;
