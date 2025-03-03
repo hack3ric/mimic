@@ -35,6 +35,18 @@ _curdir=$(dirname $(realpath "${BASH_SOURCE[0]}"))
 source "$_curdir/../util.bash"
 
 router_env_setup() {
+  for _i in "$@"; do
+    case "$_i" in
+    # --mtu=*) local mtu="${_i#*=}" ;;
+    # --no-offload) local no_offload=true ;;
+    --wg) local wg=1 ;;
+    --wg-v4) local wg_ip_kind=v4 ;;
+    --wg-v6) local wg_ip_kind=v6 ;;
+    --wg-mtu=*) local wg_mtu="${_i#*=}" ;;
+    *) ;;
+    esac
+  done
+
   for _netns in ${netns_internal[@]}; do
     ip netns add $_netns
     ip netns exec $_netns sysctl -w net.ipv4.conf.all.forwarding=1
@@ -86,14 +98,42 @@ router_env_setup() {
   ip netns exec ${netns_internal[1]} nft -f - <<EOF
 table inet filter {
   chain forward {
-    type filter hook forward priority filter; policy accept;
-    ct state established,related accept
+    type filter hook forward priority filter; policy drop;
+    ct state new,established,related accept
     ip protocol tcp ct state invalid reject with tcp reset
   }
 }
 EOF
 
-  # TODO: WireGuard setup
+  if [ -n "$wg" ]; then
+    local _priv_key=($(wg genkey) $(wg genkey))
+    for _i in {0..1}; do
+      ip -n ${netns[$_i]} link add wg-${veth[$_i]} type wireguard
+      ip -n ${netns[$_i]} addr add dev wg-${veth[$_i]} ${wg_ipv4[$_i]}
+      ip -n ${netns[$_i]} addr add dev wg-${veth[$_i]} ${wg_ipv6[$_i]}
+
+      ip netns exec ${netns[$_i]} wg set wg-${veth[$_i]} \
+        listen-port ${wg_port[$_i]} \
+        private-key <(echo ${_priv_key[$_i]})
+
+      for _j in {0..1}; do
+        if [ $_i -eq $_j ]; then continue; fi
+        local _endpoint
+        if [ "$wg_ip_kind" = v6 ]; then
+          _endpoint=\[$(strip_ip_cidr ${veth_ipv6[$_j]})\]
+        else
+          _endpoint=$(strip_ip_cidr ${veth_ipv4[$_j]})
+        fi
+        ip netns exec ${netns[$_i]} wg set wg-${veth[$_i]} \
+          peer $(echo ${_priv_key[$_j]} | wg pubkey) \
+          allowed-ips ${wg_ipv4_range},${wg_ipv6_range} \
+          endpoint $_endpoint:${wg_port[$_j]}
+      done
+
+      [ -z "$wg_mtu" ] || ip -n ${netns[$_i]} link set wg-${veth[$_i]} mtu "$wg_mtu"
+      ip -n ${netns[$_i]} link set wg-${veth[$_i]} up
+    done
+  fi
 }
 
 router_env_cleanup() {
