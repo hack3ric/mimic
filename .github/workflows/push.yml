@@ -63,7 +63,7 @@ jobs:
               deb http://deb.debian.org/debian bookworm-backports main
             extra-cmd: |
               sed -i 's/clang/clang-16/' debian/control
-              sed -i 's/BPF_CC=clang/BPF_CC=clang-16/' debian/rules
+              sed -i 's/BPF_CC=clang/BPF_CC=clang-16 COMPAT_LINUX_6_1=1/' debian/rules
           - name: Debian 13 (testing)
             codename: trixie
             image: debian:trixie-slim

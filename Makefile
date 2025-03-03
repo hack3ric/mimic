@@ -127,6 +127,11 @@ CFLAGS += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
 # compatibility, but also makes the program lose CO-RE functionality.
 STRIP_BTF_EXT ?=
 
+ifneq ($(COMPAT_LINUX_6_1),)
+CFLAGS += -DMIMIC_COMPAT_LINUX_6_1
+BPF_CFLAGS += -DMIMIC_COMPAT_LINUX_6_1
+endif
+
 # Rules
 
 mkdir_p = mkdir -p $(@D)
