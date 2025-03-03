@@ -81,11 +81,13 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
       case 0:  // end of option list
       case 1:  // no-op
         break;
+#ifndef MIMIC_COMPAT_LINUX_6_1
       case 2:  // MSS
         if (unlikely(i > 80 - 4 || opt_buf[i + 1] != 4)) return XDP_DROP;
         opt->mss = (opt_buf[i + 2] << 8) + opt_buf[i + 3];
         i += 3;
         break;
+#endif
       case 3:  // window scale
         if (unlikely(i > 80 - 3 || opt_buf[i + 1] != 3 || opt_buf[i + 2] > 14)) return XDP_DROP;
         opt->wscale = opt_buf[i + 2];
