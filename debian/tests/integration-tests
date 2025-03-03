@@ -1,5 +1,7 @@
 #!/bin/sh
 set -e
 
+mkdir -p out/
+ln -s /usr/sbin/mimic out/mimic
 modprobe mimic
 bats tests/

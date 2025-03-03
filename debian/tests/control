@@ -10,4 +10,4 @@ Depends: @,
  socat,
  tshark,
  wireguard-tools,
-Restrictions: needs-root, isolation-machine, build-needed, allow-stderr
+Restrictions: needs-root, isolation-machine, allow-stderr
