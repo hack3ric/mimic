@@ -1,6 +1,6 @@
 #!/usr/bin/dh-exec
 
-out/mimic usr/bin
+out/mimic usr/sbin
 install/eth0.conf etc/mimic
 install/eth0.conf => usr/share/doc/mimic/eth0.conf.example
 docs/getting-started.md usr/share/doc/mimic
