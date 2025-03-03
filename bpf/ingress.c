@@ -57,6 +57,7 @@ static __always_inline __u32 next_ack_seq(struct tcphdr* tcp, __u16 payload_len)
 
 struct tcp_options {
   __u16 mss;
+  __u8 window_scale;
   // more fields may be added in the future
 };
 
@@ -84,6 +85,11 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
         if (unlikely(i > 80 - 4 || opt_buf[i + 1] != 4)) return XDP_DROP;
         opt->mss = (opt_buf[i + 2] << 8) + opt_buf[i + 3];
         i += 3;
+        break;
+      case 3:  // window scale
+        if (unlikely(i > 80 - 3 || opt_buf[i + 1] != 3)) return XDP_DROP;
+        opt->window_scale = opt_buf[i + 2];
+        i += 2;
         break;
       default:
         // HACK: `80 - 2` -> `80 - 3`
@@ -231,6 +237,7 @@ int ingress_handler(struct xdp_md* xdp) {
         ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
         conn->seq += 1;
         conn->peer_mss = opt.mss;
+        conn->peer_window_scale = opt.window_scale;
       } else {
         goto fsm_error;
       }
@@ -244,6 +251,7 @@ int ingress_handler(struct xdp_md* xdp) {
         seq = conn->seq++;
         ack_seq = new_ack_seq;
         conn->peer_mss = opt.mss;
+        conn->peer_window_scale = opt.window_scale;
       } else if (likely(!tcp->syn && tcp->ack)) {
         will_send_ctrl_packet = false;
         conn->state = CONN_ESTABLISHED;
@@ -272,6 +280,7 @@ int ingress_handler(struct xdp_md* xdp) {
         seq = conn->seq;
         ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
         conn->peer_mss = opt.mss;
+        conn->peer_window_scale = opt.window_scale;
         conn->cwnd = cwnd = INIT_CWND;
       } else {
         goto fsm_error;

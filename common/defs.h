@@ -307,9 +307,11 @@ struct connection {
     bool keepalive_sent;
     bool initiator;
   };
+
   struct {
     struct filter_settings settings;
     __u16 peer_mss;
+    __u8 peer_window_scale;
   };
 
   __u64 retry_tstamp, reset_tstamp, stale_tstamp;
@@ -317,7 +319,7 @@ struct connection {
 };
 
 static __always_inline struct connection conn_init(struct filter_settings* settings, __u64 tstamp) {
-  struct connection conn = {.cwnd = INIT_CWND};
+  struct connection conn = {.cwnd = 0xffff};
   __builtin_memcpy(&conn.settings, settings, sizeof(*settings));
   conn.retry_tstamp = conn.reset_tstamp = conn.stale_tstamp = tstamp;
   return conn;
