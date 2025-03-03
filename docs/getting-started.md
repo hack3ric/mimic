@@ -58,10 +58,12 @@ See [mimic(1)](mimic.1.md) for more information on command-line options and deta
 
 ## Firewall
 
-Mimic not only mangles packets from UDP to TCP transparently using eBPF, but also sends out control packets e.g. SYN and keepalive, using Linux's raw(7) socket. As TC eBPF happens after netfilter's output hook, and XDP before input hook, the former is recognized as UDP by netfilter. However, the latter is still regarded as TCP (as it really is). To make firewall work with Mimic, one should treat Mimic's traffic as *both TCP and UDP*.
+Mimic not only mangles packets from UDP to TCP transparently using eBPF, but also sends out control packets e.g. SYN and keepalive, using Linux's raw(7) socket. As TC eBPF happens after netfilter's output hook, and XDP before input hook, the former is recognized as UDP by netfilter. However, the latter is still regarded as TCP (as it really is). To make firewall work with Mimic, one should generally treat Mimic's traffic as *both TCP and UDP*. However this could vary in more complex setups.
 
 ## Notes on XDP Native Mode
 
 Some network drivers, like Intel's e1000, igb, igc and Nvidia (Mellanox)'s mlx4, mlx5 have XDP offload function, running XDP programs in their drivers (native mode) in contrast to running in the Linux kernel (skb mode). However, one may exhibit unstable traffic when using Mimic on such drivers (especially Intel ones). I encountered several times on my router with Intel i225 NIC (igc driver), but none on another one using Realtek R8111 (r8169 driver), which does not support native mode and always falls back to skb mode. If you encounter sudden traffic loss, you may want to specify `xdp_mode = skb` in your configuration file, or pass `--xdp-mode skb` as arguments when running Mimic.
+
+Virtual devices such as virtio_net or veth should prefer `xdp_mode = native` and use the default setting. However host machine could prevent guest VMs' virtio_net device from using XDP native mode (such as [#11](https://github.com/hack3ric/mimic/issues/11)). In this case `xdp_mode = skb` has to be forced.
 
 XDP can also directly run on NIC hardware (hardware mode), but only a handful of SmartNICs support it. I don't have them so I can't test them.
