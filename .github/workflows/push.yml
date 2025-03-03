@@ -41,6 +41,7 @@ jobs:
           sudo cp /sys/kernel/btf/vmlinux /lib/modules/`uname -r`/build
           make -j ${{ matrix.flags.flags }}
           sudo nft delete table filter  # Docker's nftables rule drops IPv4 packets in tests
+          sudo nft list ruleset
           sudo insmod out/mimic.ko
           sudo env MIMIC_TEST_EXTRA_ARGS="${{ matrix.flags.args }}" make test ${{ matrix.flags.flags }}
       - name: Upload captured packets
