@@ -79,7 +79,12 @@ _test_packet_buffer() {
   sleep $((1 * SLEEP_MULTIPLIER))
 
   # Check if all sent data are present
-  [ "$(cat ${output[1]})" = "$(printf '%s\n' "${random_data[@]}")" ]
+  if [ "$(cat ${output[1]})" != "$(printf '%s\n' "${random_data[@]}")" ]; then
+    >&2 echo "error: content mismatch"
+    >&2 echo "  expected: $(echo "${random_data[@]}" | base64)"
+    >&2 echo "  got: $(base64 "${output[1]}")"
+    return 1
+  fi
   check_mimic_is_alive
 }
 
