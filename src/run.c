@@ -245,7 +245,7 @@ static inline int send_ctrl_packet(struct conn_tuple* conn, __be32 flags, __u32 
                                    __u32 cwnd, const char* ifname) {
   struct send_options s = {
     .conn = *conn,
-    .flags = ntohl(flags) >> 16,
+    .flags = flags,
     .seq = seq,
     .ack_seq = ack_seq,
     .cwnd = cwnd,
