@@ -230,9 +230,8 @@ int ingress_handler(struct xdp_md* xdp) {
   conn->retry_tstamp = conn->reset_tstamp = tstamp;
 
   // Update peer window against newest segment
-  if ((__s32)(ntohl(tcp->seq) - conn->ack_seq) >= 0) {
-    __u32 new = ntohs(tcp->window) << conn->peer_wscale;
-    conn->peer_window = new;
+  if (conn->ack_seq == 0 || (__s32)(ntohl(tcp->seq) - conn->ack_seq) >= 0) {
+    conn->peer_window = ntohs(tcp->window) << conn->peer_wscale;
     conn->wprobe_tstamp = 0;
   }
 
