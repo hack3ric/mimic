@@ -58,12 +58,12 @@ static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_
 }
 
 static inline void update_tcp_header(struct tcphdr* tcp, __u16 tcp_payload_len, __u32 seq,
-                                     __u32 ack_seq, __u32 window) {
+                                     __u32 ack_seq, __u16 window) {
   tcp->seq = htonl(seq);
   tcp->ack_seq = htonl(ack_seq);
   tcp_flag_word(tcp) = 0;
   tcp->doff = 5;
-  tcp->window = htons(window >> WINDOW_SCALE);
+  tcp->window = htons(window);
   tcp->ack = true;
   tcp->psh = tcp_payload_len < 2;
   tcp->urg_ptr = 0;
@@ -145,9 +145,8 @@ int egress_handler(struct __sk_buff* skb) {
   __be16 old_udp_csum = udp->check;
   __u16 udp_len = ntohs(udp->len);
   __u16 payload_len = udp_len - sizeof(*udp);
-  __u32 seq = 0, ack_seq = 0, window;
+  __u32 seq = 0, ack_seq = 0, padding;
   __u32 random = bpf_get_prandom_u32();
-  __u32 padding;
 
   bpf_spin_lock(&conn->lock);
   if (likely(conn->state == CONN_ESTABLISHED)) {
@@ -155,16 +154,16 @@ int egress_handler(struct __sk_buff* skb) {
     if (conn->peer_window < (payload_len + padding) * 1) {
       // peer window (lower bound) not enough, sending window probe every 10ms
       if (time_diff(MILISECOND, tstamp, conn->wprobe_tstamp) >= 10) {
+        __be32 flags = TCP_FLAG_ACK | TCP_GARBAGE_BYTE | conn_max_window(conn);
         seq = conn->seq;
         ack_seq = conn->ack_seq;
-        window = conn->window;
         if (conn->wprobe_tstamp)
           seq -= 1;
         else
           conn->seq += 1;
         conn->wprobe_tstamp = tstamp;
         bpf_spin_unlock(&conn->lock);
-        send_ctrl_packet(&conn_key, TCP_FLAG_ACK | TCP_GARBAGE_BYTE, seq, ack_seq, window);
+        send_ctrl_packet(&conn_key, flags, seq, ack_seq, conn->window);
       } else {
         bpf_spin_unlock(&conn->lock);
       }
@@ -189,9 +188,11 @@ int egress_handler(struct __sk_buff* skb) {
       ack_seq = conn->ack_seq = 0;
       conn->retry_tstamp = conn->reset_tstamp = tstamp;
       conn->initiator = true;
+      __u32 window = conn->window;
       bpf_spin_unlock(&conn->lock);
       log_conn(LOG_CONN_INIT, &conn_key);
-      send_ctrl_packet(&conn_key, TCP_FLAG_SYN, seq, ack_seq, 0xffff);
+      send_ctrl_packet(&conn_key, TCP_FLAG_SYN | (conn->settings.max_window ? TCP_MAX_WINDOW : 0),
+                       seq, ack_seq, window);
     } else {
       bpf_spin_unlock(&conn->lock);
     }
@@ -216,7 +217,8 @@ int egress_handler(struct __sk_buff* skb) {
     }
     return store_packet(skb, ip_end, &conn_key, ip_summed);
   }
-  window = conn->window;
+  // Actual window field in TCP header
+  __u16 window = conn->settings.max_window ? 0xffff : (conn->window >> WINDOW_SCALE);
   bpf_spin_unlock(&conn->lock);
 
   size_t reserve_len = TCP_UDP_HEADER_DIFF + padding;
@@ -237,8 +239,7 @@ int egress_handler(struct __sk_buff* skb) {
   __be32 csum_diff = 0;
   try_tc(mangle_data(skb, ip_end + sizeof(*udp), &csum_diff, padding));
   decl_shot(struct tcphdr, tcp, ip_end, skb);
-  update_tcp_header(tcp, payload_len, seq, ack_seq,
-                    settings->max_window ? 0xffff << WINDOW_SCALE : window);
+  update_tcp_header(tcp, payload_len, seq, ack_seq, window);
 
   __u32 csum_off = ip_end + offsetof(struct tcphdr, check);
   redecl_shot(struct tcphdr, tcp, ip_end, skb);

@@ -189,11 +189,13 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
 
   try_e(bind(sk, (struct sockaddr*)&saddr, sizeof(saddr)), _("failed to bind: %s"), strret);
 
-  __be32 flags = s->flags & TCP_FLAGS_MASK;
+  __u32 flags = s->flags & TCP_FLAGS_MASK;
+  bool syn = s->flags & TCP_FLAG_SYN;
   bool garbage_byte = s->flags & TCP_GARBAGE_BYTE;
+  bool max_window = s->flags & TCP_MAX_WINDOW;
 
   // TCP header + (MSS + window scale + SACK PERM) if SYN
-  size_t header_len = sizeof(struct tcphdr) + (flags & TCP_FLAG_SYN ? 3 * 4 : 0);
+  size_t header_len = sizeof(struct tcphdr) + (syn ? 3 * 4 : 0);
   size_t buf_len = header_len + garbage_byte;
   csum += buf_len;
 
@@ -209,15 +211,21 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
   };
   tcp_flag_word(tcp) = flags;
   tcp->doff = header_len >> 2;
-  tcp->window = htons(s->window >> (flags & TCP_FLAG_SYN ? 0 : WINDOW_SCALE));
+  if (max_window)
+    tcp->window = 0xffff;
+  else if (syn)
+    tcp->window = htons(min(s->window, 0xffff));
+  else
+    tcp->window = htons(s->window >> WINDOW_SCALE);
 
-  if (flags & TCP_FLAG_SYN) {
+  if (syn) {
     // Look up MTU in time for (probably) correctness
     struct ifreq ifr;
     strncpy(ifr.ifr_name, ifname, sizeof(ifr.ifr_name));
     ioctl(sk, SIOCGIFMTU, &ifr);
     __u16 mss = ip_proto(&s->conn.local) == AF_INET ? max(ifr.ifr_mtu, 576) - 40
                                                     : max(ifr.ifr_mtu, 1280) - 60;
+    __u8 wscale = max_window ? MAX_WINDOW_SCALE : WINDOW_SCALE;
     // Specify TCP options. `1`s at the front of arrays are NOP paddings.
     struct _tlv_be16 {
       __u8 t, l;
@@ -225,7 +233,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
     };
     __u8* opt = (__u8*)(tcp + 1);
     memcpy(opt, &(struct _tlv_be16){2, 4, htons(mss)}, 4);  // MSS
-    memcpy(opt += 4, (__u8[]){1, 3, 3, WINDOW_SCALE}, 4);     // window scaling
+    memcpy(opt += 4, (__u8[]){1, 3, 3, wscale}, 4);         // window scaling
     memcpy(opt += 4, (__u8[]){1, 1, 4, 2}, 4);              // SACK permitted
   }
 
@@ -389,7 +397,8 @@ static int do_routine(int conns_fd, const char* ifname) {
           reset = true;
         } else if (retry_secs != 0 && retry_secs % conn.settings.handshake.interval == 0) {
           log_conn(LOG_INFO, &key, _("retry sending SYN"));
-          send_ctrl_packet(&key, TCP_FLAG_SYN, conn.seq - 1, 0, 0xffff, ifname);
+          send_ctrl_packet(&key, TCP_FLAG_SYN | conn_max_window(&conn), conn.seq - 1, 0,
+                           conn.window, ifname);
         }
         break;
       case CONN_SYN_RECV:
@@ -401,14 +410,14 @@ static int do_routine(int conns_fd, const char* ifname) {
             time_diff(SECOND, tstamp, conn.stale_tstamp) >= conn.settings.keepalive.stale) {
           reset = remove = true;
         } else if (conn.settings.keepalive.time > 0 && retry_secs >= conn.settings.keepalive.time) {
-          __u32 window = conn.settings.max_window ? 0xffff << WINDOW_SCALE : conn.window;
           if (conn.settings.keepalive.interval <= 0) {
             reset = true;
           } else if (conn.retry_tstamp >= conn.reset_tstamp) {
             log_conn(LOG_DEBUG, &key, _("sending keepalive"));
             conn.reset_tstamp = tstamp;
             conn.keepalive_sent = true;
-            send_ctrl_packet(&key, TCP_FLAG_ACK, conn.seq - 1, conn.ack_seq, window, ifname);
+            send_ctrl_packet(&key, TCP_FLAG_ACK | conn_max_window(&conn), conn.seq - 1,
+                             conn.ack_seq, conn.window, ifname);
             bpf_map_update_elem(conns_fd, &key, &conn, BPF_EXIST | BPF_F_LOCK);
           } else {
             int reset_secs = time_diff(SECOND, tstamp, conn.reset_tstamp);
@@ -416,7 +425,8 @@ static int do_routine(int conns_fd, const char* ifname) {
               reset = true;
             } else if (reset_secs % conn.settings.keepalive.interval == 0) {
               log_conn(LOG_DEBUG, &key, _("sending keepalive"));
-              send_ctrl_packet(&key, TCP_FLAG_ACK, conn.seq - 1, conn.ack_seq, window, ifname);
+              send_ctrl_packet(&key, TCP_FLAG_ACK | conn_max_window(&conn), conn.seq - 1,
+                               conn.ack_seq, conn.window, ifname);
             }
           }
         }

@@ -221,7 +221,7 @@ int ingress_handler(struct xdp_md* xdp) {
   will_send_ctrl_packet = will_drop = true;
 
   __be32 flags = 0;
-  __u32 seq = 0, ack_seq = 0, window = 0xffff, cooldown = 0;
+  __u32 seq = 0, ack_seq = 0, cooldown = 0;
   __u32 random = bpf_get_prandom_u32();
 
   bpf_spin_lock(&conn->lock);
@@ -235,6 +235,7 @@ int ingress_handler(struct xdp_md* xdp) {
     conn->wprobe_tstamp = 0;
   }
 
+  flags |= conn_max_window(conn);
   switch (conn->state) {
     case CONN_IDLE:
       if (likely(tcp->syn && !tcp->ack)) {
@@ -289,7 +290,7 @@ int ingress_handler(struct xdp_md* xdp) {
         ack_seq = conn->ack_seq = next_ack_seq(tcp, payload_len);
         conn->peer_mss = opt.mss;
         conn->peer_wscale = opt.wscale;
-        conn->window = window = DEFAULT_WINDOW;
+        conn->window = DEFAULT_WINDOW;
       } else {
         goto fsm_error;
       }
@@ -309,7 +310,6 @@ int ingress_handler(struct xdp_md* xdp) {
         is_keepalive = true;
         seq = conn->seq;
         ack_seq = conn->ack_seq;  // TODO: next_ack_seq?
-        window = conn->window;
       } else if (conn->keepalive_sent && payload_len == 0) {
         // Received keepalive ACK
         will_send_ctrl_packet = false;
@@ -321,7 +321,7 @@ int ingress_handler(struct xdp_md* xdp) {
           ack_seq = conn->ack_seq = next_ack_seq(tcp, 1);
           flags |= TCP_FLAG_ACK;
           seq = conn->seq;
-          window = conn->window;  // TODO: update window?
+          // TODO: update window?
         } else {
           will_send_ctrl_packet = false;
         }
@@ -338,7 +338,7 @@ int ingress_handler(struct xdp_md* xdp) {
           flags |= TCP_FLAG_ACK;
           seq = conn->seq;
           ack_seq = conn->ack_seq;
-          conn->window = window = DEFAULT_WINDOW;
+          conn->window = DEFAULT_WINDOW;
         }
         conn->window -= payload_len;
       }
@@ -355,20 +355,13 @@ int ingress_handler(struct xdp_md* xdp) {
   }
   if (!is_keepalive) conn->stale_tstamp = tstamp;
 
+  __u32 window = conn->window;
   bpf_spin_unlock(&conn->lock);
 
   if (flags & TCP_FLAG_SYN && flags & TCP_FLAG_ACK) log_conn(LOG_CONN_ACCEPT, &conn_key);
   if (will_send_ctrl_packet) {
-    __u32 out_window;
-    if (flags & TCP_FLAG_RST)
-      out_window = 0;
-    else if (flags & TCP_FLAG_SYN)
-      out_window = 0xffff;
-    else if (settings->max_window)
-      out_window = 0xffff << WINDOW_SCALE;
-    else
-      out_window = window;
-    send_ctrl_packet(&conn_key, flags, seq, ack_seq, out_window);
+    if (flags & TCP_FLAG_RST) window = 0;
+    send_ctrl_packet(&conn_key, flags, seq, ack_seq, window);
   }
   if (unlikely(flags & TCP_FLAG_RST)) {
     log_destroy(&conn_key, DESTROY_INVALID, cooldown);

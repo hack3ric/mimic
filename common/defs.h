@@ -167,8 +167,24 @@ static inline void freestrp(char** ptr) { freep((void*)ptr); }
 // Used for reading packet data in bulk
 #define SEGMENT_SIZE 64
 
+#define INIT_WINDOW 0xffff
 #define DEFAULT_WINDOW 212992  // Linux default
 #define WINDOW_SCALE 7
+#define MAX_WINDOW_SCALE 14
+
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+enum {
+  TCP_FLAGS_MASK = 0x00ff0000,
+  TCP_GARBAGE_BYTE = 0x01000000,
+  TCP_MAX_WINDOW = 0x02000000,
+};
+#else
+enum {
+  TCP_FLAGS_MASK = 0x0000ff00,
+  TCP_GARBAGE_BYTE = 0x00000001,
+  TCP_MAX_WINDOW = 0x00000002,
+};
+#endif
 
 // Reserved for gettext use in the future.
 //
@@ -349,6 +365,10 @@ static __always_inline __u32 conn_padding(struct connection* conn, __u32 seq, __
   return conn->settings.padding == PADDING_RANDOM ? (seq + ack_seq) % 11 : conn->settings.padding;
 }
 
+static __always_inline __be32 conn_max_window(struct connection* conn) {
+  return conn->settings.max_window ? TCP_MAX_WINDOW : 0;
+}
+
 #define SECOND 1000000000ul
 #define MILISECOND 1000000ul
 
@@ -363,18 +383,6 @@ struct send_options {
   __u32 seq, ack_seq;
   __u32 window;
 };
-
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-enum {
-  TCP_FLAGS_MASK = 0x00ff0000,
-  TCP_GARBAGE_BYTE = 0x01000000,
-};
-#else
-enum {
-  TCP_FLAGS_MASK = 0x0000ff00,
-  TCP_GARBAGE_BYTE = 0x00000001,
-};
-#endif
 
 // need to define `log_verbosity` besides including this file.
 #define LOG_ALLOW_ERROR (log_verbosity >= LOG_ERROR)
