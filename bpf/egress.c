@@ -152,8 +152,8 @@ int egress_handler(struct __sk_buff* skb) {
   if (likely(conn->state == CONN_ESTABLISHED)) {
     padding = conn_padding(conn, conn->seq, conn->ack_seq);
     if (conn->peer_window < DEFAULT_WINDOW / 2) {
-      bool critical = conn->peer_window < payload_len + padding;
       // peer window (lower bound) not enough, sending window probe every 10ms
+      bool critical = conn->peer_window < payload_len + padding;
       if (time_diff(MILISECOND, tstamp, conn->wprobe_tstamp) >= 10) {
         __be32 flags = TCP_FLAG_ACK | TCP_GARBAGE_BYTE | conn_max_window(conn);
         seq = conn->seq;
@@ -173,10 +173,8 @@ int egress_handler(struct __sk_buff* skb) {
         bpf_spin_unlock(&conn->lock);
         return TC_ACT_STOLEN;
       }
-    } else {
-      conn->wprobe_tstamp = 0;
-      conn->peer_window -= payload_len + padding;
     }
+    conn->peer_window -= payload_len + padding;
     seq = conn->seq;
     ack_seq = conn->ack_seq;
     conn->seq += payload_len + padding;
