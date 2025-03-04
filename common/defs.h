@@ -168,8 +168,8 @@ static inline void freestrp(char** ptr) { freep((void*)ptr); }
 #define SEGMENT_SIZE 64
 
 #define INIT_WINDOW 0xffff
-#define DEFAULT_WINDOW 212992  // Linux default
-#define WINDOW_SCALE 7
+#define DEFAULT_WINDOW 0x3400000
+#define WINDOW_SCALE 12
 #define MAX_WINDOW_SCALE 14
 
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
