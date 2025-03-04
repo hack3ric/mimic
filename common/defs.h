@@ -168,7 +168,7 @@ static inline void freestrp(char** ptr) { freep((void*)ptr); }
 #define SEGMENT_SIZE 64
 
 #define INIT_WINDOW 0xffff
-#define DEFAULT_WINDOW 0x3400000
+#define DEFAULT_WINDOW 0x1312D00
 #define WINDOW_SCALE 12
 #define MAX_WINDOW_SCALE 14
 
