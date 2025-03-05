@@ -19,7 +19,7 @@ To install, download both `mimic` and `mimic-dkms` packages (the first two of th
 # apt install ./*_mimic_*.deb ./*_mimic-dkms_*.deb
 ```
 
-OpenWrt support is currently experimental and waiting for 24.10 release, see [`openwrt` branch](https://github.com/hack3ric/mimic/tree/openwrt) and [OpenWrt Support](docs/openwrt.md) documentation.
+OpenWrt support is currently experimental, see [`openwrt` branch](https://github.com/hack3ric/mimic/tree/openwrt) and [OpenWrt Support](docs/openwrt.md) documentation.
 
 For building from source (including AUR and other Debian and Ubuntu versions), see [Building from Source](docs/building.md) for more information.
 
