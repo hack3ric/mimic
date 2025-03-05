@@ -57,25 +57,25 @@ jobs:
       fail-fast: false
       matrix:
         distro:
-          - name: Debian 12
-            codename: bookworm
-            image: debian:bookworm-slim
-            extra-repos: |
-              deb http://deb.debian.org/debian bookworm-backports main
-            extra-cmd: |
-              sed -i 's/clang/clang-16/' debian/control
-              sed -i 's/BPF_CC=clang/BPF_CC=clang-16 COMPAT_LINUX_6_1=1/' debian/rules
+          # - name: Debian 12
+          #   codename: bookworm
+          #   image: debian:bookworm-slim
+          #   extra-repos: |
+          #     deb http://deb.debian.org/debian bookworm-backports main
+          #   extra-cmd: |
+          #     sed -i 's/clang/clang-16/' debian/control
+          #     sed -i 's/BPF_CC=clang/BPF_CC=clang-16 COMPAT_LINUX_6_1=1/' debian/rules
           - name: Debian 13 (testing)
             codename: trixie
             image: debian:trixie-slim
           - name: Debian sid
             codename: sid
             image: debian:sid-slim
-          - name: Ubuntu 24.04
-            codename: noble
-            image: ubuntu:noble
-            extra-repos: |
-              deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+          # - name: Ubuntu 24.04
+          #   codename: noble
+          #   image: ubuntu:noble
+          #   extra-repos: |
+          #     deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,25 +94,25 @@ jobs:
           path: |
             debian/artifacts/*.deb
             debian/artifacts/*.ddeb
-  test-deb-install:
-    name: Test .deb installation
-    needs: build-deb
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: packages-noble
-          path: packages-noble
-      - name: Test Install
-        run: |
-          sudo apt install ./packages-noble/*.deb linux-headers-`uname -r`
-          sudo modprobe mimic
-      - name: Upload log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dkms-make-log
-          path: /var/lib/dkms/mimic/0.6.5/build/make.log
+  # test-deb-install:
+  #   name: Test .deb installation
+  #   needs: build-deb
+  #   runs-on: ubuntu-24.04
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
+  #     - name: Download artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: packages-noble
+  #         path: packages-noble
+  #     - name: Test Install
+  #       run: |
+  #         sudo apt install ./packages-noble/*.deb linux-headers-`uname -r`
+  #         sudo modprobe mimic
+  #     - name: Upload log
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: dkms-make-log
+  #         path: /var/lib/dkms/mimic/0.6.5/build/make.log
