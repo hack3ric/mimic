@@ -152,7 +152,8 @@ int egress_handler(struct __sk_buff* skb) {
   if (likely(conn->state == CONN_ESTABLISHED)) {
     padding = conn_padding(conn, conn->seq, conn->ack_seq);
     if (conn->peer_window < DEFAULT_WINDOW / 2) {
-      // peer window (lower bound) not enough, sending window probe every 10ms
+      // Peer window (lower bound) reaches threshold, sending window probe every 10ms.
+      // In extreme cases, drop packets before the window complete fills up.
       bool critical = conn->peer_window < payload_len + padding;
       if (time_diff(MILISECOND, tstamp, conn->wprobe_tstamp) >= 10) {
         __be32 flags = TCP_FLAG_ACK | TCP_GARBAGE_BYTE | conn_max_window(conn);
@@ -164,6 +165,8 @@ int egress_handler(struct __sk_buff* skb) {
           conn->seq += 1;
         conn->wprobe_tstamp = tstamp;
         bpf_spin_unlock(&conn->lock);
+        // TODO: send control packet directly by mangling current packet when "critical". Wonder if
+        // this would have any effect though.
         send_ctrl_packet(&conn_key, flags, seq, ack_seq, conn->window);
         if (critical)
           return TC_ACT_STOLEN;

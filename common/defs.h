@@ -167,6 +167,17 @@ static inline void freestrp(char** ptr) { freep((void*)ptr); }
 // Used for reading packet data in bulk
 #define SEGMENT_SIZE 64
 
+// Value of window size should be calculated from:
+//   2 * 1000 * speed (MB/s) * latency (ms)
+// This ensures window probe packets have time to reach to peer before the window fills up, even if
+// the data flows completely *one-sided*. (Two-sided traffic such as TCP in a tunnel should
+// constantly refresh the window)
+//
+// The default value is slightly larger than that of when speed = 1 Gb/s (125 MB/s) and latency =
+// 200 ms. This is huge (~54.5 MB) and probably could be slower for a lot of other scenarios, but it
+// should be a good default and works in most cases.
+//
+// TODO: make window configurable
 #define INIT_WINDOW 0xffff
 #define DEFAULT_WINDOW 0x3400000
 #define WINDOW_SCALE 12
