@@ -1,7 +1,1 @@
 kmod/* usr/src/mimic-${env:DEB_VERSION_UPSTREAM}
-
-out/extract-btf usr/lib/mimic
-tools/extract-vmlinux usr/lib/mimic
-tools/vmlinux-to-btf usr/lib/mimic
-
-linux-source-*/tools/bpf/resolve_btfids/resolve_btfids usr/lib/mimic
