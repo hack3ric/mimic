@@ -14,5 +14,10 @@ differences:
   directly, while Debian's official one should point to
   https://salsa.debian.org/hacker/mimic (currently)
 - Debian's d/copyright contains one extra line: `Files-Excluded: debian`
+- Since trixie Debian has supported building out-of-tree kernel modules with
+  BTF. Therefore Debian's mimic-dkms package will not contain dependencies
+  for build hack (like linux-source, pahole and compression tools), will not
+  ship extra binaries, and will be `Architecture: all`, until we (upstream)
+  drop support for bookworm.
 
 Make sure to check the above to adhere to Debian packaging guidelines.
