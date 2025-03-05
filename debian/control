@@ -16,7 +16,6 @@ Build-Depends:
  libbpf-dev,
  libffi-dev,
  libxdp-dev,
- linux-source,
  linux-headers-generic,
 Standards-Version: 4.7.2
 Homepage: https://github.com/hack3ric/mimic
@@ -44,21 +43,12 @@ Description: eBPF UDP -> TCP obfuscator
 
 Package: mimic-dkms
 Section: kernel
-Architecture: amd64 arm64 powerpc ppc64 ppc64el riscv64
+Architecture: all
 Provides: mimic-modules (= ${binary:Version})
 Conflicts: mimic-modules
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
- pahole,
- bubblewrap,
- xz-utils,
- lz4,
-Recommends:
- bzip2,
- lzma,
- lzop,
- zstd,
 Description: eBPF UDP -> TCP obfuscator (DKMS kernel module)
  Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP
  QoS and port blocking. Based on eBPF, it directly mangles data inside
