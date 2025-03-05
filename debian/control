@@ -50,7 +50,6 @@ Conflicts: mimic-modules
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
- binutils,
  pahole,
  bubblewrap,
  xz-utils,
