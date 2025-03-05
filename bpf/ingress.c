@@ -317,14 +317,10 @@ int ingress_handler(struct xdp_md* xdp) {
         conn->keepalive_sent = false;
       } else if (!tcp->psh && payload_len == 1) {
         // Received window probe; send window update
-        if ((__s32)(ntohl(tcp->seq) - conn->ack_seq) >= -1) {
-          ack_seq = conn->ack_seq = next_ack_seq(tcp, 1);
-          flags |= TCP_FLAG_ACK;
-          seq = conn->seq;
-          // TODO: update window?
-        } else {
-          will_send_ctrl_packet = false;
-        }
+        ack_seq = conn->ack_seq = next_ack_seq(tcp, 1);
+        flags |= TCP_FLAG_ACK;
+        seq = conn->seq;
+        conn->window = DEFAULT_WINDOW;
       } else if (!tcp->psh && payload_len == 0) {
         // Empty segment without PSH will be treated as control packet (window update)
         will_send_ctrl_packet = false;
