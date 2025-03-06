@@ -16,7 +16,6 @@ Build-Depends:
  libbpf-dev,
  libffi-dev,
  libxdp-dev,
- linux-headers-generic,
 Standards-Version: 4.7.2
 Homepage: https://github.com/hack3ric/mimic
 Rules-Requires-Root: no
