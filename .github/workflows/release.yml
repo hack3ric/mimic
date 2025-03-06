@@ -34,6 +34,7 @@ jobs:
               deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
             extra-cmd: |
               patch -Np1 -i debian/compat.patch
+              sed -i 's/clang,/clang, llvm,/' debian/control
     steps:
       - name: Checkout
         uses: actions/checkout@v4

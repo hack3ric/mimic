@@ -9,7 +9,6 @@ Build-Depends:
  dh-sequence-installsysusers,
  dh-exec,
  clang,
- llvm,
  python3,
  bpftool,
  ronn,
