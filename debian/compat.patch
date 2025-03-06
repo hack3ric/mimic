@@ -3,7 +3,7 @@ Forwarded: not-needed
 Author: Eric Long <i@hack3r.moe>
 
 diff --git a/debian/control b/debian/control
-index af47c7b..a5e5ce6 100644
+index e6823bc..a5e5ce6 100644
 --- a/debian/control
 +++ b/debian/control
 @@ -15,6 +15,7 @@ Build-Depends:
@@ -14,6 +14,15 @@ index af47c7b..a5e5ce6 100644
  Standards-Version: 4.7.2
  Homepage: https://github.com/hack3ric/mimic
  Rules-Requires-Root: no
+@@ -23,7 +24,7 @@ Vcs-Browser: https://github.com/hack3ric/mimic
+ Testsuite: autopkgtest-pkg-dkms
+ 
+ Package: mimic
+-Architecture: amd64 arm64 powerpc ppc64 ppc64el riscv64 s390x
++Architecture: amd64 arm64 powerpc ppc64 ppc64el riscv64
+ Depends:
+  ${misc:Depends},
+  ${shlibs:Depends},
 @@ -41,12 +42,21 @@ Description: eBPF UDP -> TCP obfuscator
  
  Package: mimic-dkms

@@ -23,7 +23,7 @@ Vcs-Browser: https://github.com/hack3ric/mimic
 Testsuite: autopkgtest-pkg-dkms
 
 Package: mimic
-Architecture: amd64 arm64 powerpc ppc64 ppc64el riscv64
+Architecture: amd64 arm64 powerpc ppc64 ppc64el riscv64 s390x
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
