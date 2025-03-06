@@ -3,7 +3,7 @@ Forwarded: not-needed
 Author: Eric Long <i@hack3r.moe>
 
 diff --git a/debian/control b/debian/control
-index d5a3292..89161eb 100644
+index 767844c..eb1748b 100644
 --- a/debian/control
 +++ b/debian/control
 @@ -16,6 +16,7 @@ Build-Depends:
@@ -11,10 +11,10 @@ index d5a3292..89161eb 100644
   libffi-dev,
   libxdp-dev,
 + linux-source,
-  linux-headers-generic,
  Standards-Version: 4.7.2
  Homepage: https://github.com/hack3ric/mimic
-@@ -43,12 +44,21 @@ Description: eBPF UDP -> TCP obfuscator
+ Rules-Requires-Root: no
+@@ -42,12 +43,21 @@ Description: eBPF UDP -> TCP obfuscator
  
  Package: mimic-dkms
  Section: kernel
