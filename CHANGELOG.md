@@ -1,6 +1,12 @@
 # Changelog for Mimic
 
-## 0.6.5 (2025-??-??)
+## 0.7.0 (2025-??-??)
+
+- (breaking) Add window probe mechanism
+  - Now Mimic's fake TCP connection will never reach peer's full window size and cause link breakdown by connection-tracking firewalls
+  - Connection between 0.7.x and 0.6.x (or lower) will suffer from excess packet drop due to the latter's small window size and inability to reply window update on peer's request.
+- Add COMPAT_LINUX_6_1 option and enable in Debian 12 (bookworm) build
+  - Now it will disable TCP MSS reading as window scale reading has been added and will cause Linux 6.1 eBPF verifier to fail due to large program size (unable to analyze loops and branches properly)
 
 ## 0.6.4 (2025-02-19)
 
