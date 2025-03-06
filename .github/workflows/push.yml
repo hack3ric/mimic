@@ -63,6 +63,7 @@ jobs:
             extra-repos: |
               deb http://deb.debian.org/debian bookworm-backports main
             extra-cmd: |
+              patch -Np1 -i debian/compat.patch
               sed -i 's/clang/clang-16/' debian/control
               sed -i 's/BPF_CC=clang/BPF_CC=clang-16 COMPAT_LINUX_6_1=1/' debian/rules
           - name: Debian 13 (testing)
@@ -76,6 +77,8 @@ jobs:
             image: ubuntu:noble
             extra-repos: |
               deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+            extra-cmd: |
+              patch -Np1 -i debian/compat.patch
     steps:
       - name: Checkout
         uses: actions/checkout@v4
