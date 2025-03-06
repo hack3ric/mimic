@@ -50,10 +50,10 @@ index 552dd47..bec5150 100644
 +
 +linux-source-*/tools/bpf/resolve_btfids/resolve_btfids usr/lib/mimic
 diff --git a/debian/rules b/debian/rules
-index 78eba86..2ab25cb 100755
+index 3f1b343..e4f9b9b 100755
 --- a/debian/rules
 +++ b/debian/rules
-@@ -6,6 +6,14 @@ export DH_VERBOSE = 1
+@@ -6,6 +6,13 @@ export DH_VERBOSE = 1
  export DEB_BUILD_MAINT_OPTIONS = hardening=+all
  export DEB_VERSION_UPSTREAM
  
@@ -64,14 +64,14 @@ index 78eba86..2ab25cb 100755
 +njobs = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 +endif
 +
-+
  %:
  	dh $@
  
-@@ -21,10 +29,25 @@ override_dh_auto_configure:
+@@ -21,10 +28,25 @@ override_dh_auto_configure:
  	cp install/mimic.sysusers debian/mimic.sysusers
  
  override_dh_auto_build:
+-	dh_auto_build -- build-cli generate-manpage \
 +ifeq ($(IS_UBUNTU),0)
 +#	Ubuntu's bpftool relies on current kernel, which is both inconsistent
 +#	with Debian and sbuild-unfriendly. Build from kernel source instead.
@@ -85,7 +85,7 @@ index 78eba86..2ab25cb 100755
 +else
 +	tar xf `bash -c '_tarballs=(/usr/src/linux-source-*.tar.*); echo $${_tarballs[0]}'` \
 +		--wildcards 'linux-source-*/tools/' 'linux-source-*/scripts/'
- 	dh_auto_build -- build-cli build-tools generate-manpage \
++	dh_auto_build -- build-cli build-tools generate-manpage \
  		MODE= \
  		BPF_CC=clang \
  		USE_LIBXDP=1
@@ -94,7 +94,7 @@ index 78eba86..2ab25cb 100755
  
  override_dh_auto_test:
  
-@@ -33,4 +56,5 @@ override_dh_dkms:
+@@ -33,4 +55,5 @@ override_dh_dkms:
  
  override_dh_auto_clean:
  	dh_auto_clean

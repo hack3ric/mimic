@@ -21,7 +21,7 @@ override_dh_auto_configure:
 	cp install/mimic.sysusers debian/mimic.sysusers
 
 override_dh_auto_build:
-	dh_auto_build -- build-cli build-tools generate-manpage \
+	dh_auto_build -- build-cli generate-manpage \
 		MODE= \
 		BPF_CC=clang \
 		USE_LIBXDP=1
