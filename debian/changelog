@@ -1,8 +1,10 @@
-mimic (0.7.0-1) UNRELEASED; urgency=medium
+mimic (0.7.0-1) unstable; urgency=medium
 
   * New upstream release.
+  * Disable build hack on trixie and later, since kernel packages added BPF
+    and BTF bits
 
- -- Eric Long <i@hack3r.moe>  Thu, 27 Feb 2025 19:00:12 +0800
+ -- Eric Long <i@hack3r.moe>  Fri, 07 Mar 2025 15:14:18 +0800
 
 mimic (0.6.4-1) unstable; urgency=medium
 
