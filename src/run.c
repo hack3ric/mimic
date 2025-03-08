@@ -557,6 +557,9 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   skel->bss->log_verbosity = log_verbosity;
   skel->bss->link_type = args->link_type;
 
+  bpf_program__set_flags(skel->progs.ingress_handler, BPF_F_ANY_ALIGNMENT);
+  bpf_program__set_flags(skel->progs.egress_handler, BPF_F_ANY_ALIGNMENT);
+
   // XDP
 #ifdef MIMIC_USE_LIBXDP
   if (args->use_libxdp) {
