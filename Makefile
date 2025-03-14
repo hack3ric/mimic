@@ -46,7 +46,7 @@ endif
 
 # Whether to use argp-standalone
 #
-# If host glibc is detected, the option is automatically enabled. This
+# If host glibc is not detected, the option is automatically enabled. This
 # behaviour can be overriden.
 ifeq ($(ARGP_STANDALONE),)
 ifeq ($(filter "gnu libc" "glibc" "free software foundation",$(shell ldd --version 2>&1 | tr '[A-Z]' '[a-z]')),)
