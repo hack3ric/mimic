@@ -2,7 +2,7 @@
 
 ## Platform Support
 
-To run Mimic, you need a fairly recent Linux kernel (>= 6.1, due to usage of [dynptrs](https://lwn.net/Articles/910873/)), compiled with basic BPF support. For more detail, see [checksum hacks](checksum-hacks#platform-support).
+To run Mimic, you need a fairly recent Linux kernel (>= 6.1, due to usage of [dynptrs](https://lwn.net/Articles/910873/)), compiled with basic BPF support. For more detail, see [checksum hacks](checksum-hacks.md#platform-support).
 
 You will not need to worry too much about it; most desktop and server Linux distros enable these configurations by default and should work out of the box.
 
