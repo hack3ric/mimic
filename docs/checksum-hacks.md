@@ -12,7 +12,7 @@ This leaves us a problem: when Mimic transforms a UDP packet to fake TCP one, `c
 
 To solve this issue, we have to extend eBPF on the kernel side, and we also have to maintain compatibility across kernel versions. Mimic implements two kinds of **checksum hacks** implemented in its kernel module:
 
-- `kfunc` (default): using [BPF kernel functions](https://www.kernel.org/doc/html/v6.12/bpf/kfuncs.html) to extend eBPF. This is the current way of extending eBPF in-tree, and requires BPF JIT (`CONFIG_BPF_JIT=y`) and BTF (`CONFIG_DEBUG_INFO_BTF=y`) support.
+- `kfunc` (default): using [BPF kernel functions](https://www.kernel.org/doc/html/v6.12/bpf/kfuncs.html) to extend eBPF. This is the current way of extending eBPF in-tree, and requires BPF JIT (`CONFIG_BPF_JIT=y`) and BTF (`CONFIG_DEBUG_INFO_BTF=y`) support. `CONFIG_NET_SCH_INGRESS=m` and `CONFIG_DEBUG_INFO_BTF_MODULES=y` may also be needed.
 
 - `kprobe`: change existing BPF helpers' behaviour using kprobe. This is way hackier, but could be used when kernel BTF is not present (with BPF program's own BTF information also stripped). It also allows the kernel module to be optional, since [not every case requires checksum hack](#when-is-checksum-hack-not-necessary). Pass `CHECKSUM_HACK=kprobe` to `make` to enable this behaviour (you would almost certainly need `STRIP_BTF_EXT=1` too).
 
