@@ -6,7 +6,7 @@ Requires = modprobe@mimic.service
 [Service]
 Type = notify
 ExecStart = @@MIMIC_EXEC@@ run %i -F @@MIMIC_CONFIG_PATH@@/%i.conf
-Restart = on-abnormal
+Restart = on-failure
 
 User = mimic
 RuntimeDirectory = @@MIMIC_RUNTIME_DIR@@
