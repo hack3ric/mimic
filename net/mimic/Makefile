@@ -5,7 +5,7 @@ include $(INCLUDE_DIR)/version.mk
 
 PKG_NAME := mimic
 PKG_VERSION := 0.7.0.20250831
-PKG_RELEASE := 3
+PKG_RELEASE := 4
 
 commit := ad7a4b95867f48ada5a39881c2096251a222b9b8
 PKG_BUILD_DIR := $(BUILD_DIR)/mimic-$(commit)
@@ -42,7 +42,7 @@ mimic_kmod_flags := \
 	M="$(PKG_BUILD_DIR)/kmod" \
 	V="$(V)" \
 	CHECKSUM_HACK=kprobe \
-	COMPAT_6_6=1
+	COMPAT_LINUX_6_6=1
 
 mimic_cli_flags := \
 	MODE= \
@@ -52,7 +52,7 @@ mimic_cli_flags := \
 	LLVM_STRIP="$(LLVM_STRIP)" \
 	ARGP_STANDALONE=1 \
 	CHECKSUM_HACK=kprobe \
-	COMPAT_6_6=1 \
+	COMPAT_LINUX_6_6=1 \
 	RUNTIME_DIR=/var/run/mimic \
 	STRIP_BTF_EXT=1 \
 	USE_LIBXDP=0
