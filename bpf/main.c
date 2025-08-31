@@ -62,7 +62,7 @@ int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key, i
     offset = i * SEGMENT_SIZE;
     __u32 copy_len = data_len % SEGMENT_SIZE;
     if (copy_len > 0 && copy_len < SEGMENT_SIZE) {
-      bpf_gt0_hack1(copy_len);
+      bpf_gt0_hack2(copy_len);
       packet = bpf_dynptr_data(&ptr, sizeof(*item) + offset, SEGMENT_SIZE);
       if (!packet) cleanup(TC_ACT_SHOT);
       if (bpf_skb_load_bytes(skb, pkt_off + offset, packet, copy_len) < 0) cleanup(TC_ACT_SHOT);

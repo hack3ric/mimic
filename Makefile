@@ -127,10 +127,15 @@ CFLAGS += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
 # compatibility, but also makes the program lose CO-RE functionality.
 STRIP_BTF_EXT ?=
 
-ifneq ($(COMPAT_LINUX_6_1),)
-CFLAGS += -DMIMIC_COMPAT_LINUX_6_1
-BPF_CFLAGS += -DMIMIC_COMPAT_LINUX_6_1
+define create_compat
+ifneq ($$(COMPAT_LINUX_$(1)),)
+CFLAGS += -DMIMIC_COMPAT_LINUX_$(1)
+BPF_CFLAGS += -DMIMIC_COMPAT_LINUX_$(1)
 endif
+endef
+
+compats := 6_1 6_6
+$(foreach compat,$(compats),$(eval $(call create_compat,$(compat))))
 
 # Rules
 

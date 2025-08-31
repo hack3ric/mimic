@@ -86,10 +86,10 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
         opt->wscale = opt_buf[i + 2];
         i += 2;
         break;
-#ifndef MIMIC_COMPAT_LINUX_6_1
-      // On Linux 6.1 eBPF verifier will fail with "program too big" with these branches enabled,
-      // since it struggles to unroll the loop properly. They are not necessary to Mimic and can be
-      // ignored.
+#if !defined(MIMIC_COMPAT_LINUX_6_1) && !defined(MIMIC_COMPAT_LINUX_6_6)
+      // On Linux 6.1/6.6 eBPF verifier will fail with "program too big" with these branches
+      // enabled, since it struggles to unroll the loop properly. They are not necessary to Mimic
+      // and can be ignored.
       case 2:  // MSS
         if (unlikely(i > 80 - 4 || opt_buf[i + 1] != 4)) return XDP_DROP;
         opt->mss = (opt_buf[i + 2] << 8) + opt_buf[i + 3];
