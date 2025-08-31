@@ -7,9 +7,9 @@ PKG_NAME := mimic
 PKG_VERSION := 0.7.0
 PKG_RELEASE := 1
 
-commit := v$(PKG_VERSION)
-PKG_BUILD_DIR := $(BUILD_DIR)/mimic-$(commit)
-PKG_SOURCE := $(commit).tar.gz
+tag := v$(PKG_VERSION)
+PKG_BUILD_DIR := $(BUILD_DIR)/mimic-$(PKG_VERSION)
+PKG_SOURCE := $(tag).tar.gz
 PKG_SOURCE_URL := https://github.com/hack3ric/mimic/archive/
 PKG_HASH := cfef6b4c3e3e08d1d69742bef473ea74ad49fa5916f641df7c4b82ec9f042a89
 
