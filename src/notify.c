@@ -24,7 +24,7 @@ static int notify_systemd(const char* msg) {
   struct sockaddr_un addr = {.sun_family = AF_UNIX};
   size_t path_len = strlen(socket_path);
   if (path_len >= sizeof(addr.sun_path)) return -E2BIG;
-  memcpy(addr.sun_path, socket_path, sizeof(addr.sun_path));
+  memcpy(addr.sun_path, socket_path, path_len+1);
   if (socket_path[0] == '@') addr.sun_path[0] = 0;
 
   int sk raii(closep) = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
