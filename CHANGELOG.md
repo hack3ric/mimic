@@ -1,5 +1,15 @@
 # Changelog for Mimic
 
+## 0.7.1 (2025-??-??)
+
+- Allow unaligned memory access in BPF, fixing running on riscv64, etc.
+- Fix BPF verifier failure on clang 20 and kernel 6.15 (@hrimfaxi)
+- systemd: Workaround failure after wake from suspend by restarting the service (@flyxyz123)
+- Add COMPAT_LINUX_6_6 option and fix verifier on Linux 6.6
+- Fix a buffer overread causing coredump on new versions of kernel (@flyxyz123)
+- Set max cooldown for re-initiating handshake to 40s
+- Multiple documentation improvements (@flyxyz123)
+
 ## 0.7.0 (2025-03-07)
 
 - (breaking) Add window probe mechanism
