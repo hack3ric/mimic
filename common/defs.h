@@ -84,6 +84,8 @@
 #define br_likely
 #endif
 
+#define UNUSED(x) (void)(x)
+
 #ifdef MIMIC_BPF
 
 // Some missing declaration of vmlinux.h
@@ -384,7 +386,7 @@ static __always_inline __be32 conn_max_window(struct connection* conn) {
 #define SECOND 1000000000ul
 #define MILISECOND 1000000ul
 
-static __always_inline int time_diff(__u64 unit, __u64 a, __u64 b) {
+static __always_inline __u32 time_diff(__u64 unit, __u64 a, __u64 b) {
   if (a <= b) return 0;
   return (a - b) / unit + !!((a - b) % unit < unit / 2);
 }

@@ -21,7 +21,7 @@ static inline __u16 csum_fold(__u32 csum) { return ~u32_fold(u32_fold(csum)); }
 static inline __u32 calc_ctx_csum(__u32 data, __u32 data_end, __u32 off) {
   __u32 csum = 0;
   __be16* ptr = (__be16*)((__u64)data + off);
-  for (int i = 0; i < MAX_PACKET_SIZE / sizeof(*ptr); i++) {
+  for (size_t i = 0; i < MAX_PACKET_SIZE / sizeof(*ptr); i++) {
     if ((__u64)(ptr + 1) > data_end) break;
     csum += ntohs(*ptr);
     ptr += 1;

@@ -32,7 +32,7 @@ void log_conn(int level, struct conn_tuple* conn, const char* fmt, ...) {
 
 static void _log_tcp(enum log_level level, bool recv, struct conn_tuple* conn, __u16 len,
                      __u16 flags, __u32 seq, __u32 ack_seq) {
-  if (log_verbosity < level) return;
+  if (log_verbosity < (int)level) return;
   char buf[32] = {};
   if (flags) {
     __be32 flag_word = htonl(flags << 16);

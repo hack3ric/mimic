@@ -71,7 +71,7 @@ static __always_inline struct conn_tuple gen_conn_key(QUARTET_DEF) {
 
 static void log_any(enum log_level level, enum log_type type, union log_info* info) {
   if (unlikely(!info)) return;
-  if (log_verbosity < level) return;
+  if (log_verbosity < (int)level) return;
   struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
   if (unlikely(!item)) return;
   item->type = RB_ITEM_LOG_EVENT;

@@ -1,7 +1,6 @@
 #include <argp.h>
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
-#include <errno.h>
 #include <linux/bpf.h>
 #include <linux/if_link.h>
 #include <net/if.h>
@@ -17,8 +16,8 @@
 #include "main.h"
 
 static const struct argp_option options[] = {
-  {"process", 'p', NULL, 0, N_("Show process information")},
-  {"connections", 'c', NULL, 0, N_("Show connections")},
+  {"process", 'p', NULL, 0, N_("Show process information"), 0},
+  {"connections", 'c', NULL, 0, N_("Show connections"), 0},
   {},
 };
 
@@ -48,10 +47,10 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
 }
 
 const struct argp show_argp = {
-  options,
-  args_parse_opt,
-  N_("<interface>"),
-  N_("\vSee mimic(1) for detailed usage."),
+  .options = options,
+  .parser = args_parse_opt,
+  .args_doc = N_("<interface>"),
+  .doc = N_("\vSee mimic(1) for detailed usage."),
 };
 
 int show_overview(int ifindex, enum link_type link_type, int whitelist_fd,
@@ -83,6 +82,7 @@ int show_overview(int ifindex, enum link_type link_type, int whitelist_fd,
         fprintf(out, _("skb"));
       else
         fprintf(out, _("hardware"));
+      break;
     default:
       fprintf(out, _("unknown %d"), xdp_opts.attach_mode);
       break;

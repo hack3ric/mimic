@@ -128,10 +128,10 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
 }
 
 const struct argp run_argp = {
-  options,
-  args_parse_opt,
-  N_("<interface>"),
-  N_("\vSee mimic(1) for detailed usage."),
+  .options = options,
+  .parser = args_parse_opt,
+  .args_doc = N_("<interface>"),
+  .doc = N_("\vSee mimic(1) for detailed usage."),
 };
 
 static inline int tc_hook_cleanup(struct bpf_tc_hook* hook, struct bpf_tc_opts* opts) {
@@ -214,7 +214,7 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
   if (max_window)
     tcp->window = 0xffff;
   else if (syn)
-    tcp->window = htons(min(s->window, 0xffff));
+    tcp->window = htons(min(s->window, 0xffffu));
   else
     tcp->window = htons(s->window >> WINDOW_SCALE);
 
@@ -291,6 +291,7 @@ cleanup:
 
 static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx, void* data,
                             size_t data_sz) {
+  UNUSED(ctx);
   struct rb_item* item = data;
   struct conn_tuple* conn = &item->store_packet.conn_key;
   const char* name;
@@ -347,6 +348,7 @@ struct handle_rb_event_ctx {
 };
 
 static void _handle_rb_event_binding(ffi_cif* cif, void* ret, void** args, void* _ctx) {
+  UNUSED(cif);
   struct handle_rb_event_ctx* ctx = (typeof(ctx))_ctx;
   *(int*)ret = _handle_rb_event(ctx->conns, ctx->ifname, *(void**)args[0], *(void**)args[1],
                                 *(size_t*)args[2]);
@@ -407,7 +409,7 @@ static int do_routine(int conns_fd, const char* ifname) {
         break;
       case CONN_ESTABLISHED:
         if (conn.settings.keepalive.stale > 0 &&
-            time_diff(SECOND, tstamp, conn.stale_tstamp) >= conn.settings.keepalive.stale) {
+            time_diff(SECOND, tstamp, conn.stale_tstamp) >= (__u32)conn.settings.keepalive.stale) {
           reset = remove = true;
         } else if (conn.settings.keepalive.time > 0 && retry_secs >= conn.settings.keepalive.time) {
           if (conn.settings.keepalive.interval <= 0) {
@@ -622,7 +624,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   };
   try2(write_lock_file(lock_fd, &lock_content));
 
-  for (int i = 0; i < args->filter_count; i++) {
+  for (unsigned int i = 0; i < args->filter_count; i++) {
     filter_settings_apply(&args->info[i].settings, &args->gsettings);
     retcode =
       bpf_map__update_elem(skel->maps.mimic_whitelist, &args->filters[i], sizeof(struct filter),

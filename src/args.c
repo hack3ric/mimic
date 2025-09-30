@@ -69,4 +69,9 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
   return 0;
 }
 
-const struct argp argp = {options, args_parse_opt, N_("COMMAND [OPTION...]"), doc};
+const struct argp argp = {
+  .options = options,
+  .parser = args_parse_opt,
+  .args_doc = N_("COMMAND [OPTION...]"),
+  .doc = doc,
+};
