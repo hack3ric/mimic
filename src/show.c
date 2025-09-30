@@ -1,6 +1,7 @@
 #include <argp.h>
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
+#include <errno.h>
 #include <linux/bpf.h>
 #include <linux/if_link.h>
 #include <net/if.h>
