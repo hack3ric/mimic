@@ -26,9 +26,9 @@ jobs:
           - name: Debian 13
             codename: trixie
             image: debian:trixie-slim
-          - name: Debian 14 (testing)
-            codename: forky
-            image: debian:forky-slim
+          # - name: Debian 14 (testing)
+          #   codename: forky
+          #   image: debian:forky-slim
           - name: Ubuntu 24.04
             codename: noble
             image: ubuntu:noble

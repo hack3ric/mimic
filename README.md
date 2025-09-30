@@ -6,7 +6,7 @@ Mimic is a UDP to TCP obfuscator designed to bypass UDP QoS and port blocking. B
 
 ## Installation
 
-Mimic currently ships prebuilt packages for Debian 12 (bookworm) and Ubuntu 24.04 (noble) for x86_64 in [GitHub releases](https://github.com/hack3ric/mimic/releases). Release artifacts contains:
+Mimic currently ships prebuilt packages for Debian 12 (bookworm), 13 (trixie) and Ubuntu 24.04 (noble) for x86_64 in [GitHub releases](https://github.com/hack3ric/mimic/releases). Release artifacts contains:
 
 - **`<codename>_mimic_<ver>_<arch>.deb`: Mimic CLI**
 - **`<codename>_mimic-dkms_<ver>_<arch>.deb`: Mimic kernel module for DKMS**
