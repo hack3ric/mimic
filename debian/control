@@ -15,6 +15,7 @@ Build-Depends:
  libbpf-dev,
  libffi-dev,
  libxdp-dev,
+ linux-source,
 Standards-Version: 4.7.2
 Homepage: https://github.com/hack3ric/mimic
 Rules-Requires-Root: no
@@ -23,7 +24,7 @@ Vcs-Browser: https://github.com/hack3ric/mimic
 Testsuite: autopkgtest-pkg-dkms
 
 Package: mimic
-Architecture: amd64 arm64 powerpc ppc64 ppc64el riscv64 s390x
+Architecture: amd64 arm64 riscv64 ppc64el s390x
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
@@ -41,12 +42,21 @@ Description: eBPF UDP -> TCP obfuscator
 
 Package: mimic-dkms
 Section: kernel
-Architecture: all
+Architecture: amd64 arm64 riscv64 ppc64el s390x
 Provides: mimic-modules (= ${binary:Version})
 Conflicts: mimic-modules
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
+Recommends:
+ pahole,
+ bubblewrap,
+ xz-utils,
+ lz4,
+ zstd,
+ bzip2,
+ lzma,
+ lzop,
 Description: eBPF UDP -> TCP obfuscator (DKMS kernel module)
  Mimic is an experimental UDP to TCP obfuscator designed to bypass UDP
  QoS and port blocking. Based on eBPF, it directly mangles data inside
@@ -56,3 +66,9 @@ Description: eBPF UDP -> TCP obfuscator (DKMS kernel module)
  .
  This package uses DKMS to automatically build kernel module against
  current kernel.
+ .
+ Mimic works out-of-the-box with Debian kernel shipped in trixie (and
+ versions above) without mimic-dkms' Recommends. Older or third-party
+ kernels are supported with best effort and with Recommends, but your
+ milage may vary. Linux version less than (exclusive) 6.1 and s390x
+ with non-official kernels are not supported at all.

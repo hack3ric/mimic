@@ -1,5 +1,7 @@
 # Mimic Debian Packaging
 
+## Differences with Upstream Packaging
+
 Mimic consists of userspace CLI, eBPF packet filter, and kernel module. It is
 the most convenient way to distribute them as Linux distro packages, which
 Mimic does for Debian in both upstream and in official repository, with the

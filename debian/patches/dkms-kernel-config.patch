@@ -1,0 +1,16 @@
+Description: Make mimic-dkms require kernel module BTF
+ Debian package now exclusively uses kfunc as checksum hack, therefore add it
+ as a patch.
+Forwarded: not-needed
+Author: Eric Long <i@hack3r.moe>
+
+--- a/kmod/dkms.conf.in
++++ b/kmod/dkms.conf.in
+@@ -1,6 +1,7 @@
+ PACKAGE_NAME="mimic"
+ PACKAGE_VERSION="#MODULE_VERSION#"
+ BUILD_EXCLUSIVE_KERNEL_MIN="6.1"
++BUILD_EXCLUSIVE_CONFIG="CONFIG_DEBUG_INFO_BTF_MODULES"
+ MAKE[0]="make KERNEL_UNAME=$kernelver @@EXTRA_OPTS@@"
+ CLEAN="make clean KERNEL_UNAME=$kernelver"
+ BUILT_MODULE_NAME[0]="mimic"

@@ -1,3 +1,7 @@
+Description: Correct links in installed documentation
+Forwarded: not-needed
+Author: Eric Long <i@hack3r.moe>
+
 --- a/docs/getting-started.md
 +++ b/docs/getting-started.md
 @@ -16,7 +16,7 @@
