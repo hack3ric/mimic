@@ -276,6 +276,7 @@ struct filter_info {
 };
 
 #define DEFAULT_COOLDOWN 5
+#define MAX_COOLDOWN_MUL 3  // max 5 << (3 + 1) = 40s
 
 static const struct filter_settings DEFAULT_SETTINGS = {
   .handshake.array = {2, 3},
@@ -352,7 +353,7 @@ static __always_inline struct connection conn_init(struct filter_settings* setti
 }
 
 static __always_inline void conn_reset(struct connection* conn, __u64 tstamp) {
-  if (conn->initiator && conn->state != CONN_IDLE && conn->cooldown_mul < 11)
+  if (conn->initiator && conn->state != CONN_IDLE && conn->cooldown_mul < MAX_COOLDOWN_MUL)
     conn->cooldown_mul += 1;
   conn->state = CONN_IDLE;
   conn->seq = conn->ack_seq = 0;
