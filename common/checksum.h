@@ -36,7 +36,7 @@ static inline __u32 calc_ctx_csum(__u32 data, __u32 data_end, __u32 off) {
 
 static inline __u32 calc_csum(void* data, size_t data_len) {
   __u32 result = 0;
-  for (int i = 0; i < data_len / 2; i++) {
+  for (size_t i = 0; i < data_len / 2; i++) {
     result += ntohs(*((__u16*)data + i));
   }
   if (data_len % 2 == 1) {

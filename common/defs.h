@@ -291,7 +291,7 @@ static const struct filter_settings FALLBACK_SETTINGS = {
 
 static inline void filter_settings_apply(struct filter_settings* local,
                                          const struct filter_settings* global) {
-  for (int i = 0; i < sizeof_array(local->array); i++)
+  for (size_t i = 0; i < sizeof_array(local->array); i++)
     if (local->array[i] == -1) local->array[i] = global->array[i];
 }
 
@@ -374,7 +374,7 @@ static __always_inline __u32 conn_cooldown_display(struct connection* conn) {
 }
 
 static __always_inline __u32 conn_padding(struct connection* conn, __u32 seq, __u32 ack_seq) {
-  return conn->settings.padding == PADDING_RANDOM ? (seq + ack_seq) % 11 : conn->settings.padding;
+  return conn->settings.padding == PADDING_RANDOM ? (seq + ack_seq) % 11 : (__u32)conn->settings.padding;
 }
 
 static __always_inline __be32 conn_max_window(struct connection* conn) {

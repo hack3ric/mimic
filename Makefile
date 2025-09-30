@@ -22,8 +22,8 @@ LLVM_STRIP ?= llvm-strip
 BPF_TARGET ?= bpf
 BPF_CFLAGS += --target=$(BPF_TARGET) -mcpu=v3 -g -O2
 
-BPF_CFLAGS += -iquote. -Wall -std=gnu99
-CFLAGS += -iquote. -Wall -std=gnu99
+BPF_CFLAGS += -iquote. -Wall -Wextra -std=gnu99
+CFLAGS += -iquote. -Wall -Wextra -std=gnu99
 
 # Specify compiler option presets
 MODE ?=

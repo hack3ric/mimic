@@ -98,11 +98,11 @@ static inline int parse_int_non_neg(const char* str, int min, int max) {
   return parsed;
 }
 
-static int parse_int_seq(char* str, int* nums, size_t len) {
+static size_t parse_int_seq(char* str, int* nums, size_t len) {
   size_t str_len = strlen(str);
   char* head = str;
-  int nums_idx = 0;
-  for (int i = 0; i < str_len + 1; i++) {
+  size_t nums_idx = 0;
+  for (size_t i = 0; i < str_len + 1; i++) {
     if (str[i] == ':' || str[i] == '\0') {
       char orig_char = str[i];
       if (nums_idx >= len) ret(-EINVAL, _("sequence length out of range: '%s'"), str);
