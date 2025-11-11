@@ -72,12 +72,18 @@ jobs:
           - name: Debian 13
             codename: trixie
             image: debian:trixie-slim
+            extra-cmd-arm64: |
+              sed -i 's/linux-source,/linux-source | linux-source-6.11 | linux-source-6.12,/' debian/control
           - name: Debian 14 (testing)
             codename: forky
             image: debian:forky-slim
+            extra-cmd-arm64: |
+              sed -i 's/linux-source,/linux-source | linux-source-6.11 | linux-source-6.12,/' debian/control
           - name: Debian sid
             codename: sid
             image: debian:sid-slim
+            extra-cmd-arm64: |
+              sed -i 's/linux-source,/linux-source | linux-source-6.11 | linux-source-6.12,/' debian/control
           - name: Ubuntu 24.04
             codename: noble
             image: ubuntu:noble
