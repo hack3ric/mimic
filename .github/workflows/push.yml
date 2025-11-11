@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64] # TODO: arm64
+        arch: [amd64, arm64]
         flags:
           - flags: CHECKSUM_HACK=kfunc
             args: ""
@@ -34,7 +34,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install python3 clang-15 llvm pahole linux-tools-`uname -r` \
+          sudo apt install python3 clang-15 llvm pahole \
+            linux-tools-`uname -r` linux-cloud-tools-`uname -r` \
             bats bc conntrack ethtool iperf3 jq socat tshark wireguard-tools \
             libbpf-dev libffi-dev libelf-dev libxdp-dev
       - name: Build & Test
@@ -58,7 +59,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64] # TODO: arm64
+        arch: [amd64, arm64]
         distro:
           - name: Debian 12
             codename: bookworm
@@ -133,4 +134,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dkms-make-log
-          path: /var/lib/dkms/mimic/0.7.0/build/make.log
+          path: /var/lib/dkms/mimic/*/build/make.log
