@@ -22,23 +22,14 @@ jobs:
             extra-repos: |
               deb http://deb.debian.org/debian bookworm-backports main
             extra-cmd-amd64: |
-              sed -i 's/clang/clang-16/' debian/control
+              sed -i 's/clang:native | clang/clang-16/' debian/control
               sed -i 's/BPF_CC=clang/BPF_CC=clang-16 COMPAT_LINUX_6_1=1/' debian/rules
             extra-cmd-arm64: |
               sed -i 's/linux-source/linux-source-6.1/' debian/control
-              sed -i 's/ clang,/ clang:native,/' debian/control
-              sed -i 's/ python3,/ python3:native,/' debian/control
-              sed -i 's/ bpftool,/ bpftool:native,/' debian/control
-              sed -i 's/ ronn,/ ronn:native,/' debian/control
               sed -i 's/BPF_CC=clang/BPF_CC=clang COMPAT_LINUX_6_1=1/' debian/rules
           - name: Debian 13
             codename: trixie
             image: debian:trixie-slim
-            extra-cmd-arm64: |
-              sed -i 's/ clang,/ clang:native,/' debian/control
-              sed -i 's/ python3,/ python3:native,/' debian/control
-              sed -i 's/ bpftool,/ bpftool:native,/' debian/control
-              sed -i 's/ ronn,/ ronn:native,/' debian/control
           # - name: Debian 14 (testing)
           #   codename: forky
           #   image: debian:forky-slim
@@ -48,12 +39,7 @@ jobs:
             extra-repos: |
               deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
             extra-cmd-amd64: |
-              sed -i 's/clang,/clang, llvm,/' debian/control
-            extra-cmd-arm64: |
-              sed -i 's/ clang,/ clang:native, llvm,/' debian/control
-              sed -i 's/ python3,/ python3:native,/' debian/control
-              sed -i 's/ bpftool,/ bpftool:native,/' debian/control
-              sed -i 's/ ronn,/ ronn:native,/' debian/control
+              sed -i 's/clang:native | clang,/clang:native | clang, llvm,/' debian/control
     steps:
       - name: Checkout
         uses: actions/checkout@v4
