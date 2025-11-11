@@ -68,6 +68,10 @@ jobs:
               sed -i 's/BPF_CC=clang/BPF_CC=clang-16 COMPAT_LINUX_6_1=1/' debian/rules
             extra-cmd-arm64: |
               sed -i 's/linux-source/linux-source-6.1/' debian/control
+              sed -i 's/ clang,/ clang:native [arm64],/' debian/control
+              sed -i 's/ python3,/ python3:native [arm64],/' debian/control
+              sed -i 's/ bpftool,/ bpftool:native [arm64],/' debian/control
+              sed -i 's/ ronn,/ ronn:native [arm64],/' debian/control
               sed -i 's/BPF_CC=clang/BPF_CC=clang COMPAT_LINUX_6_1=1/' debian/rules
           - name: Debian 13
             codename: trixie
