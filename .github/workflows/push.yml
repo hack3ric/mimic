@@ -13,19 +13,19 @@ jobs:
       matrix:
         flags:
           - flags: CHECKSUM_HACK=kfunc
-            args: ''
+            args: ""
             desc: kfunc
           - flags: CHECKSUM_HACK=kfunc USE_LIBXDP=0
-            args: ''
+            args: ""
             desc: kfunc-no-libxdp
           - flags: CHECKSUM_HACK=kfunc USE_LIBXDP=1
-            args: ''
+            args: ""
             desc: kfunc-libxdp-use-libbpf
           - flags: CHECKSUM_HACK=kfunc USE_LIBXDP=1
             args: --use-libxdp
             desc: kfunc-libxdp-use-libxdp
           - flags: CHECKSUM_HACK=kprobe STRIP_BTF_EXT=1
-            args: ''
+            args: ""
             desc: kprobe-strip-btf-ext
     steps:
       - name: Checkout
@@ -51,11 +51,12 @@ jobs:
           name: pcap-${{ matrix.flags.desc }}
           path: out/*.pcapng
   build-deb:
-    name: Build .deb packages for ${{ matrix.distro.name }}
-    runs-on: ubuntu-latest
+    name: Build .deb packages for ${{ matrix.distro.name }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
+        arch: [amd64, arm64]
         distro:
           - name: Debian 12
             codename: bookworm
@@ -95,25 +96,29 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: packages-${{ matrix.distro.codename }}
+          name: packages-${{ matrix.distro.codename }}-${{ matrix.arch }}
           path: |
             debian/artifacts/*.deb
             debian/artifacts/*.ddeb
   test-deb-install:
-    name: Test .deb installation
+    name: Test .deb installation (${{ matrix.arch }})
     needs: build-deb
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: packages-noble
-          path: packages-noble
+          name: packages-noble-${{ matrix.arch }}
+          path: packages-noble-${{ matrix.arch }}
       - name: Test Install
         run: |
-          sudo apt install ./packages-noble/*.deb linux-headers-`uname -r`
+          sudo apt install ./packages-noble-${{ matrix.arch }}/*.deb linux-headers-`uname -r`
           sudo modprobe mimic
       - name: Upload log
         if: always()
