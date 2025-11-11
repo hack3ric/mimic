@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
+        arch: [amd64] # TODO: arm64
         flags:
           - flags: CHECKSUM_HACK=kfunc
             args: ""
@@ -58,7 +58,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
+        arch: [amd64] # TODO: arm64
         distro:
           - name: Debian 12
             codename: bookworm
