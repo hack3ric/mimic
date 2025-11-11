@@ -116,7 +116,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64] # TODO: arm64
+        arch: [amd64] # TODO: arm64 (no BTF blob found)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
