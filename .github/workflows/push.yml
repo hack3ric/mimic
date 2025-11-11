@@ -34,7 +34,6 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt upgrade
           sudo apt install python3 clang-15 llvm pahole \
             bats bc conntrack ethtool iperf3 jq socat tshark wireguard-tools \
             libbpf-dev libffi-dev libelf-dev libxdp-dev
