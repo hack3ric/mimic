@@ -79,21 +79,27 @@ jobs:
           - name: Ubuntu 24.04
             codename: noble
             image: ubuntu:noble
-            extra-repos: |
-              deb http://${{ matrix.arch == 'arm64' && 'ports.ubuntu.com/ubuntu-ports' || 'archive.ubuntu.com/ubuntu' }} noble-backports main restricted universe multiverse
+            extra-repos-amd64: |
+              deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+            extra-repos-arm64: |
+              deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
             extra-cmd: |
               sed -i 's/clang,/clang, llvm,/' debian/control
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Run pre-building script
-        run: ${{ matrix.distro.extra-cmd }}
+        run: |
+          ${{ matrix.distro.extra-cmd }}
+          ${{ matrix.arch == 'arm64' && matrix.distro.extra-cmd-arm64 || matrix.distro.extra-cmd-amd64 }}
       - name: Build
         uses: jtdor/build-deb-action@v1
         with:
           buildpackage-opts: -b -us -uc
           docker-image: ${{ matrix.distro.image }}
-          extra-repos: ${{ matrix.distro.extra-repos }}
+          extra-repos: |
+            ${{ matrix.distro.extra-repos }}
+            ${{ matrix.arch == 'arm64' && matrix.distro.extra-repos-arm64 || matrix.distro.extra-repos-amd64 }}
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
