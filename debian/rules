@@ -44,6 +44,9 @@ else
 		BPF_CC=clang \
 		USE_LIBXDP=1
 endif
+	PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig \
+	LIBELF_LIBS=-lelf ZLIB_LIBS=-lz \
+	LDFLAGS="-L/usr/lib/x86_64-linux-gnu -L/usr/lib64 -lelf -lz" \
 	make -j$(njobs) -C linux-source-*/tools/bpf/resolve_btfids
 
 override_dh_auto_test:
