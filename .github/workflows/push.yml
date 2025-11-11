@@ -51,11 +51,12 @@ jobs:
           name: pcap-${{ matrix.flags.desc }}
           path: out/*.pcapng
   build-deb:
-    name: Build .deb packages for ${{ matrix.distro.name }}
+    name: Build .deb packages for ${{ matrix.distro.name }} (${{ matrix.arch }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        arch: [amd64, arm64]
         distro:
           - name: Debian 12
             codename: bookworm
@@ -84,6 +85,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Set up QEMU
+        if: matrix.arch != 'amd64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: ${{ matrix.arch }}
       - name: Run pre-building script
         run: ${{ matrix.distro.extra-cmd }}
       - name: Build
@@ -92,15 +98,16 @@ jobs:
           buildpackage-opts: -b -us -uc
           docker-image: ${{ matrix.distro.image }}
           extra-repos: ${{ matrix.distro.extra-repos }}
+          host-arch: ${{ matrix.arch }}
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: packages-${{ matrix.distro.codename }}
+          name: packages-${{ matrix.distro.codename }}-${{ matrix.arch }}
           path: |
             debian/artifacts/*.deb
             debian/artifacts/*.ddeb
   test-deb-install:
-    name: Test .deb installation
+    name: Test .deb installation (amd64)
     needs: build-deb
     runs-on: ubuntu-24.04
     steps:
@@ -109,11 +116,11 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: packages-noble
-          path: packages-noble
+          name: packages-noble-amd64
+          path: packages-noble-amd64
       - name: Test Install
         run: |
-          sudo apt install ./packages-noble/*.deb linux-headers-`uname -r`
+          sudo apt install ./packages-noble-amd64/*.deb linux-headers-`uname -r`
           sudo modprobe mimic
       - name: Upload log
         if: always()
