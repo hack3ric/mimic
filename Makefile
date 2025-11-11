@@ -140,7 +140,12 @@ $(foreach compat,$(compats),$(eval $(call create_compat,$(compat))))
 # Rules
 
 mkdir_p = mkdir -p $(@D)
-check_options := out/.options.$(shell echo $(BPF_CC) $(CC) $(BPFTOOL) $(BPF_CFLAGS) $(CFLAGS) | sha256sum | awk '{ print $$1 }')
+check_options := out/.options.$(shell echo $(BPF_CC) $(CC) $(BPFTOOL) $(BPF_CFLAGS) $(CFLAGS) $(LDFLAGS) | sha256sum | awk '{ print $$1 }')
+
+out/.options.%:
+	$(mkdir_p)
+	rm -f out/.options.*
+	touch $@
 
 .PHONY: .FORCE
 .FORCE:
@@ -181,11 +186,6 @@ clean:
 	rm -f src/bpf_skel.h
 	rm -f bpf/vmlinux/system.h
 	rm -f kmod/dkms.conf kmod/AKMBUILD
-
-out/.options.%:
-	$(mkdir_p)
-	rm -f out/.options.*
-	touch $@
 
 bpf/vmlinux/system.h:
 ifneq ($(KERNEL_VMLINUX),)
