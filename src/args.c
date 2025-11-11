@@ -51,6 +51,7 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
     case ARGP_KEY_ARG:
       if (strcmp(arg, "run") == 0) {
         args->cmd = CMD_RUN;
+        args->run.ipv4_wildcard = args->run.ipv6_wildcard = -1;
         args->run.gsettings = DEFAULT_SETTINGS;
         return argp_parse_cmd(state, "run", &run_argp, &args->run);
       } else if (strcmp(arg, "show") == 0) {

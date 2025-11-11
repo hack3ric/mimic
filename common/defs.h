@@ -241,7 +241,8 @@ static inline struct in6_addr ipv4_mapped(__be32 ipv4) {
 }
 
 struct filter {
-  enum { O_LOCAL, O_REMOTE } origin : 16;
+  enum { O_LOCAL, O_REMOTE } origin : 15;
+  bool from_wildcard : 1;
   __u16 port;
   struct in6_addr ip;
 };
@@ -376,7 +377,8 @@ static __always_inline __u32 conn_cooldown_display(struct connection* conn) {
 }
 
 static __always_inline __u32 conn_padding(struct connection* conn, __u32 seq, __u32 ack_seq) {
-  return conn->settings.padding == PADDING_RANDOM ? (seq + ack_seq) % 11 : (__u32)conn->settings.padding;
+  return conn->settings.padding == PADDING_RANDOM ? (seq + ack_seq) % 11
+                                                  : (__u32)conn->settings.padding;
 }
 
 static __always_inline __be32 conn_max_window(struct connection* conn) {

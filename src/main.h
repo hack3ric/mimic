@@ -2,7 +2,6 @@
 #define MIMIC_MAIN_H
 
 #include <bpf/bpf.h>
-#include <errno.h>
 #include <linux/types.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -24,6 +23,7 @@ struct args {
       struct filter filters[32];
       struct filter_info info[32];
       struct filter_settings gsettings;
+      int ipv4_wildcard, ipv6_wildcard;  // TODO: implement wildcard
       unsigned int filter_count;
       int xdp_mode;
 #ifdef MIMIC_USE_LIBXDP
