@@ -1,5 +1,5 @@
 modname=mimic
-modver=0.7.0
+modver=0.7.1
 built_modules="$modname.ko"
 
 build() {
