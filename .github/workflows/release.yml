@@ -26,14 +26,19 @@ jobs:
               sed -i 's/BPF_CC=clang/BPF_CC=clang-16 COMPAT_LINUX_6_1=1/' debian/rules
             extra-cmd-arm64: |
               sed -i 's/linux-source/linux-source-6.1/' debian/control
-              sed -i 's/ clang,/ clang:native [arm64],/' debian/control
-              sed -i 's/ python3,/ python3:native [arm64],/' debian/control
-              sed -i 's/ bpftool,/ bpftool:native [arm64],/' debian/control
-              sed -i 's/ ronn,/ ronn:native [arm64],/' debian/control
+              sed -i 's/ clang,/ clang:native,/' debian/control
+              sed -i 's/ python3,/ python3:native,/' debian/control
+              sed -i 's/ bpftool,/ bpftool:native,/' debian/control
+              sed -i 's/ ronn,/ ronn:native,/' debian/control
               sed -i 's/BPF_CC=clang/BPF_CC=clang COMPAT_LINUX_6_1=1/' debian/rules
           - name: Debian 13
             codename: trixie
             image: debian:trixie-slim
+            extra-cmd-arm64: |
+              sed -i 's/ clang,/ clang:native,/' debian/control
+              sed -i 's/ python3,/ python3:native,/' debian/control
+              sed -i 's/ bpftool,/ bpftool:native,/' debian/control
+              sed -i 's/ ronn,/ ronn:native,/' debian/control
           # - name: Debian 14 (testing)
           #   codename: forky
           #   image: debian:forky-slim
@@ -45,7 +50,10 @@ jobs:
             extra-cmd-amd64: |
               sed -i 's/clang,/clang, llvm,/' debian/control
             extra-cmd-arm64: |
-              sed -i 's/clang,/clang, llvm,/' debian/control
+              sed -i 's/ clang,/ clang:native, llvm,/' debian/control
+              sed -i 's/ python3,/ python3:native,/' debian/control
+              sed -i 's/ bpftool,/ bpftool:native,/' debian/control
+              sed -i 's/ ronn,/ ronn:native,/' debian/control
     steps:
       - name: Checkout
         uses: actions/checkout@v4
