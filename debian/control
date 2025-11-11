@@ -8,16 +8,16 @@ Build-Depends:
  dh-sequence-dlopenlibdeps,
  dh-sequence-installsysusers,
  dh-exec,
- clang:native | clang,
- python3:native | python3,
- bpftool:native | bpftool,
+ clang,
+ python3,
+ bpftool,
  ronn,
  libbpf-dev,
- libelf-dev:native | libelf-dev,
+ libelf-dev,
  libffi-dev,
  libxdp-dev,
  linux-source,
- zlib1g-dev:native | zlib1g-dev,
+ zlib1g-dev,
 Standards-Version: 4.7.2
 Homepage: https://github.com/hack3ric/mimic
 Rules-Requires-Root: no

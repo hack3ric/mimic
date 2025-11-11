@@ -44,24 +44,6 @@ else
 		BPF_CC=clang \
 		USE_LIBXDP=1
 endif
-	@HOST_ARCH=$$(uname -m); \
-	HOST_LIB_DIR="/usr/lib/$${HOST_ARCH}-linux-gnu"; \
-	if [ ! -d "$$HOST_LIB_DIR" ]; then \
-		HOST_LIB_DIR="/usr/lib64"; \
-	fi; \
-	echo "Building resolve_btfids with HOST_ARCH=$$HOST_ARCH, LIB_DIR=$$HOST_LIB_DIR"; \
-	for mkfile in linux-source-*/tools/bpf/resolve_btfids/Makefile; do \
-		if [ -f "$$mkfile" ]; then \
-			perl -i -pe "s|^(.*resolve_btfids.*)\$\$|\1 -L$$HOST_LIB_DIR -L/usr/lib64 -lelf -lz|" "$$mkfile"; \
-			if ! grep -q "HOSTLDFLAGS.*-lelf" "$$mkfile"; then \
-				echo "HOSTLDFLAGS += -L$$HOST_LIB_DIR -L/usr/lib64 -lelf -lz" >> "$$mkfile"; \
-			fi; \
-		fi; \
-	done; \
-	PKG_CONFIG_PATH="$$HOST_LIB_DIR/pkgconfig:/usr/lib/pkgconfig" \
-	LIBELF_LIBS="-lelf" ZLIB_LIBS="-lz" \
-	HOSTLDFLAGS="-L$$HOST_LIB_DIR -L/usr/lib64 -lelf -lz" \
-	LDFLAGS="-L$$HOST_LIB_DIR -L/usr/lib64 -lelf -lz" \
 	make -j$(njobs) -C linux-source-*/tools/bpf/resolve_btfids
 
 override_dh_auto_test:
