@@ -6,8 +6,8 @@
 #include "common/try.h"
 #include "main.h"
 
-int log_verbosity = 0;
-enum link_type link_type = LINK_ETH;
+int log_verbosity;
+enum link_type link_type;
 
 struct mimic_whitelist_map mimic_whitelist SEC(".maps");
 struct mimic_conns_map mimic_conns SEC(".maps");

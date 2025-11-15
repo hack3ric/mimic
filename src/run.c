@@ -25,6 +25,7 @@
 #include <sys/timerfd.h>
 #include <time.h>
 #include <unistd.h>
+#include <linux/if_arp.h>
 
 #ifdef MIMIC_USE_LIBXDP
 #include "libxdp.h"
@@ -36,6 +37,7 @@
 #include "common/try.h"
 #include "log.h"
 #include "main.h"
+#include "nl.h"
 
 #include "bpf_skel.h"
 
@@ -760,6 +762,23 @@ int subcmd_run(struct run_args* args) {
 
   int ifindex = if_nametoindex(args->ifname);
   if (!ifindex) ret(-1, _("no interface named '%s'"), args->ifname);
+
+  if (args->link_type == LINK_UNKNOWN) {
+    int kind = try(get_l2_kind(args->ifname));
+    switch (kind) {
+      case ARPHRD_ETHER:
+      case ARPHRD_LOOPBACK:
+        args->link_type = LINK_ETH;
+        break;
+      case ARPHRD_PPP:
+      case ARPHRD_NONE:
+        args->link_type = LINK_NONE;
+        break;
+      default:
+        log_warn(_("unknown link type %d, defaulting to eth"), kind);
+        break;
+    }
+  }
 
   if (args->file) {
     FILE* conf raii(fclosep) = fopen(args->file, "r");

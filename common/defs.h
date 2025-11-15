@@ -299,7 +299,8 @@ static inline void filter_settings_apply(struct filter_settings* local,
 }
 
 enum link_type {
-  LINK_ETH,  // default value
+  LINK_UNKNOWN,
+  LINK_ETH,
   LINK_NONE,
 };
 
@@ -309,6 +310,7 @@ static inline const char* link_type_str(enum link_type link) {
       return "eth";
     case LINK_NONE:
       return "none";
+    case LINK_UNKNOWN:
     default:
       return "(unknown)";
   }
