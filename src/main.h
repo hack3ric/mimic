@@ -33,7 +33,7 @@ struct args {
 #ifdef MIMIC_USE_LIBXDP
       bool use_libxdp;
 #endif
-      enum link_type link_type;  // TODO: auto detect
+      enum link_type link_type;
     } run;
     struct show_args {
       const char* ifname;
