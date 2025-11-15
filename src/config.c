@@ -177,7 +177,7 @@ static int parse_setting(const char* k, char* v, struct filter_settings* setting
   return 1;
 }
 
-int parse_filter(char* filter_str, struct filter* filters, struct filter_info* info, int size) {
+int parse_filter(char* filter_str, struct filter_list* list, unsigned int* wildcard_count) {
   int ret;
 
   char* delim = strchr(filter_str, ',');
@@ -208,36 +208,39 @@ int parse_filter(char* filter_str, struct filter* filters, struct filter_info* i
 
   int i = 0;
   bool resolved = false;
+  struct filter_node* start = list->tail;
   for (struct addrinfo* ai = ai_list; ai; ai = ai->ai_next, i++) {
-    if (i >= size) {
-      freeaddrinfo(ai_list);
-      return -E2BIG;
-    };
     struct sockaddr_in6* addr = (typeof(addr))ai->ai_addr;
     char ip_str[INET6_ADDRSTRLEN];
     ip_fmt(&addr->sin6_addr, ip_str);
     resolved = resolved || strcmp(host, ip_str) != 0;
-    filters[i] = (typeof(*filters)){.origin = origin, .ip = addr->sin6_addr, .port = port};
+    struct filter_node* filter = filter_list_add(list);
+    filter->filter.origin = origin;
+    filter->filter.ip = addr->sin6_addr;
+    filter->filter.port = port;
   }
 
   freeaddrinfo(ai_list);
   if (i <= 0) return 0;
 
-  if (resolved) strcpy(info[0].host, host);
-  info[0].settings = FALLBACK_SETTINGS;
-  if (!delim) goto ret;
-  char* next_delim = delim;
-  while (true) {
-    delim = next_delim + 1;
-    next_delim = strchr(delim, ',');
-    if (next_delim) *next_delim = '\0';
-    try(parse_kv(delim, &k, &v));
-    if (!try(parse_setting(k, v, &info[0].settings)))
-      ret(-EINVAL, _("unsupported option type: '%s'"), k);
-    if (!next_delim) break;
+  start = start ? start->next : list->head;
+
+  if (resolved) strcpy(start->info.host, host);
+  start->info.settings = FALLBACK_SETTINGS;
+  if (delim) {
+    char* next_delim = delim;
+    while (true) {
+      delim = next_delim + 1;
+      next_delim = strchr(delim, ',');
+      if (next_delim) *next_delim = '\0';
+      try(parse_kv(delim, &k, &v));
+      if (!try(parse_setting(k, v, &start->info.settings)))
+        ret(-EINVAL, _("unsupported option type: '%s'"), k);
+      if (!next_delim) break;
+    }
   }
-ret:
-  for (int j = 1; j < i; j++) memcpy(&info[j], &info[0], sizeof(*info));
+  for (struct filter_node* j = start; j; j = j->next)
+    memcpy(&j->info, &start->info, sizeof(start->info));
   return i;
 }
 
@@ -250,7 +253,6 @@ int parse_xdp_mode(const char* mode) {
 }
 
 int parse_config_file(FILE* file, struct run_args* args) {
-  int ret;
   char* line raii(freestrp) = NULL;
   size_t len = 0;
   ssize_t read;
@@ -286,15 +288,7 @@ int parse_config_file(FILE* file, struct run_args* args) {
       try(parse_link_type(v, &args->link_type));
 
     } else if (strcmp(k, "filter") == 0) {
-      unsigned int fc = args->filter_count;
-      ret = parse_filter(v, &args->filters[fc], &args->info[fc], sizeof_array(args->filters) - fc);
-      if (ret == -E2BIG)
-        ret(-E2BIG, _("currently only maximum of %d filters is supported"),
-            sizeof_array(args->filters));
-      else if (ret < 0)
-        return ret;
-      else
-        args->filter_count += ret;
+      try(parse_filter(v, &args->filters, &args->wildcard_count));
 
     } else if (strcmp(k, "xdp_mode") == 0) {
       args->xdp_mode = try(parse_xdp_mode(v));

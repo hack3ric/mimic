@@ -12,7 +12,7 @@
 #include "main.h"
 
 int main(int argc, char** argv) {
-  struct args args = {};
+  struct args args raii(args_destroy) = {};
   try(argp_parse(&argp, argc, argv, ARGP_IN_ORDER, NULL, &args), _("error parsing arguments"));
 
   switch (args.cmd) {

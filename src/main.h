@@ -20,11 +20,15 @@ struct args {
   union {
     struct run_args {
       const char *ifname, *file;
-      struct filter filters[32];
-      struct filter_info info[32];
+      struct filter_list {
+        struct filter_node {
+          struct filter filter;
+          struct filter_info info;
+          struct filter_node* next;
+        } *head, *tail;
+      } filters;
+      unsigned int wildcard_count;
       struct filter_settings gsettings;
-      int ipv4_wildcard, ipv6_wildcard;  // TODO: implement wildcard
-      unsigned int filter_count;
       int xdp_mode;
 #ifdef MIMIC_USE_LIBXDP
       bool use_libxdp;
@@ -37,6 +41,41 @@ struct args {
     } show;
   };
 };
+
+static inline struct filter_node* filter_list_add(struct filter_list* list) {
+  struct filter_node* result = calloc(1, sizeof(*result));
+  if (!result) return NULL;
+  if (!list->head) {
+    list->head = list->tail = result;
+  } else {
+    list->tail->next = result;
+    list->tail = result;
+  }
+  return result;
+}
+
+static inline void filter_list_destroy(struct filter_list* list) {
+  struct filter_node *prev = NULL, *i;
+  for (i = list->head; i; i = i->next) {
+    free(prev);
+    prev = i;
+  }
+}
+
+static inline struct filter_node* run_args_add_filter(struct run_args* args) {
+  return filter_list_add(&args->filters);
+}
+
+static inline void args_destroy(struct args* args) {
+  switch (args->cmd) {
+    case CMD_NULL:
+    case CMD_SHOW:
+      break;
+    case CMD_RUN:;
+      filter_list_destroy(&args->run.filters);
+      break;
+  }
+}
 
 extern const struct argp argp;
 extern const struct argp run_argp;
@@ -60,7 +99,7 @@ int parse_link_type(const char* str, enum link_type* link);
 int parse_handshake(char* str, struct filter_handshake* h);
 int parse_keepalive(char* str, struct filter_keepalive* k);
 int parse_padding(const char* str, __s16* padding);
-int parse_filter(char* filter_str, struct filter* filters, struct filter_info* info, int size);
+int parse_filter(char* filter_str, struct filter_list* list, unsigned int* wildcard_count);
 int parse_xdp_mode(const char* mode);
 int parse_config_file(FILE* file, struct run_args* args);
 int parse_lock_file(FILE* file, struct lock_content* c);

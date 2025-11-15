@@ -65,9 +65,7 @@ static const struct argp_option options[] = {
 };
 
 static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
-  int ret;
   struct run_args* args = (struct run_args*)state->input;
-  unsigned int fc = args->filter_count;
   switch (key) {
     case 'v':
       if (log_verbosity < 4) log_verbosity++;
@@ -76,15 +74,7 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       if (log_verbosity > 0) log_verbosity--;
       break;
     case 'f':
-      ret =
-        parse_filter(arg, &args->filters[fc], &args->info[fc], sizeof_array(args->filters) - fc);
-      if (ret == -E2BIG)
-        ret(-E2BIG, _("currently only maximum of %d filters is supported"),
-            sizeof_array(args->filters));
-      else if (ret < 0)
-        return ret;
-      else
-        args->filter_count += ret;
+      try(parse_filter(arg, &args->filters, &args->wildcard_count));
       break;
     case 'L':
       try(parse_link_type(arg, &args->link_type));
@@ -624,14 +614,14 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   };
   try2(write_lock_file(lock_fd, &lock_content));
 
-  for (unsigned int i = 0; i < args->filter_count; i++) {
-    filter_settings_apply(&args->info[i].settings, &args->gsettings);
+  for (struct filter_node* i = args->filters.head; i; i = i->next) {
+    filter_settings_apply(&i->info.settings, &args->gsettings);
     retcode =
-      bpf_map__update_elem(skel->maps.mimic_whitelist, &args->filters[i], sizeof(struct filter),
-                           &args->info[i], sizeof(struct filter_info), BPF_NOEXIST);
+      bpf_map__update_elem(skel->maps.mimic_whitelist, &i->filter, sizeof(struct filter),
+                           &i->info, sizeof(struct filter_info), BPF_NOEXIST);
     if (retcode || LOG_ALLOW_TRACE) {
       char fmt[FILTER_FMT_MAX_LEN];
-      filter_fmt(&args->filters[i], fmt);
+      filter_fmt(&i->filter, fmt);
       if (retcode) cleanup(retcode, _("failed to add filter `%s`: %s"), fmt, strerror(-retcode));
     }
   }
@@ -644,7 +634,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
 
   log_info(_("Mimic successfully deployed on %s"), args->ifname);
   show_overview(ifindex, args->link_type, mimic_whitelist_fd, &args->gsettings, log_verbosity);
-  if (args->filter_count <= 0) log_warn(_("no filter specified"));
+  if (!args->filters.head) log_warn(_("no filter specified"));
 
   struct epoll_event ev;
   struct epoll_event events[EPOLL_MAX_EVENTS];
