@@ -25,6 +25,7 @@
 #include <sys/timerfd.h>
 #include <time.h>
 #include <unistd.h>
+
 #include <linux/if_arp.h>
 
 #ifdef MIMIC_USE_LIBXDP
@@ -161,14 +162,14 @@ static int handle_send_ctrl_packet(struct send_options* s, const char* ifname) {
   // Maybe setting reception buffer size to 0 will help, but it's just prevent packets from storing
   // and they will be forwarded to the socket and discarded anyway.
   int sk raii(closep) =
-    try(socket(ip_proto(&s->conn.local), SOCK_RAW | SOCK_NONBLOCK, IPPROTO_TCP));
+    try_e(socket(ip_proto(&s->conn.local), SOCK_RAW | SOCK_NONBLOCK, IPPROTO_TCP));
 
   int level = SOL_IP, opt = IP_FREEBIND, yes = 1;
   if (ip_proto(&s->conn.local) == AF_INET6) {
     level = SOL_IPV6;
     opt = IPV6_FREEBIND;
   }
-  try(setsockopt(sk, level, opt, &yes, sizeof(yes)), _("failed to set IP free bind: %s"), strret);
+  try_e(setsockopt(sk, level, opt, &yes, sizeof(yes)), _("failed to set IP free bind: %s"), strret);
 
   struct sockaddr_storage saddr, daddr;
   conn_tuple_to_addrs(&s->conn, &saddr, &daddr);
@@ -502,11 +503,13 @@ static inline int terminate_all_conns(int mimic_conns_fd, const char* ifname) {
 static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname, int ifindex) {
   int retcode;
   struct mimic_bpf* skel = NULL;
-  raii(closep) int epfd = -1, sfd = -1, timer = -1;
+  raii(closep) int epfd = -1, sfd = -1, timer = -1, rtnl = -1;
 
   // These fds are actually reference of skel, so no need to use _cleanup_fd
   int egress_handler_fd = -1, ingress_handler_fd = -1;
   int mimic_whitelist_fd = -1, mimic_conns_fd = -1, mimic_rb_fd = -1;
+
+  void* wildcards_buf raii(freep) = NULL;
 
   bool tc_hook_created = false;
   struct bpf_tc_hook tc_hook_egress;
@@ -616,15 +619,24 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   };
   try2(write_lock_file(lock_fd, &lock_content));
 
+  // log_warn("wildcard count: %d", args->wildcard_count);
+  if (args->wildcard_count > 0)
+    wildcards_buf = try2_p(calloc(args->wildcard_count, sizeof(struct filter_node*)));
+  struct filter_node** wildcards = wildcards_buf;
+
+  unsigned int wildcards_len = 0;
   for (struct filter_node* i = args->filters.head; i; i = i->next) {
     filter_settings_apply(&i->info.settings, &args->gsettings);
-    retcode =
-      bpf_map__update_elem(skel->maps.mimic_whitelist, &i->filter, sizeof(struct filter),
-                           &i->info, sizeof(struct filter_info), BPF_NOEXIST);
-    if (retcode || LOG_ALLOW_TRACE) {
+    if (ip_is_wildcard(&i->filter.ip)) {
+      assert(wildcards_len < args->wildcard_count);
+      wildcards[wildcards_len++] = i;
+    }
+    retcode = bpf_map__update_elem(skel->maps.mimic_whitelist, &i->filter, sizeof(struct filter),
+                                   &i->info, sizeof(struct filter_info), BPF_NOEXIST);
+    if (retcode) {
       char fmt[FILTER_FMT_MAX_LEN];
       filter_fmt(&i->filter, fmt);
-      if (retcode) cleanup(retcode, _("failed to add filter `%s`: %s"), fmt, strerror(-retcode));
+      cleanup(retcode, _("failed to add filter `%s`: %s"), fmt, strerror(-retcode));
     }
   }
 
@@ -666,6 +678,12 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   ev = (typeof(ev)){.events = EPOLLIN | EPOLLET, .data.fd = timer};
   try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, timer, &ev), _("epoll_ctl error: %s"), strret);
 
+  if (args->wildcard_count > 0) {
+    rtnl = try2(rtnl_create_socket());
+    ev = (typeof(ev)){.events = EPOLLIN, .data.fd = rtnl};
+    try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, rtnl, &ev), _("epoll_ctl error: %s"), strret);
+  }
+
   while (true) {
     int nfds = try2_e(epoll_wait(epfd, events, EPOLL_MAX_EVENTS, -1),
                       _("error waiting for epoll: %s"), strret);
@@ -690,6 +708,9 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
         __u64 expirations;
         read(timer, &expirations, sizeof(expirations));
         do_routine(mimic_conns_fd, ifname);
+
+      } else if (args->wildcard_count > 0 && events[i].data.fd == rtnl) {
+        rtnl_recv_addr_change(rtnl, ifindex);
 
       } else {
         cleanup(-1, _("unknown fd: %d"), events[i].data.fd);

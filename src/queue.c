@@ -98,7 +98,7 @@ int packet_buf_consume(struct packet_buf* buf, bool* consumed) {
   }
 
   int sk raii(closep) =
-    try(socket(ip_proto(&buf->conn.local), SOCK_RAW | SOCK_NONBLOCK, IPPROTO_UDP));
+    try_e(socket(ip_proto(&buf->conn.local), SOCK_RAW | SOCK_NONBLOCK, IPPROTO_UDP));
   struct sockaddr_storage saddr, daddr;
   conn_tuple_to_addrs(&buf->conn, &saddr, &daddr);
 

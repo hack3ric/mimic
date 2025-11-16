@@ -214,15 +214,15 @@ int parse_filter(char* filter_str, struct filter_list* list, unsigned int* wildc
     char ip_str[INET6_ADDRSTRLEN];
     ip_fmt(&addr->sin6_addr, ip_str);
     resolved = resolved || strcmp(host, ip_str) != 0;
-    struct filter_node* filter = filter_list_add(list);
-    filter->filter.origin = origin;
-    filter->filter.ip = addr->sin6_addr;
-    filter->filter.port = port;
+    struct filter_node* f = filter_list_add(list);
+    f->filter.origin = origin;
+    f->filter.ip = addr->sin6_addr;
+    f->filter.port = port;
+    if (ip_is_wildcard(&f->filter.ip)) (*wildcard_count)++;
   }
 
   freeaddrinfo(ai_list);
   if (i <= 0) return 0;
-
   start = start ? start->next : list->head;
 
   if (resolved) strcpy(start->info.host, host);

@@ -12,9 +12,9 @@
 int get_l2_kind(const char* ifname) {
   char path[128];
   snprintf(path, sizeof(path), "/sys/class/net/%s/type", ifname);
-  FILE* f raii(fclosep) = try_p(fopen(path, "r"), _("failed to open %s"), path);
+  FILE* f raii(fclosep) = try_p(fopen(path, "r"), _("failed to open %s: %s"), path, strret);
   int type = 0;
-  if (try(fscanf(f, "%d", &type), _("failed to read %s"), path) != 1) {
+  if (try_e(fscanf(f, "%d", &type), _("failed to read %s: %s"), path, strret) != 1) {
     log_error(_("failed to read %s"), path);
     return -EIO;
   }
@@ -23,13 +23,14 @@ int get_l2_kind(const char* ifname) {
 
 int rtnl_create_socket() {
   int retcode = 0;
-  int sock =
-    try(socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE), _("failed to create rtnetlink socket"));
+  int sock = try_e(socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE),
+                   _("failed to create rtnetlink socket: %s"), strret);
   struct sockaddr_nl addr = {
     .nl_family = AF_NETLINK,
     .nl_groups = RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR,
   };
-  try2(bind(sock, (struct sockaddr*)&addr, sizeof(addr)), _("failed to bind rtnetlink socket"));
+  try2_e(bind(sock, (struct sockaddr*)&addr, sizeof(addr)),
+         _("failed to bind rtnetlink socket: %s"), strret);
   return sock;
 cleanup:
   close(sock);
@@ -38,13 +39,14 @@ cleanup:
 
 int rtnl_recv_addr_change(int sock, unsigned int ifindex) {
   char buf[1024];
-  ssize_t len = try(recv(sock, buf, sizeof(buf), 0), _("failed to recv from rtnetlink socket"));
+  ssize_t len =
+    try_e(recv(sock, buf, sizeof(buf), 0), _("failed to recv from rtnetlink socket: %s"), strret);
 
   struct nlmsghdr* nlh = (struct nlmsghdr*)buf;
   for (; NLMSG_OK(nlh, (unsigned int)len); nlh = NLMSG_NEXT(nlh, len)) {
     if (nlh->nlmsg_type == NLMSG_DONE) break;
     if (nlh->nlmsg_type == RTM_NEWADDR || nlh->nlmsg_type == RTM_DELADDR) {
-      struct ifaddrmsg* ifa = (struct ifaddrmsg*)NLMSG_DATA(nlh);
+      struct ifaddrmsg* ifa = NLMSG_DATA(nlh);
       struct rtattr* rta = IFA_RTA(ifa);
       int rtl = IFA_PAYLOAD(nlh);
 
@@ -57,9 +59,9 @@ int rtnl_recv_addr_change(int sock, unsigned int ifindex) {
           inet_ntop(ifa->ifa_family, RTA_DATA(rta), ip, sizeof(ip));
 
           if (nlh->nlmsg_type == RTM_NEWADDR)
-            log_info("Interface %s has new IP address %s\n", ifname, ip);
+            log_info("Interface %s has new IP address %s", ifname, ip);
           else
-            log_info("Interface %s lost IP address %s\n", ifname, ip);
+            log_info("Interface %s lost IP address %s", ifname, ip);
         }
       }
     }

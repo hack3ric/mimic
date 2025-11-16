@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #endif
@@ -242,9 +243,14 @@ static inline struct in6_addr ipv4_mapped(__be32 ipv4) {
   return (struct in6_addr){.s6_addr32 = {0, 0, htonl(0xffff), ipv4}};
 }
 
+#ifndef MIMIC_BPF
+static inline bool ip_is_wildcard(const struct in6_addr* ip) {
+  return memcmp(ip, &IPV4_ANY, sizeof(*ip)) == 0 || memcmp(ip, &IPV6_ANY, sizeof(*ip)) == 0;
+}
+#endif
+
 struct filter {
-  enum { O_LOCAL, O_REMOTE } origin : 15;
-  bool from_wildcard : 1;
+  enum { O_LOCAL, O_REMOTE } origin : 16;
   __u16 port;
   struct in6_addr ip;
 };
@@ -276,7 +282,8 @@ struct filter_settings {
 // clang-format on
 
 struct filter_info {
-  char host[128];
+  bool from_wildcard;
+  char host[127];
   struct filter_settings settings;
 };
 
