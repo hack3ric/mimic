@@ -213,7 +213,9 @@ static inline __attribute__((__format_arg__(1))) const char* _(const char* text)
 
 // IP representation utilities
 
-#define IP_ANY ((struct in6_addr){})
+static const struct in6_addr IP_ANY = {};
+static const struct in6_addr IPV4_ANY = {.s6_addr32 = {0, 0, 0xffff, 0}};
+static const struct in6_addr IPV6_ANY = {};
 
 static inline int ip_proto(const struct in6_addr* ip) {
   if (ip->s6_addr32[0] == 0 && ip->s6_addr32[1] == 0 && ip->s6_addr32[2] == htonl(0xffff))
