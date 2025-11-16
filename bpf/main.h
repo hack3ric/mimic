@@ -12,14 +12,16 @@ extern enum link_type link_type;
 
 extern struct mimic_whitelist_map {
   __uint(type, BPF_MAP_TYPE_HASH);
-  __uint(max_entries, 32);
+  __uint(max_entries, 65536);
+  __uint(map_flags, BPF_F_NO_PREALLOC);
   __type(key, struct filter);
   __type(value, struct filter_info);
 } mimic_whitelist;
 
 extern struct mimic_conns_map {
   __uint(type, BPF_MAP_TYPE_HASH);
-  __uint(max_entries, 32);
+  __uint(max_entries, 65536);
+  __uint(map_flags, BPF_F_NO_PREALLOC);
   __type(key, struct conn_tuple);
   __type(value, struct connection);
 } mimic_conns;
