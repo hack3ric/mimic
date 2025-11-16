@@ -682,7 +682,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
     rtnl = try2(rtnl_create_socket());
     ev = (typeof(ev)){.events = EPOLLIN, .data.fd = rtnl};
     try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, rtnl, &ev), _("epoll_ctl error: %s"), strret);
-    rtnl_get_addrs(ifindex, NULL);
+    rtnl_get_addrs(ifindex, NULL);  // TODO: process ips
   }
 
   while (true) {
@@ -708,10 +708,13 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
       } else if (events[i].data.fd == timer) {
         __u64 expirations;
         read(timer, &expirations, sizeof(expirations));
-        do_routine(mimic_conns_fd, ifname);
+        retcode = do_routine(mimic_conns_fd, ifname);
 
       } else if (args->wildcard_count > 0 && events[i].data.fd == rtnl) {
-        rtnl_recv_addr_change(rtnl, ifindex, NULL);
+        struct ip_delta_list* ips = NULL;
+        retcode = rtnl_recv_addr_change(rtnl, ifindex, &ips);
+        // TODO: process ips
+        ip_delta_list_destroy(&ips);
 
       } else {
         cleanup(-1, _("unknown fd: %d"), events[i].data.fd);

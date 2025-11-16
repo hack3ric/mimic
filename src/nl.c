@@ -31,6 +31,7 @@ void ip_delta_list_destroy(struct ip_delta_list** list) {
     prev = i;
   }
   free(prev);
+  *list = NULL;
 }
 
 // Returns value refer to linux/if_arp.h
@@ -64,6 +65,7 @@ cleanup:
 }
 
 int rtnl_get_addrs(unsigned int ifindex, struct ip_delta_list** ips) {
+  int retcode = 0;
   int sock raii(closep) = try_e(socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE),
                                 _("failed to create rtnetlink socket: %s"), strret);
   struct sockaddr_nl addr = {.nl_family = AF_NETLINK, .nl_groups = 0};
@@ -87,13 +89,13 @@ int rtnl_get_addrs(unsigned int ifindex, struct ip_delta_list** ips) {
 
   char buf[8192];
   ssize_t len;
-  while ((len = try_e(recv(sock, buf, sizeof(buf), 0),
-                      _("failed to recv from rtnetlink socket: %s"), strret)) > 0) {
+  while ((len = try2_e(recv(sock, buf, sizeof(buf), 0),
+                       _("failed to recv from rtnetlink socket: %s"), strret)) > 0) {
     for (struct nlmsghdr* nlh = (typeof(nlh))buf; NLMSG_OK(nlh, len); nlh = NLMSG_NEXT(nlh, len)) {
       if (nlh->nlmsg_type == NLMSG_DONE) goto done;
       if (nlh->nlmsg_type == NLMSG_ERROR) {
         struct nlmsgerr* e = NLMSG_DATA(nlh);
-        ret(-abs(e->error), _("received netlink error: %s"), strerror(abs(e->error)));
+        cleanup(-abs(e->error), _("received netlink error: %s"), strerror(abs(e->error)));
       }
 
       struct ifaddrmsg* ifa = NLMSG_DATA(nlh);
@@ -101,7 +103,7 @@ int rtnl_get_addrs(unsigned int ifindex, struct ip_delta_list** ips) {
       for (struct rtattr* rta = IFA_RTA(ifa); RTA_OK(rta, rtl); rta = RTA_NEXT(rta, rtl)) {
         if (rta->rta_type == IFA_ADDRESS || rta->rta_type == IFA_LOCAL) {
           struct in6_addr ip = ip_from_buf(ifa->ifa_family, RTA_DATA(rta));
-          if (ips) try(ip_delta_list_add(ips, false, ip));
+          if (ips) try2(ip_delta_list_add(ips, false, ip));
           if (log_verbosity >= LOG_DEBUG) {
             char ip_buf[INET6_ADDRSTRLEN];
             ip_fmt(&ip, ip_buf);
@@ -117,10 +119,14 @@ int rtnl_get_addrs(unsigned int ifindex, struct ip_delta_list** ips) {
   }
 done:
   return 0;
+cleanup:
+  ip_delta_list_destroy(ips);
+  return retcode;
 }
 
 // TODO: return linked list
 int rtnl_recv_addr_change(int sock, unsigned int ifindex, struct ip_delta_list** ips) {
+  int retcode = 0;
   char buf[8192];
   ssize_t len =
     try_e(recv(sock, buf, sizeof(buf), 0), _("failed to recv from rtnetlink socket: %s"), strret);
@@ -129,7 +135,7 @@ int rtnl_recv_addr_change(int sock, unsigned int ifindex, struct ip_delta_list**
     if (nlh->nlmsg_type == NLMSG_DONE) break;
     if (nlh->nlmsg_type == NLMSG_ERROR) {
       struct nlmsgerr* e = NLMSG_DATA(nlh);
-      ret(-abs(e->error), _("received netlink error: %s"), strerror(abs(e->error)));
+      cleanup(-abs(e->error), _("received netlink error: %s"), strerror(abs(e->error)));
     }
     if (nlh->nlmsg_type == RTM_NEWADDR || nlh->nlmsg_type == RTM_DELADDR) {
       struct ifaddrmsg* ifa = NLMSG_DATA(nlh);
@@ -154,7 +160,7 @@ int rtnl_recv_addr_change(int sock, unsigned int ifindex, struct ip_delta_list**
       if (ip_is_wildcard(&ifa_local_ip) && ip_is_wildcard(&ifa_address_ip)) continue;
       struct in6_addr* ip = ip_is_wildcard(&ifa_local_ip) ? &ifa_address_ip : &ifa_local_ip;
 
-      if (ips) try(ip_delta_list_add(ips, nlh->nlmsg_type == RTM_DELADDR, *ip));
+      if (ips) try2(ip_delta_list_add(ips, nlh->nlmsg_type == RTM_DELADDR, *ip));
       if (log_verbosity >= LOG_DEBUG) {
         char ip_buf[INET6_ADDRSTRLEN];
         ip_fmt(ip, ip_buf);
@@ -166,4 +172,7 @@ int rtnl_recv_addr_change(int sock, unsigned int ifindex, struct ip_delta_list**
     }
   }
   return 0;
+cleanup:
+  ip_delta_list_destroy(ips);
+  return retcode;
 }

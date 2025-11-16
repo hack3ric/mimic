@@ -27,7 +27,7 @@ struct args {
           struct filter_node* next;
         } *head, *tail;
       } filters;
-      unsigned int wildcard_count;
+      unsigned int wildcard_count;  // TODO: maybe separate v4 and v6
       struct filter_settings gsettings;
       int xdp_mode;
 #ifdef MIMIC_USE_LIBXDP
