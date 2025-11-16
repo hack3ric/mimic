@@ -60,6 +60,7 @@ static inline void filter_list_destroy(struct filter_list* list) {
     free(prev);
     prev = i;
   }
+  free(prev);
 }
 
 static inline struct filter_node* run_args_add_filter(struct run_args* args) {
@@ -71,7 +72,7 @@ static inline void args_destroy(struct args* args) {
     case CMD_NULL:
     case CMD_SHOW:
       break;
-    case CMD_RUN:;
+    case CMD_RUN:
       filter_list_destroy(&args->run.filters);
       break;
   }
