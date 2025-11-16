@@ -1,10 +1,12 @@
 #include <arpa/inet.h>
+#include <bpf/libbpf.h>
 #include <linux/if_addr.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <sys/socket.h>
 
@@ -32,6 +34,34 @@ void ip_delta_list_destroy(struct ip_delta_list** list) {
   }
   free(prev);
   *list = NULL;
+}
+
+int ip_delta_list_apply(struct ip_delta_list* list, struct bpf_map* mimic_whitelist,
+                        struct filter_node** wildcards, size_t wildcards_count) {
+  int retcode = 0;
+  for (struct ip_delta_list* ip = list; ip; ip = ip->next) {
+    for (size_t i = 0; i < wildcards_count; i++) {
+      if (ip_proto(&wildcards[i]->filter.ip) != ip_proto(&ip->ip)) continue;
+      struct filter f = {.origin = O_LOCAL, .ip = ip->ip, .port = wildcards[i]->filter.port};
+      const char* error_msg;
+      if (ip->removed) {
+        error_msg = N_("failed to remove filter `%s`: %s");
+        retcode = bpf_map__delete_elem(mimic_whitelist, &f, sizeof(struct filter), 0);
+      } else {
+        error_msg = N_("failed to add filter `%s`: %s");
+        struct filter_info fi = wildcards[i]->info;
+        fi.from_wildcard = true;
+        retcode = bpf_map__update_elem(mimic_whitelist, &f, sizeof(struct filter), &fi,
+                                       sizeof(struct filter_info), 0);
+      }
+      if (retcode) {
+        char fmt[FILTER_FMT_MAX_LEN];
+        filter_fmt(&f, fmt);
+        log_error(gettext(error_msg), fmt, strerror(-retcode));
+      }
+    }
+  }
+  return retcode;
 }
 
 // Returns value refer to linux/if_arp.h

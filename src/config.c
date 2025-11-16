@@ -218,7 +218,7 @@ int parse_filter(char* filter_str, struct filter_list* list, unsigned int* wildc
     f->filter.origin = origin;
     f->filter.ip = addr->sin6_addr;
     f->filter.port = port;
-    if (ip_is_wildcard(&f->filter.ip)) (*wildcard_count)++;
+    if (ip_is_wildcard(&f->filter.ip) && origin == O_LOCAL) (*wildcard_count)++;
   }
 
   freeaddrinfo(ai_list);

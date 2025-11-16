@@ -620,7 +620,6 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   };
   try2(write_lock_file(lock_fd, &lock_content));
 
-  // log_warn("wildcard count: %d", args->wildcard_count);
   if (args->wildcard_count > 0)
     wildcards_buf = try2_p(calloc(args->wildcard_count, sizeof(struct filter_node*)));
   struct filter_node** wildcards = wildcards_buf;
@@ -628,7 +627,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   unsigned int wildcards_len = 0;
   for (struct filter_node* i = args->filters.head; i; i = i->next) {
     filter_settings_apply(&i->info.settings, &args->gsettings);
-    if (ip_is_wildcard(&i->filter.ip)) {
+    if (ip_is_wildcard(&i->filter.ip) && i->filter.origin == O_LOCAL) {
       assert(wildcards_len < args->wildcard_count);
       wildcards[wildcards_len++] = i;
     }
@@ -683,7 +682,10 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
     rtnl = try2(rtnl_create_socket());
     ev = (typeof(ev)){.events = EPOLLIN, .data.fd = rtnl};
     try2_e(epoll_ctl(epfd, EPOLL_CTL_ADD, rtnl, &ev), _("epoll_ctl error: %s"), strret);
-    rtnl_get_addrs(ifindex, NULL);  // TODO: process ips
+
+    struct ip_delta_list* ips raii(ip_delta_list_destroy) = NULL;
+    try2(rtnl_get_addrs(ifindex, &ips));
+    try2(ip_delta_list_apply(ips, skel->maps.mimic_whitelist, wildcards, args->wildcard_count));
   }
 
   while (true) {
@@ -712,10 +714,12 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
         retcode = do_routine(mimic_conns_fd, ifname);
 
       } else if (args->wildcard_count > 0 && events[i].data.fd == rtnl) {
-        struct ip_delta_list* ips = NULL;
+        struct ip_delta_list* ips raii(ip_delta_list_destroy) = NULL;
         retcode = rtnl_recv_addr_change(rtnl, ifindex, &ips);
-        // TODO: process ips
-        ip_delta_list_destroy(&ips);
+        if (retcode < 0) {
+          retcode =
+            ip_delta_list_apply(ips, skel->maps.mimic_whitelist, wildcards, args->wildcard_count);
+        }
 
       } else {
         cleanup(-1, _("unknown fd: %d"), events[i].data.fd);
