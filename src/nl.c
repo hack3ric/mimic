@@ -4,12 +4,34 @@
 #include <linux/rtnetlink.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <sys/socket.h>
 
+#include "common/defs.h"
 #include "common/try.h"
 #include "main.h"
 #include "nl.h"
+
+int ip_delta_list_add(struct ip_delta_list** list, bool removed, struct in6_addr ip) {
+  if (!list) return -EINVAL;
+  struct ip_delta_list* new = try_p(calloc(1, sizeof(*new)));
+  new->removed = removed;
+  new->ip = ip;
+  new->next = *list;
+  *list = new;
+  return 0;
+}
+
+void ip_delta_list_destroy(struct ip_delta_list** list) {
+  if (!list) return;
+  struct ip_delta_list *prev = NULL, *i;
+  for (i = *list; i; i = i->next) {
+    free(prev);
+    prev = i;
+  }
+  free(prev);
+}
 
 // Returns value refer to linux/if_arp.h
 int get_l2_kind(const char* ifname) {
@@ -34,33 +56,90 @@ int rtnl_create_socket() {
   };
   try2_e(bind(sock, (struct sockaddr*)&addr, sizeof(addr)),
          _("failed to bind rtnetlink socket: %s"), strret);
+
   return sock;
 cleanup:
   close(sock);
   return retcode;
 }
 
-// TODO: get initial set of IPs
+int rtnl_get_addrs(unsigned int ifindex, struct ip_delta_list** ips) {
+  int sock raii(closep) = try_e(socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE),
+                                _("failed to create rtnetlink socket: %s"), strret);
+  struct sockaddr_nl addr = {.nl_family = AF_NETLINK, .nl_groups = 0};
+  try_e(bind(sock, (struct sockaddr*)&addr, sizeof(addr)), _("failed to bind rtnetlink socket: %s"),
+        strret);
+  int opt = 1;
+  try_e(setsockopt(sock, SOL_NETLINK, NETLINK_GET_STRICT_CHK, &opt, sizeof(opt)),
+        _("failed to setsockopt rtnetlink socket: %s"), strret);
 
-int rtnl_recv_addr_change(int sock, unsigned int ifindex) {
-  char buf[1024];
+  struct {
+    struct nlmsghdr nlh;
+    struct ifaddrmsg ifa;
+  } req = {
+    .nlh.nlmsg_len = sizeof(req),
+    .nlh.nlmsg_type = RTM_GETADDR,
+    .nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP,
+    .ifa.ifa_family = AF_UNSPEC,
+    .ifa.ifa_index = ifindex,
+  };
+  try_e(send(sock, &req, sizeof(req), 0), _("failed to send rtnetlink request: %s"), strret);
+
+  char buf[8192];
+  ssize_t len;
+  while ((len = try_e(recv(sock, buf, sizeof(buf), 0),
+                      _("failed to recv from rtnetlink socket: %s"), strret)) > 0) {
+    for (struct nlmsghdr* nlh = (typeof(nlh))buf; NLMSG_OK(nlh, len); nlh = NLMSG_NEXT(nlh, len)) {
+      if (nlh->nlmsg_type == NLMSG_DONE) goto done;
+      if (nlh->nlmsg_type == NLMSG_ERROR) {
+        struct nlmsgerr* e = NLMSG_DATA(nlh);
+        ret(-abs(e->error), _("received netlink error: %s"), strerror(abs(e->error)));
+      }
+
+      struct ifaddrmsg* ifa = NLMSG_DATA(nlh);
+      int rtl = IFA_PAYLOAD(nlh);
+      for (struct rtattr* rta = IFA_RTA(ifa); RTA_OK(rta, rtl); rta = RTA_NEXT(rta, rtl)) {
+        if (rta->rta_type == IFA_ADDRESS || rta->rta_type == IFA_LOCAL) {
+          struct in6_addr ip = ip_from_buf(ifa->ifa_family, RTA_DATA(rta));
+          if (ips) try(ip_delta_list_add(ips, false, ip));
+          if (log_verbosity >= LOG_DEBUG) {
+            char ip_buf[INET6_ADDRSTRLEN];
+            ip_fmt(&ip, ip_buf);
+            if (ifa->ifa_family == AF_INET) {
+              log_debug("interface IPv4 address: %s/%d", ip_buf, ifa->ifa_prefixlen);
+            } else if (ifa->ifa_family == AF_INET6) {
+              log_debug("interface IPv6 address: %s/%d", ip_buf, ifa->ifa_prefixlen);
+            }
+          }
+        }
+      }
+    }
+  }
+done:
+  return 0;
+}
+
+// TODO: return linked list
+int rtnl_recv_addr_change(int sock, unsigned int ifindex, struct ip_delta_list** ips) {
+  char buf[8192];
   ssize_t len =
     try_e(recv(sock, buf, sizeof(buf), 0), _("failed to recv from rtnetlink socket: %s"), strret);
 
-  struct nlmsghdr* nlh = (struct nlmsghdr*)buf;
-  for (; NLMSG_OK(nlh, (unsigned int)len); nlh = NLMSG_NEXT(nlh, len)) {
+  for (struct nlmsghdr* nlh = (typeof(nlh))buf; NLMSG_OK(nlh, len); nlh = NLMSG_NEXT(nlh, len)) {
     if (nlh->nlmsg_type == NLMSG_DONE) break;
+    if (nlh->nlmsg_type == NLMSG_ERROR) {
+      struct nlmsgerr* e = NLMSG_DATA(nlh);
+      ret(-abs(e->error), _("received netlink error: %s"), strerror(abs(e->error)));
+    }
     if (nlh->nlmsg_type == RTM_NEWADDR || nlh->nlmsg_type == RTM_DELADDR) {
       struct ifaddrmsg* ifa = NLMSG_DATA(nlh);
       if (ifa->ifa_index != ifindex) continue;
-      struct rtattr* rta = IFA_RTA(ifa);
       int rtl = IFA_PAYLOAD(nlh);
 
-      struct in6_addr ifa_local_ip = {}, ifa_address_ip = {}, ip;
-      for (; RTA_OK(rta, rtl); rta = RTA_NEXT(rta, rtl)) {
+      struct in6_addr ifa_local_ip = {}, ifa_address_ip = {};
+      for (struct rtattr* rta = IFA_RTA(ifa); RTA_OK(rta, rtl); rta = RTA_NEXT(rta, rtl)) {
         switch (rta->rta_type) {
           case IFA_LOCAL:
-            log_info("ok");
             ifa_local_ip = ip_from_buf(ifa->ifa_family, RTA_DATA(rta));
             break;
           case IFA_ADDRESS:
@@ -73,16 +152,18 @@ int rtnl_recv_addr_change(int sock, unsigned int ifindex) {
 
       // netlink should not return wildcard address
       if (ip_is_wildcard(&ifa_local_ip) && ip_is_wildcard(&ifa_address_ip)) continue;
-      ip = ip_is_wildcard(&ifa_local_ip) ? ifa_address_ip : ifa_local_ip;
+      struct in6_addr* ip = ip_is_wildcard(&ifa_local_ip) ? &ifa_address_ip : &ifa_local_ip;
 
-      char ip_buf[INET6_ADDRSTRLEN];
-      ip_fmt(&ip, ip_buf);
-      if (nlh->nlmsg_type == RTM_NEWADDR)
-        log_info("interface has new IP address %s", ip_buf);
-      else
-        log_info("interface lost IP address %s", ip_buf);
+      if (ips) try(ip_delta_list_add(ips, nlh->nlmsg_type == RTM_DELADDR, *ip));
+      if (log_verbosity >= LOG_DEBUG) {
+        char ip_buf[INET6_ADDRSTRLEN];
+        ip_fmt(ip, ip_buf);
+        if (nlh->nlmsg_type == RTM_NEWADDR)
+          log_debug("interface has new IP address %s", ip_buf);
+        else
+          log_debug("interface lost IP address %s", ip_buf);
+      }
     }
   }
-
   return 0;
 }

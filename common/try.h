@@ -144,26 +144,28 @@ static __always_inline void* xdp_data_end(const struct xdp_md* ctx) {
   })
 
 // Similar to `try_e`, but for function that returns a pointer.
-#define try_p(expr, ...)        \
-  ({                            \
-    void* _ptr = (expr);        \
-    if (unlikely(!_ptr)) {      \
-      long _ret = -errno;       \
-      ret(_ret, ##__VA_ARGS__); \
-    }                           \
-    _ptr;                       \
+#define try_p(expr, ...)                 \
+  ({                                     \
+    void* _ptr = (expr);                 \
+    if (unlikely(!_ptr && errno != 0)) { \
+      long _ret = -errno;                \
+      ret(_ret, ##__VA_ARGS__);          \
+    }                                    \
+    _ptr;                                \
   })
 
 // Similar to `try2_e`, but for function that returns a pointer.
-#define try2_p(expr, ...)           \
-  ({                                \
-    void* _ptr = (expr);            \
-    if (unlikely(!_ptr)) {          \
-      long _ret = -errno;           \
-      cleanup(_ret, ##__VA_ARGS__); \
-    }                               \
-    _ptr;                           \
+#define try2_p(expr, ...)                \
+  ({                                     \
+    void* _ptr = (expr);                 \
+    if (unlikely(!_ptr) && errno != 0) { \
+      long _ret = -errno;                \
+      cleanup(_ret, ##__VA_ARGS__);      \
+    }                                    \
+    _ptr;                                \
   })
+
+// TODO: try macros for parent function returning pointer
 
 #endif  // MIMIC_BPF
 
