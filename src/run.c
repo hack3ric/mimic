@@ -1,5 +1,6 @@
 #include <argp.h>
 #include <arpa/inet.h>
+#include <assert.h>
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <errno.h>
