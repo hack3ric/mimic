@@ -1,11 +1,14 @@
 #include <arpa/inet.h>
+#include <linux/if_addr.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <net/if.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <sys/socket.h>
 
 #include "common/try.h"
+#include "main.h"
 #include "nl.h"
 
 // Returns value refer to linux/if_arp.h
@@ -37,6 +40,8 @@ cleanup:
   return retcode;
 }
 
+// TODO: get initial set of IPs
+
 int rtnl_recv_addr_change(int sock, unsigned int ifindex) {
   char buf[1024];
   ssize_t len =
@@ -47,23 +52,35 @@ int rtnl_recv_addr_change(int sock, unsigned int ifindex) {
     if (nlh->nlmsg_type == NLMSG_DONE) break;
     if (nlh->nlmsg_type == RTM_NEWADDR || nlh->nlmsg_type == RTM_DELADDR) {
       struct ifaddrmsg* ifa = NLMSG_DATA(nlh);
+      if (ifa->ifa_index != ifindex) continue;
       struct rtattr* rta = IFA_RTA(ifa);
       int rtl = IFA_PAYLOAD(nlh);
 
+      struct in6_addr ifa_local_ip = {}, ifa_address_ip = {}, ip;
       for (; RTA_OK(rta, rtl); rta = RTA_NEXT(rta, rtl)) {
-        if (ifa->ifa_index == ifindex &&
-            (rta->rta_type == IFA_LOCAL || rta->rta_type == IFA_ADDRESS)) {
-          char ifname[IF_NAMESIZE];
-          if_indextoname(ifa->ifa_index, ifname);
-          char ip[INET6_ADDRSTRLEN];
-          inet_ntop(ifa->ifa_family, RTA_DATA(rta), ip, sizeof(ip));
-
-          if (nlh->nlmsg_type == RTM_NEWADDR)
-            log_info("Interface %s has new IP address %s", ifname, ip);
-          else
-            log_info("Interface %s lost IP address %s", ifname, ip);
+        switch (rta->rta_type) {
+          case IFA_LOCAL:
+            log_info("ok");
+            ifa_local_ip = ip_from_buf(ifa->ifa_family, RTA_DATA(rta));
+            break;
+          case IFA_ADDRESS:
+            ifa_address_ip = ip_from_buf(ifa->ifa_family, RTA_DATA(rta));
+            break;
+          default:
+            break;
         }
       }
+
+      // netlink should not return wildcard address
+      if (ip_is_wildcard(&ifa_local_ip) && ip_is_wildcard(&ifa_address_ip)) continue;
+      ip = ip_is_wildcard(&ifa_local_ip) ? ifa_address_ip : ifa_local_ip;
+
+      char ip_buf[INET6_ADDRSTRLEN];
+      ip_fmt(&ip, ip_buf);
+      if (nlh->nlmsg_type == RTM_NEWADDR)
+        log_info("interface has new IP address %s", ip_buf);
+      else
+        log_info("interface lost IP address %s", ip_buf);
     }
   }
 
