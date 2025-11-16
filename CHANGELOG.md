@@ -9,6 +9,8 @@
 - Fix a buffer overread causing coredump on new versions of kernel (@flyxyz123)
 - Set max cooldown for re-initiating handshake to 40s
 - Multiple documentation improvements (@flyxyz123)
+- Auto detect link types (Ethernet or no L2) for Ethernet, loopback and PPP interfaces
+- Wildcard filters: `local=0.0.0.0:1234` or `local=[::]:5678`
 
 ## 0.7.0 (2025-03-07)
 
