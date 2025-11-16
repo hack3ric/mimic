@@ -331,7 +331,7 @@ static int _handle_rb_event(struct bpf_map* conns, const char* ifname, void* ctx
 static ffi_type* _handle_rb_event_args[] = {
   &ffi_type_pointer,
   &ffi_type_pointer,
-  sizeof(void*) == 8 ? &ffi_type_sint64 : &ffi_type_sint32,
+  sizeof(void*) == 8 ? &ffi_type_uint64 : &ffi_type_uint32,
 };
 
 struct handle_rb_event_ctx {
@@ -808,7 +808,7 @@ int subcmd_run(struct run_args* args) {
 #ifdef MIMIC_USE_LIBXDP
   if (args->use_libxdp) {
     if (dlopen_libxdp() < 0) {
-      log_warn(_("fall back to using libbpf for loading XDP programs"));
+      log_warn(_("falling back to using libbpf for loading XDP programs"));
       args->use_libxdp = false;
     } else {
       sym_libxdp_set_print((libxdp_print_fn_t)libbpf_print_fn);

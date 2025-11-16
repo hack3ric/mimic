@@ -42,41 +42,9 @@ struct args {
   };
 };
 
-static inline struct filter_node* filter_list_add(struct filter_list* list) {
-  struct filter_node* result = calloc(1, sizeof(*result));
-  if (!result) return NULL;
-  if (!list->head) {
-    list->head = list->tail = result;
-  } else {
-    list->tail->next = result;
-    list->tail = result;
-  }
-  return result;
-}
-
-static inline void filter_list_destroy(struct filter_list* list) {
-  struct filter_node *prev = NULL, *i;
-  for (i = list->head; i; i = i->next) {
-    free(prev);
-    prev = i;
-  }
-  free(prev);
-}
-
-static inline struct filter_node* run_args_add_filter(struct run_args* args) {
-  return filter_list_add(&args->filters);
-}
-
-static inline void args_destroy(struct args* args) {
-  switch (args->cmd) {
-    case CMD_NULL:
-    case CMD_SHOW:
-      break;
-    case CMD_RUN:
-      filter_list_destroy(&args->run.filters);
-      break;
-  }
-}
+struct filter_node* filter_list_add(struct filter_list* list);
+void filter_list_destroy(struct filter_list* list);
+void args_destroy(struct args* args);
 
 extern const struct argp argp;
 extern const struct argp run_argp;

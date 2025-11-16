@@ -214,7 +214,7 @@ static inline __attribute__((__format_arg__(1))) const char* _(const char* text)
 // IP representation utilities
 
 static const struct in6_addr IP_ANY = {};
-static const struct in6_addr IPV4_ANY = {.s6_addr32 = {0, 0, 0xffff, 0}};
+static const struct in6_addr IPV4_ANY = {.s6_addr16 = {0, 0, 0, 0, 0, 0xffff, 0, 0}};
 static const struct in6_addr IPV6_ANY = {};
 
 static inline int ip_proto(const struct in6_addr* ip) {
