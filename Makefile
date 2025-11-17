@@ -235,4 +235,4 @@ out/mimic.pot:
 	find src -type f -regex '.*\.[ch]' | xargs xgettext -k_ -kN_ -o $@ --
 
 compile_commands.json: clean
-	bear -- $(MAKE)
+	intercept-build $(MAKE)
