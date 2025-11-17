@@ -6,6 +6,14 @@ Mimic is a UDP to TCP obfuscator designed to bypass UDP QoS and port blocking. B
 
 ## Installation
 
+Install from official Debian repository (>= 13, though version may not be the newest):
+
+```console
+# apt install mimic
+```
+
+On Arch Linux, build and install the PKGBUILD `mimic-bpf` or `mimic-bpf-git` from AUR.
+
 Mimic currently ships prebuilt packages for Debian 12 (bookworm), 13 (trixie) and Ubuntu 24.04 (noble) for x86_64 in [GitHub releases](https://github.com/hack3ric/mimic/releases). Release artifacts contains:
 
 - **`<codename>_mimic_<ver>_<arch>.deb`: Mimic CLI**
