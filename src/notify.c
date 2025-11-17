@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "common/defs.h"
+#include "common/try.h"
 #include "main.h"
 
 static int notify_systemd(const char* msg) {
@@ -24,17 +25,16 @@ static int notify_systemd(const char* msg) {
   struct sockaddr_un addr = {.sun_family = AF_UNIX};
   size_t path_len = strlen(socket_path);
   if (path_len >= sizeof(addr.sun_path)) return -E2BIG;
-  memcpy(addr.sun_path, socket_path, path_len+1);
+  memcpy(addr.sun_path, socket_path, path_len + 1);
   if (socket_path[0] == '@') addr.sun_path[0] = 0;
 
-  int sk raii(closep) = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
-  if (sk < 0) return -errno;
+  int sk raii(closep) = try(socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0));
 
   socklen_t sock_len = offsetof(struct sockaddr_un, sun_path) + path_len;
-  if (connect(sk, (struct sockaddr*)&addr, sock_len) != 0) return -errno;
+  try(connect(sk, (struct sockaddr*)&addr, sock_len));
 
-  ssize_t written = write(sk, msg, message_length);
-  if (written != (ssize_t)message_length) return written < 0 ? -errno : -EPROTO;
+  ssize_t written = try(write(sk, msg, message_length));
+  if (written != (ssize_t)message_length) return -EPROTO;
 
   return 1;
 }
