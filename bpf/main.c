@@ -60,7 +60,11 @@ int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key, i
   }
   if (has_remainder) {
     offset = i * SEGMENT_SIZE;
+#if defined(MIMIC_COMPAT_LINUX_6_1) || defined(MIMIC_COMPAT_LINUX_6_6)
+    __u32 copy_len = data_len - offset;
+#else
     __u32 copy_len = data_len % SEGMENT_SIZE;
+#endif
     if (copy_len > 0 && copy_len < SEGMENT_SIZE) {
       bpf_gt0_hack2(copy_len);
       packet = bpf_dynptr_data(&ptr, sizeof(*item) + offset, SEGMENT_SIZE);
