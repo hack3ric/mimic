@@ -1,0 +1,68 @@
+name: 'lvh-install-cli'
+description: 'Install LVM CLI'
+inputs:
+  arch:
+    description: 'VM architecture (amd64 (default) or arm64)'
+    required: true
+    default: 'amd64'
+  lvh-version:
+    description: 'LVH cli version (Docker tag)'
+    required: true
+    default: 'v0.0.28'
+outputs:
+  runner_os_id:
+    description: Runner OS ID
+    value: ${{ steps.find-lvh-cli.outputs.runner_os_id }}
+  dependency_list:
+    description: LVM dependency list
+    value: ${{ steps.find-lvh-cli.outputs.dependency_list }}
+  dependency_list_sha:
+    description: Hash of LVM dependency list
+    value: ${{ steps.find-lvh-cli.outputs.dependency_list_sha }}
+runs:
+  using: "composite"
+  steps:
+    - name: Find LVH cli
+      id: find-lvh-cli
+      shell: bash
+      run: |
+        if command -v lvh 2>&1 >/dev/null; then
+          echo 'skip=true' >> $GITHUB_OUTPUT
+        fi
+        runner_os_id=$(grep VERSION_ID /etc/os-release | cut -d= -f 2 | sed 's/"//g')
+        echo "runner_os_id=${runner_os_id}" >> $GITHUB_OUTPUT
+
+        dependencies="qemu-system cpu-checker libvirt-daemon-system libvirt-clients bridge-utils virtinst virt-manager"
+        if [[ "${{ inputs.arch }}" == "amd64" ]]; then
+          dependencies="qemu-system-x86 ${dependencies}"
+        elif [[ "${{ inputs.arch }}" == "arm64" ]]; then
+          dependencies="qemu-system-arm ${dependencies}"
+        else
+          echo "Unsupported arch ${{ inputs.arch }}"
+          exit 1
+        fi
+        echo "dependency_list=${dependencies}" >> $GITHUB_OUTPUT
+
+        deps_w_versions=""
+        sudo apt update
+        for dep in ${dependencies}
+        do
+          # Simulate package install to fetch package version;
+          # head -n1 in case there are multiple packages being installed (eg: for qemu-system);
+          # Output line similar to:
+          # Inst virtinst (1:4.1.0-3ubuntu0.1 Ubuntu:24.04/noble-updates [all])
+          version=$(apt-get -s install $dep | grep "Inst $dep"  | head -n1 | awk -F" " '{ printf $3 }' | cut -c2-)
+          deps_w_versions="${dep}_${version} ${deps_w_versions}"
+        done
+        # Remove ending "-" character added by md5sum
+        dependencies_sha=$(echo ${deps_w_versions} | md5sum | cut -d' ' -f1)
+        echo "dependency_list_sha=${dependencies_sha}" >> $GITHUB_OUTPUT
+    - name: Install LVH cli
+      if: ${{ steps.find-lvh-cli.outputs.skip != 'true' }}
+      shell: bash
+      run: |
+        cid=$(docker create quay.io/lvh-images/lvh:${{ inputs.lvh-version }})
+        docker cp $cid:/usr/bin/lvh /tmp/lvh
+        docker rm $cid
+        chmod +x /tmp/lvh
+        sudo mv /tmp/lvh /bin/lvh

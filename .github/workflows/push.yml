@@ -2,6 +2,7 @@ name: Push actions
 
 on:
   push:
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -53,6 +54,7 @@ jobs:
         with:
           name: pcap-${{ matrix.flags.desc }}
           path: out/*.pcapng
+
   build-deb:
     name: Build .deb packages for ${{ matrix.distro.name }} (${{ matrix.arch }})
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
@@ -109,6 +111,7 @@ jobs:
           path: |
             debian/artifacts/*.deb
             debian/artifacts/*.ddeb
+
   test-deb-install:
     name: Test .deb installation (${{ matrix.arch }})
     needs: build-deb
@@ -135,3 +138,113 @@ jobs:
         with:
           name: dkms-make-log
           path: /var/lib/dkms/mimic/*/build/make.log
+
+  test-lvh:
+    name: Test LVH
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    env:
+      lvh-version: v0.0.28
+      root-image-version: 20251113.115124-sid
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64] # TODO: arm64 (runner no KVM)
+        kernel-name: [bpf-next, '6.1', '6.6', '6.12']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install LVH CLI
+        uses: ./.github/actions/lvh-install-cli
+        with:
+          lvh-version: ${{ env.lvh-version }}
+          arch: ${{ matrix.arch }}
+      - name: Fetch cached root image
+        id: fetch-cached-root-image
+        uses: actions/cache/restore@v4
+        with:
+          path: lvh-image.qcow2
+          key: mimic-lvh-root-image-${{ matrix.arch }}-${{ env.root-image-version }}
+      - name: Fetch root image
+        if: steps.fetch-cached-root-image.outputs.cache-hit != 'true'
+        run: |
+          lvh images pull quay.io/lvh-images/root-images:${{ env.root-image-version }}
+          cp _data/images/kind.qcow2 lvh-image.qcow2
+      - name: Save root image to cache
+        if: steps.fetch-cached-root-image.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: lvh-image.qcow2
+          key: mimic-lvh-root-image-${{ matrix.arch }}-${{ env.root-image-version }}
+      - name: Install pahole
+        run: |
+          sudo apt update
+          sudo apt install pahole
+      - name: Prepare LVH kernel tree metadata
+        id: prepare-kernel-tree-metadata
+        run: |
+          mkdir -p _data/kernels
+          wget -O _data/kernels.json https://raw.githubusercontent.com/cilium/little-vm-helper-images/c19813941658d998100cf7caaeaf6670763c8e2c/_data/kernels.json
+          sed -i 's/\?depth=1/?depth=128/g' _data/kernels.json
+          git_url_with_branch="$(jq -r '.kernels.[] | select(.name=="${{ matrix.kernel-name }}") | .url' < _data/kernels.json | sed -E 's/\?depth=[0-9]+//')"
+          git_url="$(echo $git_url_with_branch | sed 's/#.*//')"
+          git_branch="$(echo $git_url_with_branch | sed -n 's/.*#\(.*\)/\1/p')"
+          if [ -z "$git_branch" ]; then
+            git_branch=HEAD
+          else
+            git_branch="refs/heads/$git_branch"
+          fi
+          echo lvh_kernel_rev=$(git ls-remote "$git_url" | grep "$git_branch" | awk '{print $1}') >> $GITHUB_OUTPUT
+      - name: Fetch cached LVH kernel
+        id: fetch-cached-kernel
+        uses: actions/cache@v4
+        with:
+          path: |
+            lvh-kernel
+            lvh-kernel-tree
+          key: mimic-lvh-kernel-${{ matrix.arch }}-${{ matrix.kernel-name }}-${{ steps.prepare-kernel-tree-metadata.outputs.lvh_kernel_rev }}
+      - name: Build LVH kernel
+        if: steps.fetch-cached-kernel.outputs.cache-hit != 'true'
+        run: |
+          sudo apt update
+          sudo apt install build-essential libncurses-dev libssl-dev libelf-dev
+          lvh kernels --dir _data fetch ${{ matrix.kernel-name }}
+
+          cd _data/kernels/${{ matrix.kernel-name }}
+          git checkout ${{ steps.prepare-kernel-tree-metadata.outputs.lvh_kernel_rev }}
+          cd ${{ github.workspace }}
+
+          lvh kernels --dir _data build ${{ matrix.kernel-name }}
+
+          cd _data/kernels/${{ matrix.kernel-name }}/tar-install/boot
+          mv vmlinuz-* vmlinuz
+          cd ../..
+          make -C tools/bpf/resolve_btfids -j$(nproc)
+          rm -rf drivers/gpu arch/*/boot tools/perf .git *.tar Documentation vmlinux.unstripped .tmp*
+          find . -type f -name '*.o' -delete
+          cd ${{ github.workspace }}
+
+          cp _data/kernels/${{ matrix.kernel-name }}/tar-install/boot/vmlinuz lvh-kernel
+          rm -r _data/kernels/${{ matrix.kernel-name }}/tar-install
+          mv _data/kernels/${{ matrix.kernel-name }} lvh-kernel-tree
+      - name: Build mimic.ko
+        run: |
+          cd kmod
+          make SYSTEM_BUILD_DIR=../lvh-kernel-tree
+      - name: Provision LVH VMs
+        uses: ./.github/actions/lvh-run
+        with:
+          lvh-version: ${{ env.lvh-version }}
+          mem: 4G
+          cpu: 2
+          cpu-kind: ""
+          test-name: mimic-test
+          image-path: lvh-image.qcow2
+          kernel-path: lvh-kernel
+          arch: ${{ matrix.arch }}
+          install-dependencies: true
+          host-mount: ./
+          cmd: |
+            cd /host/lvh-kernel-tree
+            make modules_install
+            uname -a
+            insmod /host/kmod/mimic.ko
