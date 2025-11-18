@@ -7,7 +7,7 @@ on:
 
 jobs:
   test:
-    name: Run tests on ${{ matrix.arch }} with ${{ matrix.flags.flags }} ${{ matrix.flags.args }}
+    name: Run tests with ${{ matrix.flags.flags }} ${{ matrix.flags.args }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
@@ -56,7 +56,7 @@ jobs:
           path: out/*.pcapng
 
   build-deb:
-    name: Build .deb packages for ${{ matrix.distro.name }} (${{ matrix.arch }})
+    name: Build .deb packages for ${{ matrix.distro.name }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
@@ -113,7 +113,7 @@ jobs:
             debian/artifacts/*.ddeb
 
   test-deb-install:
-    name: Test .deb installation (${{ matrix.arch }})
+    name: Test .deb installation
     needs: build-deb
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     strategy:
@@ -141,14 +141,14 @@ jobs:
 
   test-lvh:
     name: Test LVH
-    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     env:
       lvh-version: v0.0.28
       root-image-version: 20251113.115124-sid
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64] # TODO: arm64 (runner no KVM)
+        arch: [amd64] # TODO: arm64 (runner no KVM, cross on amd64)
         kernel-name: [bpf-next, '6.1', '6.6', '6.12']
     steps:
       - name: Checkout
@@ -243,6 +243,7 @@ jobs:
           arch: ${{ matrix.arch }}
           install-dependencies: true
           host-mount: ./
+          # TODO: run mimic with --check first, and then try to run test cases at least on amd64
           cmd: |
             cd /host/lvh-kernel-tree
             make modules_install
