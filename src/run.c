@@ -65,6 +65,7 @@ static const struct argp_option options[] = {
    N_("Padding size appended to each packet. Pass 'random' to use random padding."), 2},
   {"max-window", 'W', NULL, 0, N_("Always use maximum window size in TCP packets"), 2},
   {"file", 'F', N_("PATH"), 0, N_("Load configuration from file"), 3},
+  {"check", 0xffff, NULL, 0, N_("Check if Mimic could be deployed, and exit"), 4},
   {},
 };
 
@@ -105,6 +106,9 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       break;
     case 'F':
       args->file = arg;
+      break;
+    case 0xffff:
+      args->check = true;
       break;
     case ARGP_KEY_ARG:
       if (!args->ifname)
@@ -649,6 +653,10 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   log_info(_("Mimic successfully deployed on %s"), args->ifname);
   show_overview(ifindex, args->link_type, mimic_whitelist_fd, &args->gsettings, log_verbosity);
   if (!args->filters.head) log_warn(_("no filter specified"));
+  if (args->check) {
+    log_warn(_("check only, exiting"));
+    cleanup(0);
+  }
 
   struct epoll_event ev;
   struct epoll_event events[EPOLL_MAX_EVENTS];

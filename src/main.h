@@ -30,10 +30,11 @@ struct args {
       unsigned int wildcard_count;  // TODO: maybe separate v4 and v6
       struct filter_settings gsettings;
       int xdp_mode;
+      enum link_type link_type;
 #ifdef MIMIC_USE_LIBXDP
       bool use_libxdp;
 #endif
-      enum link_type link_type;
+      bool check;
     } run;
     struct show_args {
       const char* ifname;
