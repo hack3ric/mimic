@@ -179,7 +179,7 @@ jobs:
           done
           cd out
           mkdir expect-fail
-          mv mimic-compat-6.1-clang-20 mimic-compat-6.6-clang-20 expect-fail/
+          # insert expected fail combination here
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
