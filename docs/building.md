@@ -4,7 +4,7 @@
 
 - **Linux kernel**: [as mentioned in Getting Started](getting-started.md#kernel-support), along with its headers: `` apt install linux-{image,headers}-$(uname -r) `` on Debian or similar
 - **GNU make**
-- **Clang**: version >= 15
+- **Clang**: version >= 15 (for Linux 6.1, also < 20)
 - **GCC** (if kernel is built using it)
 - **pahole, bpftool**: for generating BPF stuff
 - **libbpf 1.x**: `apt install libbpf-dev` on Debian or similar

@@ -172,14 +172,15 @@ jobs:
           flags=("" "COMPAT_LINUX_6_1=1" "COMPAT_LINUX_6_6=1")
           for _i in {0..2}; do
             for _clang_version in {15..21}; do
+              if [ $_clang_version -ge 20 ] && [ "${flags_name[$_i]}" == "compat-6.1" ]; then
+                continue
+              fi
               export BPF_CC=clang-$_clang_version
               make build-cli -j ${flags[$_i]}
               mv out/mimic out/mimic-${flags_name[$_i]}-clang-$_clang_version
             done
           done
           cd out
-          mkdir expect-fail
-          # insert expected fail combination here
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:

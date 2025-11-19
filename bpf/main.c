@@ -60,7 +60,7 @@ int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key, i
   }
   if (has_remainder) {
     offset = i * SEGMENT_SIZE;
-#if (defined(MIMIC_COMPAT_LINUX_6_1) || defined(MIMIC_COMPAT_LINUX_6_6)) && __clang_major__ < 20
+#if defined(MIMIC_COMPAT_LINUX_6_1) || (defined(MIMIC_COMPAT_LINUX_6_6) && __clang_major__ < 20)
     __u32 copy_len = data_len - offset;
 #else
     __u32 copy_len = data_len % SEGMENT_SIZE;
