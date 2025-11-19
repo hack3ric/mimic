@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64] # TODO: on arm64, bpftool not working
+        arch: [amd64] # TODO: arm64 (bpftool not working)
         flags:
           - flags: CHECKSUM_HACK=kfunc
             args: ""
@@ -36,13 +36,13 @@ jobs:
         run: |
           sudo apt update
           sudo apt install python3 clang-15 llvm pahole \
-            linux-tools-`uname -r` linux-cloud-tools-`uname -r` \
-            bats bc conntrack ethtool iperf3 jq socat tshark wireguard-tools \
-            libbpf-dev libffi-dev libelf-dev libxdp-dev
+            linux-tools-common linux-tools-$(uname -r) linux-cloud-tools-$(uname -r) \
+            libbpf-dev libffi-dev libelf-dev libxdp-dev \
+            bats bc conntrack ethtool iperf3 jq socat tshark wireguard-tools
       - name: Build & Test
         run: |
           export BPF_CC=clang-15
-          sudo cp /sys/kernel/btf/vmlinux /lib/modules/`uname -r`/build
+          sudo cp /sys/kernel/btf/vmlinux /lib/modules/$(uname -r)/build
           make -j ${{ matrix.flags.flags }}
           sudo nft delete table filter  # Docker's nftables rule drops IPv4 packets in tests
           sudo nft list ruleset
@@ -139,8 +139,42 @@ jobs:
           name: dkms-make-log
           path: /var/lib/dkms/mimic/*/build/make.log
 
+  build-exe:
+    name: Build Mimic CLI executable
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64] # TODO: arm64 (bpftool not working)
+        flags:
+          - name: generic
+            flags: ""
+          - name: compat-6.1
+            flags: COMPAT_LINUX_6_1=1
+          - name: compat-6.6
+            flags: COMPAT_LINUX_6_6=1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install clang-15 llvm pahole \
+            linux-tools-common linux-tools-$(uname -r) linux-cloud-tools-$(uname -r) \
+            libbpf-dev libffi-dev libelf-dev libxdp-dev
+      - name: Build CLI
+        run: |
+          export BPF_CC=clang-15
+          make build-cli -j ${{ matrix.flags.flags }}
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: mimic-${{ matrix.flags.name }}-${{ matrix.arch }}
+          path: out/mimic
+
   test-lvh:
     name: Test LVH
+    needs: build-exe
     runs-on: ubuntu-24.04
     env:
       lvh-version: v0.0.28
@@ -149,10 +183,23 @@ jobs:
       fail-fast: false
       matrix:
         arch: [amd64] # TODO: arm64 (runner no KVM, cross on amd64)
-        kernel-name: [bpf-next, '6.1', '6.6', '6.12']
+        kernel:
+          - name: "6.1"
+            variant: compat-6.1
+          - name: "6.6"
+            variant: compat-6.6
+          - name: "6.12"
+            variant: generic
+          - name: bpf-next
+            variant: generic
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mimic-${{ matrix.kernel.variant }}-${{ matrix.arch }}
+          path: out
       - name: Install LVH CLI
         uses: ./.github/actions/lvh-install-cli
         with:
@@ -185,7 +232,7 @@ jobs:
           mkdir -p _data/kernels
           wget -O _data/kernels.json https://raw.githubusercontent.com/cilium/little-vm-helper-images/c19813941658d998100cf7caaeaf6670763c8e2c/_data/kernels.json
           sed -i 's/\?depth=1/?depth=128/g' _data/kernels.json
-          git_url_with_branch="$(jq -r '.kernels.[] | select(.name=="${{ matrix.kernel-name }}") | .url' < _data/kernels.json | sed -E 's/\?depth=[0-9]+//')"
+          git_url_with_branch="$(jq -r '.kernels.[] | select(.name=="${{ matrix.kernel.name }}") | .url' < _data/kernels.json | sed -E 's/\?depth=[0-9]+//')"
           git_url="$(echo $git_url_with_branch | sed 's/#.*//')"
           git_branch="$(echo $git_url_with_branch | sed -n 's/.*#\(.*\)/\1/p')"
           if [ -z "$git_branch" ]; then
@@ -201,21 +248,21 @@ jobs:
           path: |
             lvh-kernel
             lvh-kernel-tree
-          key: mimic-lvh-kernel-${{ matrix.arch }}-${{ matrix.kernel-name }}-${{ steps.prepare-kernel-tree-metadata.outputs.lvh_kernel_rev }}
+          key: mimic-lvh-kernel-${{ matrix.arch }}-${{ matrix.kernel.name }}-${{ steps.prepare-kernel-tree-metadata.outputs.lvh_kernel_rev }}
       - name: Build LVH kernel
         if: steps.fetch-cached-kernel.outputs.cache-hit != 'true'
         run: |
           sudo apt update
           sudo apt install build-essential libncurses-dev libssl-dev libelf-dev
-          lvh kernels --dir _data fetch ${{ matrix.kernel-name }}
+          lvh kernels --dir _data fetch ${{ matrix.kernel.name }}
 
-          cd _data/kernels/${{ matrix.kernel-name }}
+          cd _data/kernels/${{ matrix.kernel.name }}
           git checkout ${{ steps.prepare-kernel-tree-metadata.outputs.lvh_kernel_rev }}
           cd ${{ github.workspace }}
 
-          lvh kernels --dir _data build ${{ matrix.kernel-name }}
+          lvh kernels --dir _data build ${{ matrix.kernel.name }}
 
-          cd _data/kernels/${{ matrix.kernel-name }}/tar-install/boot
+          cd _data/kernels/${{ matrix.kernel.name }}/tar-install/boot
           mv vmlinuz-* vmlinuz
           cd ../..
           make -C tools/bpf/resolve_btfids -j$(nproc)
@@ -223,9 +270,9 @@ jobs:
           find . -type f -name '*.o' -delete
           cd ${{ github.workspace }}
 
-          cp _data/kernels/${{ matrix.kernel-name }}/tar-install/boot/vmlinuz lvh-kernel
-          rm -r _data/kernels/${{ matrix.kernel-name }}/tar-install
-          mv _data/kernels/${{ matrix.kernel-name }} lvh-kernel-tree
+          cp _data/kernels/${{ matrix.kernel.name }}/tar-install/boot/vmlinuz lvh-kernel
+          rm -r _data/kernels/${{ matrix.kernel.name }}/tar-install
+          mv _data/kernels/${{ matrix.kernel.name }} lvh-kernel-tree
       - name: Build mimic.ko
         run: |
           cd kmod
@@ -243,9 +290,11 @@ jobs:
           arch: ${{ matrix.arch }}
           install-dependencies: true
           host-mount: ./
-          # TODO: run mimic with --check first, and then try to run test cases at least on amd64
           cmd: |
             cd /host/lvh-kernel-tree
             make modules_install
             uname -a
-            insmod /host/kmod/mimic.ko
+            cd /host
+            insmod kmod/mimic.ko
+            chmod +x out/mimic
+            out/mimic run lo --check
