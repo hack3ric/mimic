@@ -146,31 +146,47 @@ jobs:
       fail-fast: false
       matrix:
         arch: [amd64] # TODO: arm64 (bpftool not working)
-        flags:
-          - name: generic
-            flags: ""
-          - name: compat-6.1
-            flags: COMPAT_LINUX_6_1=1
-          - name: compat-6.6
-            flags: COMPAT_LINUX_6_6=1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install dependencies
+      - name: Add LLVM apt repository
+        shell: bash
         run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          # Ubuntu 24.04 officially packages LLVM 15 and 16
+          for _clang_version in {17..21}; do
+            sudo ./llvm.sh $_clang_version
+          done
           sudo apt update
-          sudo apt install clang-15 llvm pahole \
+      - name: Install dependencies
+        shell: bash
+        run: |
+          sudo apt install clang-{15..21} pahole \
             linux-tools-common linux-tools-$(uname -r) linux-cloud-tools-$(uname -r) \
             libbpf-dev libffi-dev libelf-dev libxdp-dev
       - name: Build CLI
+        shell: bash
         run: |
-          export BPF_CC=clang-15
-          make build-cli -j ${{ matrix.flags.flags }}
+          flags_name=(generic compat-6.1 compat-6.6)
+          flags=("" "COMPAT_LINUX_6_1=1" "COMPAT_LINUX_6_6=1")
+          for _i in {0..2}; do
+            for _clang_version in {15..21}; do
+              export BPF_CC=clang-$_clang_version
+              make build-cli -j ${flags[$_i]}
+              mv out/mimic out/mimic-${flags_name[$_i]}-clang-$_clang_version
+            done
+          done
+          cd out
+          mkdir expect-fail
+          mv mimic-compat-6.1-clang-20 mimic-compat-6.6-clang-20 expect-fail/
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
-          name: mimic-${{ matrix.flags.name }}-${{ matrix.arch }}
-          path: out/mimic
+          name: mimic-${{ matrix.arch }}
+          path: |
+            out/mimic-*
+            out/expect-fail/mimic-*
 
   test-lvh:
     name: Test LVH
@@ -198,7 +214,7 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: mimic-${{ matrix.kernel.variant }}-${{ matrix.arch }}
+          name: mimic-${{ matrix.arch }}
           path: out
       - name: Install LVH CLI
         uses: ./.github/actions/lvh-install-cli
@@ -303,8 +319,12 @@ jobs:
             uname -a
             cd /host
             insmod kmod/mimic.ko
-            chmod +x out/mimic
-            out/mimic run lo --check
+            cd out
+            chmod +x mimic-*
+            for _mimic in ./mimic-${{ matrix.kernel.variant }}-*; do
+              echo Checking \$_mimic
+              \$_mimic run lo --check
+            done
       - name: Extract kernel log
         if: always()
         uses: ./.github/actions/lvh-run
