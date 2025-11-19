@@ -298,3 +298,16 @@ jobs:
             insmod kmod/mimic.ko
             chmod +x out/mimic
             out/mimic run lo --check
+      - name: Extract kernel log
+        if: always()
+        uses: ./.github/actions/lvh-run
+        with:
+          provision: "false"
+          cmd: |
+            dmesg > /host/dmesg.log
+      - name: Upload kernel log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dmesg-${{ matrix.arch }}-${{ matrix.kernel.name }}.log
+          path: dmesg.log
