@@ -182,7 +182,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64] # TODO: arm64 (runner no KVM, cross on amd64)
+        arch: [amd64] # TODO: arm64 (see build-exe)
         kernel:
           - name: "6.1"
             variant: compat-6.1
@@ -253,7 +253,10 @@ jobs:
         if: steps.fetch-cached-kernel.outputs.cache-hit != 'true'
         run: |
           sudo apt update
-          sudo apt install build-essential libncurses-dev libssl-dev libelf-dev
+          sudo apt install libncurses-dev gawk flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf llvm
+          if [ "${{ matrix.arch }}" == "arm64" ]; then
+            sudo apt install gcc-aarch64-linux-gnu
+          fi
           lvh kernels --dir _data fetch ${{ matrix.kernel.name }}
 
           cd _data/kernels/${{ matrix.kernel.name }}
@@ -276,6 +279,10 @@ jobs:
       - name: Build mimic.ko
         run: |
           cd kmod
+          if [ "${{ matrix.arch }}" == "arm64" ]; then
+            export ARCH=arm64
+            export CROSS_COMPILE=aarch64-linux-gnu-
+          fi
           make SYSTEM_BUILD_DIR=../lvh-kernel-tree
       - name: Provision LVH VMs
         uses: ./.github/actions/lvh-run
