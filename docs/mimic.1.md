@@ -53,6 +53,9 @@
 `-F, --file=PATH`
 : Load configuration from file
 
+`--check`
+: Check if Mimic could be deployed, and exit
+
 ### mimic show
 
 `-c, --connections`

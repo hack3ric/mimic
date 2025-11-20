@@ -10,6 +10,7 @@
 - **libbpf 1.x**: `apt install libbpf-dev` on Debian or similar
 - **libffi**: `apt install libffi-dev` on Debian or similar
 - **argp-standalone** (if not glibc)
+- (optional) **libxdp**
 
 ## Building
 
