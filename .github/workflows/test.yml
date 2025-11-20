@@ -1,0 +1,63 @@
+name: Run tests
+
+on:
+  push:
+    paths:
+      - .github/workflows/test.yml
+      - "**.c"
+      - "**.h"
+      - "**/Makefile"
+      - tests/**
+      - "!tools/**"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run tests with ${{ matrix.flags.flags }} ${{ matrix.flags.args }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64] # TODO: arm64 (bpftool not working)
+        flags:
+          - flags: CHECKSUM_HACK=kfunc
+            args: ""
+            desc: kfunc
+          - flags: CHECKSUM_HACK=kfunc USE_LIBXDP=0
+            args: ""
+            desc: kfunc-no-libxdp
+          - flags: CHECKSUM_HACK=kfunc USE_LIBXDP=1
+            args: ""
+            desc: kfunc-libxdp-use-libbpf
+          - flags: CHECKSUM_HACK=kfunc USE_LIBXDP=1
+            args: --use-libxdp
+            desc: kfunc-libxdp-use-libxdp
+          - flags: CHECKSUM_HACK=kprobe STRIP_BTF_EXT=1
+            args: ""
+            desc: kprobe-strip-btf-ext
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install python3 clang-15 llvm pahole \
+            linux-tools-common linux-tools-$(uname -r) linux-cloud-tools-$(uname -r) \
+            libbpf-dev libffi-dev libelf-dev libxdp-dev \
+            bats bc conntrack ethtool iperf3 jq socat tshark wireguard-tools
+      - name: Build & Test
+        run: |
+          export BPF_CC=clang-15
+          sudo cp /sys/kernel/btf/vmlinux /lib/modules/$(uname -r)/build
+          make -j ${{ matrix.flags.flags }}
+          sudo nft delete table filter  # Docker's nftables rule drops IPv4 packets in tests
+          sudo nft list ruleset
+          sudo insmod out/mimic.ko
+          sudo env MIMIC_TEST_EXTRA_ARGS="${{ matrix.flags.args }}" make test ${{ matrix.flags.flags }}
+      - name: Upload captured packets
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pcap-${{ matrix.flags.desc }}
+          path: out/*.pcapng

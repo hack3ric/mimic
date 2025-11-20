@@ -1,0 +1,101 @@
+name: Build .deb packages
+
+on:
+  push:
+    paths:
+      - .github/workflows/build-deb.yml
+      - "**.c"
+      - "**.h"
+      - "**/Makefile"
+      - debian/**
+      - install/**
+      - kmod/**
+      # - tests/**
+      - tools/**
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-deb:
+    name: Build .deb packages for ${{ matrix.distro.name }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        distro:
+          - name: Debian 12
+            codename: bookworm
+            image: debian:bookworm-slim
+            extra-repos: |
+              deb http://deb.debian.org/debian bookworm-backports main
+            extra-cmd: |
+              sed -i 's/clang/clang-16/' debian/control
+              sed -i 's/BPF_CC=clang/BPF_CC=clang-16 COMPAT_LINUX_6_1=1/' debian/rules
+          - name: Debian 13
+            codename: trixie
+            image: debian:trixie-slim
+          - name: Debian 14 (testing)
+            codename: forky
+            image: debian:forky-slim
+          - name: Debian sid
+            codename: sid
+            image: debian:sid-slim
+          - name: Ubuntu 24.04
+            codename: noble
+            image: ubuntu:noble
+            extra-repos-amd64: |
+              deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+            extra-repos-arm64: |
+              deb http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+            extra-cmd: |
+              sed -i 's/clang,/clang, llvm,/' debian/control
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run pre-building script
+        run: |
+          ${{ matrix.distro.extra-cmd }}
+          ${{ matrix.arch == 'arm64' && matrix.distro.extra-cmd-arm64 || matrix.distro.extra-cmd-amd64 }}
+      - name: Build
+        uses: jtdor/build-deb-action@v1
+        with:
+          buildpackage-opts: -b -us -uc
+          docker-image: ${{ matrix.distro.image }}
+          extra-repos: |
+            ${{ matrix.distro.extra-repos }}
+            ${{ matrix.arch == 'arm64' && matrix.distro.extra-repos-arm64 || matrix.distro.extra-repos-amd64 }}
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.distro.codename }}-${{ matrix.arch }}
+          path: |
+            debian/artifacts/*.deb
+            debian/artifacts/*.ddeb
+
+  test-deb-install:
+    name: Test .deb installation
+    needs: build-deb
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-noble-${{ matrix.arch }}
+          path: packages-noble-${{ matrix.arch }}
+      - name: Test Install
+        run: |
+          sudo apt install ./packages-noble-${{ matrix.arch }}/*.deb linux-headers-`uname -r`
+          sudo modprobe mimic
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dkms-make-log
+          path: /var/lib/dkms/mimic/*/build/make.log
