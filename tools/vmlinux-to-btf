@@ -5,21 +5,41 @@
 #
 # See kmod/Makefile for usage with automatic kernel building tool e.g. DKMS.
 
+# shellcheck disable=SC2181
+
 endianness="$1"
 : "${VMLINUX_SUFFIX:=-$(uname -r)}"
 : "${EXTRACT_VMLINUX:="tools/extract-vmlinux"}"
 : "${EXTRACT_BTF:="out/extract-btf"}"
 : "${BOOT_DIR:="/boot"}"
 
+tmp=$(mktemp /tmp/vmlinux-to-btf-XXXXXX)
+trap 'rm -f '"$tmp" 0
+
+try_decompress() {
+  if (zcat "$1" || \
+      xzcat "$1" || \
+      bzcat "$1" || \
+      lzcat "$1" || \
+      lz4cat "$1" || \
+      lzop -c "$1" || \
+      zstdcat "$1") > "$tmp"/vmlinux; then
+    echo "$tmp"/vmlinux
+  else
+    echo "$1"
+  fi
+}
+
 if [ -f "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" ]; then
   >&2 echo "Found vmlinuz at $BOOT_DIR/vmlinuz$VMLINUX_SUFFIX"
 
   >&2 echo "Trying extract-vmlinux (only works on bzImage and with relevant decompressor installed)..."
-  eval $EXTRACT_VMLINUX "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX"
+  eval "$EXTRACT_VMLINUX" "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX"
 
   if [ $? -ne 0 ]; then
     >&2 echo "Trying extract-btf (directly extract BTF by looking for magic numbers)..."
-    eval $EXTRACT_BTF "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX" "$endianness"
+    vmlinux_path="$(try_decompress "$BOOT_DIR/vmlinuz$VMLINUX_SUFFIX")"
+    eval "$EXTRACT_BTF" "$vmlinux_path" "$endianness"
   fi
 
   if [ $? -ne 0 ]; then
@@ -36,7 +56,7 @@ elif [ -f "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" ]; then
 
   else
     >&2 echo "Trying extract-btf (directly extract BTF by looking for magic numbers)..."
-    eval $EXTRACT_BTF "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" "$endianness"
+    eval "$EXTRACT_BTF" "$BOOT_DIR/vmlinux$VMLINUX_SUFFIX" "$endianness"
 
     if [ $? -ne 0 ]; then
       >&2 echo "ERROR: cannot extract BTF from '$BOOT_DIR/vmlinux$VMLINUX_SUFFIX'"
