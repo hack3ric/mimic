@@ -23,8 +23,8 @@ try_decompress() {
       lzcat "$1" || \
       lz4cat "$1" || \
       lzop -c "$1" || \
-      zstdcat "$1") > "$tmp"/vmlinux; then
-    echo "$tmp"/vmlinux
+      zstdcat "$1") > "$tmp"; then
+    echo "$tmp"
   else
     echo "$1"
   fi
