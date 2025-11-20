@@ -10,7 +10,8 @@
 
 void log_conn(int level, struct conn_tuple* conn, const char* fmt, ...);
 void log_tcp(enum log_level level, struct conn_tuple* conn, struct tcphdr* tcp, __u16 len);
-void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_type type, __u32 cooldown);
+void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_type type,
+                 __u32 cooldown);
 
 int libbpf_print_fn(enum libbpf_print_level level, const char* format, va_list args);
 int handle_log_event(struct log_event* e);

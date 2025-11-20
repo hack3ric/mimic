@@ -320,13 +320,10 @@ enum link_type {
 
 static inline const char* link_type_str(enum link_type link) {
   switch (link) {
-    case LINK_ETH:
-      return "eth";
-    case LINK_NONE:
-      return "none";
+    case LINK_ETH: return "eth";
+    case LINK_NONE: return "none";
     case LINK_UNKNOWN:
-    default:
-      return "(unknown)";
+    default: return "(unknown)";
   }
 }
 

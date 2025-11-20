@@ -16,12 +16,9 @@ int main(int argc, char** argv) {
   try(argp_parse(&argp, argc, argv, ARGP_IN_ORDER, NULL, &args), _("error parsing arguments"));
 
   switch (args.cmd) {
-    case CMD_RUN:
-      return -subcmd_run(&args.run);
-    case CMD_SHOW:
-      return -subcmd_show(&args.show);
-    default:
-      break;
+    case CMD_RUN: return -subcmd_run(&args.run);
+    case CMD_SHOW: return -subcmd_show(&args.show);
+    default: break;
   }
   return 0;
 }
@@ -80,15 +77,10 @@ void filter_fmt(const struct filter* filter, char* dest) {
 
 const char* conn_state_to_str(enum conn_state s) {
   switch (s) {
-    case CONN_IDLE:
-      return N_("Idle");
-    case CONN_SYN_SENT:
-      return N_("SYN sent");
-    case CONN_SYN_RECV:
-      return N_("SYN received");
-    case CONN_ESTABLISHED:
-      return N_("Established");
-    default:
-      return N_("(unknown)");
+    case CONN_IDLE: return N_("Idle");
+    case CONN_SYN_SENT: return N_("SYN sent");
+    case CONN_SYN_RECV: return N_("SYN received");
+    case CONN_ESTABLISHED: return N_("Established");
+    default: return N_("(unknown)");
   }
 }

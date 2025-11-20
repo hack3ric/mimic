@@ -122,32 +122,24 @@ int ingress_handler(struct xdp_md* xdp) {
       decl_pass(struct ethhdr, eth, 0, xdp);
       __u16 eth_proto = ntohs(eth->h_proto);
       switch (eth_proto) {
-        case ETH_P_IP:
-          redecl_drop(struct iphdr, ipv4, l2_end, xdp);
-          break;
-        case ETH_P_IPV6:
-          redecl_drop(struct ipv6hdr, ipv6, l2_end, xdp);
-          break;
-        default:
-          return XDP_PASS;
+        case ETH_P_IP: redecl_drop(struct iphdr, ipv4, l2_end, xdp); break;
+        case ETH_P_IPV6: redecl_drop(struct ipv6hdr, ipv6, l2_end, xdp); break;
+        default: return XDP_PASS;
       }
       break;
     case LINK_NONE:
       l2_end = 0;
       redecl_pass(struct iphdr, ipv4, l2_end, xdp);
       switch (ipv4->version) {
-        case 4:
-          break;
+        case 4: break;
         case 6:
           ipv4 = NULL;
           redecl_pass(struct ipv6hdr, ipv6, 0, xdp);
           break;
-        default:
-          return XDP_DROP;
+        default: return XDP_DROP;
       }
       break;
-    default:
-      return XDP_DROP;
+    default: return XDP_DROP;
   }
 
   if (ipv4) {

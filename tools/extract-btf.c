@@ -4,7 +4,6 @@
 
 #include <assert.h>
 #include <endian.h>
-#include <errno.h>
 #include <linux/btf.h>
 #include <stdio.h>
 #include <stdlib.h>

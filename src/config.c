@@ -20,10 +20,8 @@
 static inline bool is_whitespace(char c) {
   switch (c) {
     case '\t' ... '\r':
-    case ' ':
-      return true;
-    default:
-      return false;
+    case ' ': return true;
+    default: return false;
   }
 }
 

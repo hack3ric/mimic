@@ -11,7 +11,7 @@
 #include "common/log.h"
 #include "libxdp.h"
 
-static void *libxdp_dl = NULL;
+static void* libxdp_dl = NULL;
 
 DLSYM_PROTOTYPE(libxdp_set_print) = NULL;
 DLSYM_PROTOTYPE(xdp_program__from_bpf_obj) = NULL;
@@ -19,11 +19,11 @@ DLSYM_PROTOTYPE(xdp_program__attach) = NULL;
 DLSYM_PROTOTYPE(xdp_program__detach) = NULL;
 DLSYM_PROTOTYPE(xdp_program__close) = NULL;
 
-static int dlsym_many_or_warnv(void *dl, va_list ap) {
+static int dlsym_many_or_warnv(void* dl, va_list ap) {
   void (**fn)(void);
 
   while ((fn = va_arg(ap, typeof(fn)))) {
-    const char *symbol = va_arg(ap, typeof(symbol));
+    const char* symbol = va_arg(ap, typeof(symbol));
     void (*tfn)(void) = dlsym(dl, symbol);
     if (!tfn) {
       log_warn(_("cannot find symbol '%s': %s"), symbol, dlerror());
@@ -35,11 +35,11 @@ static int dlsym_many_or_warnv(void *dl, va_list ap) {
   return 0;
 }
 
-static int dlopen_many_sym_or_warn_sentinel(void **dlp, const char *filename, ...) {
+static int dlopen_many_sym_or_warn_sentinel(void** dlp, const char* filename, ...) {
   int retcode;
   if (*dlp) return 0;
 
-  void *dl = dlopen(filename, RTLD_NOW | RTLD_NODELETE);
+  void* dl = dlopen(filename, RTLD_NOW | RTLD_NODELETE);
   if (!dl) {
     log_warn(_("%s is not installed: %s"), filename, dlerror());
     return -EOPNOTSUPP;

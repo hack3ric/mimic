@@ -62,21 +62,11 @@ void log_destroy(enum log_level level, struct conn_tuple* conn, enum destroy_typ
                  __u32 cooldown) {
   const char* reason;
   switch (type) {
-    case DESTROY_RECV_RST:
-      reason = _("received RST");
-      break;
-    case DESTROY_RECV_FIN:
-      reason = _("received FIN");
-      break;
-    case DESTROY_TIMED_OUT:
-      reason = _("timed out");
-      break;
-    case DESTROY_INVALID:
-      reason = _("invalid TCP state");
-      break;
-    default:
-      reason = _("unknown");
-      break;
+    case DESTROY_RECV_RST: reason = _("received RST"); break;
+    case DESTROY_RECV_FIN: reason = _("received FIN"); break;
+    case DESTROY_TIMED_OUT: reason = _("timed out"); break;
+    case DESTROY_INVALID: reason = _("invalid TCP state"); break;
+    default: reason = _("unknown"); break;
   }
   if (cooldown)
     log_conn(level, conn, _("connection destroyed (%s), retry in %u seconds"), reason, cooldown);
@@ -121,15 +111,9 @@ int libbpf_print_fn(enum libbpf_print_level bpf_level, const char* format, va_li
       (bpf_level == LIBBPF_DEBUG && LOG_ALLOW_TRACE)) {
     int level;
     switch (bpf_level) {
-      case LIBBPF_WARN:
-        level = LOG_WARN;
-        break;
-      case LIBBPF_INFO:
-        level = LOG_INFO;
-        break;
-      case LIBBPF_DEBUG:
-        level = LOG_TRACE;
-        break;
+      case LIBBPF_WARN: level = LOG_WARN; break;
+      case LIBBPF_INFO: level = LOG_INFO; break;
+      case LIBBPF_DEBUG: level = LOG_TRACE; break;
     }
     ret = fprintf(stderr, "%s%s " RESET, log_prefixes[level][0], gettext(log_prefixes[level][1]));
     if (level >= LOG_TRACE) ret = ret < 0 ? ret : fprintf(stderr, GRAY);
@@ -144,14 +128,10 @@ int libbpf_print_fn(enum libbpf_print_level bpf_level, const char* format, va_li
 
 static inline const char* log_type_to_str(enum log_type type) {
   switch (type) {
-    case LOG_CONN_INIT:
-      return _("initializing connection");
-    case LOG_CONN_ACCEPT:
-      return _("accepting connection");
-    case LOG_CONN_ESTABLISH:
-      return _("connection established");
-    default:
-      return "";
+    case LOG_CONN_INIT: return _("initializing connection");
+    case LOG_CONN_ACCEPT: return _("accepting connection");
+    case LOG_CONN_ESTABLISH: return _("connection established");
+    default: return "";
   }
 }
 
@@ -168,9 +148,7 @@ int handle_log_event(struct log_event* e) {
       case LOG_CONN_DESTROY:
         log_destroy(e->level, &e->info.conn, e->info.destroy_type, e->info.cooldown);
         break;
-      default:
-        log_conn(e->level, &e->info.conn, "%s", log_type_to_str(e->type));
-        break;
+      default: log_conn(e->level, &e->info.conn, "%s", log_type_to_str(e->type)); break;
     }
   }
   return 0;

@@ -175,14 +175,9 @@ int rtnl_recv_addr_change(int sock, unsigned int ifindex, struct ip_delta_list**
       struct in6_addr ifa_local_ip = {}, ifa_address_ip = {};
       for (struct rtattr* rta = IFA_RTA(ifa); RTA_OK(rta, rtl); rta = RTA_NEXT(rta, rtl)) {
         switch (rta->rta_type) {
-          case IFA_LOCAL:
-            ifa_local_ip = ip_from_buf(ifa->ifa_family, RTA_DATA(rta));
-            break;
-          case IFA_ADDRESS:
-            ifa_address_ip = ip_from_buf(ifa->ifa_family, RTA_DATA(rta));
-            break;
-          default:
-            break;
+          case IFA_LOCAL: ifa_local_ip = ip_from_buf(ifa->ifa_family, RTA_DATA(rta)); break;
+          case IFA_ADDRESS: ifa_address_ip = ip_from_buf(ifa->ifa_family, RTA_DATA(rta)); break;
+          default: break;
         }
       }
 

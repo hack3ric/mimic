@@ -25,12 +25,8 @@ static const struct argp_option options[] = {
 static inline error_t args_parse_opt(int key, char* arg, struct argp_state* state) {
   struct show_args* args = (typeof(args))state->input;
   switch (key) {
-    case 'p':
-      args->show_process = true;
-      break;
-    case 'c':
-      args->show_command = true;
-      break;
+    case 'p': args->show_process = true; break;
+    case 'c': args->show_command = true; break;
     case ARGP_KEY_ARG:
       if (!args->ifname) {
         args->ifname = arg;
@@ -38,11 +34,8 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
         return ARGP_ERR_UNKNOWN;
       }
       break;
-    case ARGP_KEY_NO_ARGS:
-      argp_usage(state);
-      break;
-    default:
-      return ARGP_ERR_UNKNOWN;
+    case ARGP_KEY_NO_ARGS: argp_usage(state); break;
+    default: return ARGP_ERR_UNKNOWN;
   }
   return 0;
 }
@@ -67,15 +60,9 @@ int show_overview(int ifindex, enum link_type link_type, int whitelist_fd,
   if (LOG_ALLOW_INFO) fprintf(out, "%s%s " RESET, log_prefixes[2][0], log_prefixes[2][1]);
   fprintf(out, _("  %sXDP Attach Mode:%s "), BOLD, RESET);
   switch (xdp_opts.attach_mode) {
-    case XDP_ATTACHED_SKB:
-      fprintf(out, _("skb"));
-      break;
-    case XDP_ATTACHED_DRV:
-      fprintf(out, _("native"));
-      break;
-    case XDP_ATTACHED_HW:
-      fprintf(out, _("hardware"));
-      break;
+    case XDP_ATTACHED_SKB: fprintf(out, _("skb")); break;
+    case XDP_ATTACHED_DRV: fprintf(out, _("native")); break;
+    case XDP_ATTACHED_HW: fprintf(out, _("hardware")); break;
     case XDP_ATTACHED_MULTI:
       if (xdp_opts.drv_prog_id)
         fprintf(out, _("native"));
@@ -84,9 +71,7 @@ int show_overview(int ifindex, enum link_type link_type, int whitelist_fd,
       else
         fprintf(out, _("hardware"));
       break;
-    default:
-      fprintf(out, _("unknown %d"), xdp_opts.attach_mode);
-      break;
+    default: fprintf(out, _("unknown %d"), xdp_opts.attach_mode); break;
   }
   fprintf(out, "\n");
 

@@ -78,49 +78,26 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
     case 'q':
       if (log_verbosity > 0) log_verbosity--;
       break;
-    case 'f':
-      try(parse_filter(arg, &args->filters, &args->wildcard_count));
-      break;
-    case 'L':
-      try(parse_link_type(arg, &args->link_type));
-      break;
-    case 'x':
-      args->xdp_mode = try(parse_xdp_mode(arg));
-      break;
+    case 'f': try(parse_filter(arg, &args->filters, &args->wildcard_count)); break;
+    case 'L': try(parse_link_type(arg, &args->link_type)); break;
+    case 'x': args->xdp_mode = try(parse_xdp_mode(arg)); break;
 #ifdef MIMIC_USE_LIBXDP
-    case 'X':
-      args->use_libxdp = true;
-      break;
+    case 'X': args->use_libxdp = true; break;
 #endif
-    case 'h':
-      try(parse_handshake(arg, &args->gsettings.handshake));
-      break;
-    case 'k':
-      try(parse_keepalive(arg, &args->gsettings.keepalive));
-      break;
-    case 'p':
-      try(parse_padding(arg, &args->gsettings.padding));
-      break;
-    case 'W':
-      args->gsettings.max_window = true;
-      break;
-    case 'F':
-      args->file = arg;
-      break;
-    case 0xffff:
-      args->check = true;
-      break;
+    case 'h': try(parse_handshake(arg, &args->gsettings.handshake)); break;
+    case 'k': try(parse_keepalive(arg, &args->gsettings.keepalive)); break;
+    case 'p': try(parse_padding(arg, &args->gsettings.padding)); break;
+    case 'W': args->gsettings.max_window = true; break;
+    case 'F': args->file = arg; break;
+    case 0xffff: args->check = true; break;
     case ARGP_KEY_ARG:
       if (!args->ifname)
         args->ifname = arg;
       else
         return ARGP_ERR_UNKNOWN;
       break;
-    case ARGP_KEY_NO_ARGS:
-      argp_usage(state);
-      break;
-    default:
-      return ARGP_ERR_UNKNOWN;
+    case ARGP_KEY_NO_ARGS: argp_usage(state); break;
+    default: return ARGP_ERR_UNKNOWN;
   }
   return 0;
 }
@@ -431,8 +408,7 @@ static int do_routine(int conns_fd, const char* ifname) {
           }
         }
         break;
-      default:
-        break;
+      default: break;
     }
 
     if (reset) {
@@ -525,18 +501,10 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   struct xdp_program* xdp_ingress = NULL;
   enum xdp_attach_mode xdp_mode;
   switch (args->xdp_mode) {
-    case XDP_FLAGS_SKB_MODE:
-      xdp_mode = XDP_MODE_SKB;
-      break;
-    case XDP_FLAGS_DRV_MODE:
-      xdp_mode = XDP_MODE_NATIVE;
-      break;
-    case XDP_FLAGS_HW_MODE:
-      xdp_mode = XDP_MODE_HW;
-      break;
-    default:
-      xdp_mode = XDP_MODE_UNSPEC;
-      break;
+    case XDP_FLAGS_SKB_MODE: xdp_mode = XDP_MODE_SKB; break;
+    case XDP_FLAGS_DRV_MODE: xdp_mode = XDP_MODE_NATIVE; break;
+    case XDP_FLAGS_HW_MODE: xdp_mode = XDP_MODE_HW; break;
+    default: xdp_mode = XDP_MODE_UNSPEC; break;
   }
 #endif
 
@@ -805,16 +773,10 @@ int subcmd_run(struct run_args* args) {
     int kind = try(get_l2_kind(args->ifname));
     switch (kind) {
       case ARPHRD_ETHER:
-      case ARPHRD_LOOPBACK:
-        args->link_type = LINK_ETH;
-        break;
+      case ARPHRD_LOOPBACK: args->link_type = LINK_ETH; break;
       case ARPHRD_PPP:
-      case ARPHRD_NONE:
-        args->link_type = LINK_NONE;
-        break;
-      default:
-        log_warn(_("unknown link type %d, defaulting to eth"), kind);
-        break;
+      case ARPHRD_NONE: args->link_type = LINK_NONE; break;
+      default: log_warn(_("unknown link type %d, defaulting to eth"), kind); break;
     }
   }
 

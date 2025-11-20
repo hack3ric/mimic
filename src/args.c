@@ -60,11 +60,8 @@ static inline error_t args_parse_opt(int key, char* arg, struct argp_state* stat
       log_error(_("unknown command '%s'"), arg);
       exit(1);
       break;
-    case ARGP_KEY_NO_ARGS:
-      argp_usage(state);
-      break;
-    default:
-      return ARGP_ERR_UNKNOWN;
+    case ARGP_KEY_NO_ARGS: argp_usage(state); break;
+    default: return ARGP_ERR_UNKNOWN;
   }
   return 0;
 }
@@ -100,10 +97,7 @@ void filter_list_destroy(struct filter_list* list) {
 void args_destroy(struct args* args) {
   switch (args->cmd) {
     case CMD_NULL:
-    case CMD_SHOW:
-      break;
-    case CMD_RUN:
-      filter_list_destroy(&args->run.filters);
-      break;
+    case CMD_SHOW: break;
+    case CMD_RUN: filter_list_destroy(&args->run.filters); break;
   }
 }

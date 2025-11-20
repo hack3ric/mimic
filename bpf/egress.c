@@ -38,17 +38,10 @@ static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_
       ((__u32*)buf)[i] = bpf_get_prandom_u32();
     // HACK: prevent usage of __builtin_memset against variable size
     switch (padding_len % 4) {
-      case 1:
-        buf[padding_len + 2] = 0;
-        fallthrough;
-      case 2:
-        buf[padding_len + 1] = 0;
-        fallthrough;
-      case 3:
-        buf[padding_len + 0] = 0;
-        fallthrough;
-      default:
-        break;
+      case 1: buf[padding_len + 2] = 0; fallthrough;
+      case 2: buf[padding_len + 1] = 0; fallthrough;
+      case 3: buf[padding_len + 0] = 0; fallthrough;
+      default: break;
     }
     *csum_diff = bpf_csum_diff(NULL, 0, (__be32*)buf, round_to_mul(padding_len, 4), *csum_diff);
     try_shot(bpf_skb_store_bytes(skb, offset + TCP_UDP_HEADER_DIFF, buf, padding_len, 0));
@@ -81,32 +74,24 @@ int egress_handler(struct __sk_buff* skb) {
       decl_ok(struct ethhdr, eth, 0, skb);
       __u16 eth_proto = ntohs(eth->h_proto);
       switch (eth_proto) {
-        case ETH_P_IP:
-          redecl_shot(struct iphdr, ipv4, l2_end, skb);
-          break;
-        case ETH_P_IPV6:
-          redecl_shot(struct ipv6hdr, ipv6, l2_end, skb);
-          break;
-        default:
-          return TC_ACT_OK;
+        case ETH_P_IP: redecl_shot(struct iphdr, ipv4, l2_end, skb); break;
+        case ETH_P_IPV6: redecl_shot(struct ipv6hdr, ipv6, l2_end, skb); break;
+        default: return TC_ACT_OK;
       }
       break;
     case LINK_NONE:
       l2_end = 0;
       redecl_ok(struct iphdr, ipv4, l2_end, skb);
       switch (ipv4->version) {
-        case 4:
-          break;
+        case 4: break;
         case 6:
           ipv4 = NULL;
           redecl_ok(struct ipv6hdr, ipv6, 0, skb);
           break;
-        default:
-          return TC_ACT_OK;
+        default: return TC_ACT_OK;
       }
       break;
-    default:
-      return TC_ACT_SHOT;
+    default: return TC_ACT_SHOT;
   }
 
   if (ipv4) {
