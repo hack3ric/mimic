@@ -5,7 +5,7 @@
 #ifdef MIMIC_USE_LIBXDP
 
 #include <dlfcn.h>
-#include <errno.h>
+#include <errno.h>  // IWYU pragma: keep
 #include <xdp/libxdp.h>
 
 #include "common/log.h"
