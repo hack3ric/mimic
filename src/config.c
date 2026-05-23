@@ -170,6 +170,8 @@ static int parse_setting(const char* k, char* v, struct filter_settings* setting
     try(parse_padding(v, &settings->padding));
   else if (strcmp("max_window", k) == 0)
     try(parse_bool(v, &settings->max_window));
+  else if (strcmp("anti_gro", k) == 0)
+    try(parse_bool(v, &settings->anti_gro));
   else
     return 0;
   return 1;
@@ -368,5 +370,6 @@ int write_lock_file(int fd, const struct lock_content* c) {
               c->settings.k.s));
   try(dprintf(fd, "padding=%d\n", c->settings.padding));
   try(dprintf(fd, "max_window=%d\n", c->settings.max_window));
+  try(dprintf(fd, "anti_gro=%d\n", c->settings.anti_gro));
   return 0;
 }
