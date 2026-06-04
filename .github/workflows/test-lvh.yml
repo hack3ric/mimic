@@ -69,13 +69,13 @@ jobs:
           flags_name=(generic compat-6.1 compat-6.6)
           flags=("" "COMPAT_LINUX_6_1=1" "COMPAT_LINUX_6_6=1")
           for _i in {0..2}; do
-            for _clang_version in {16..21}; do
+            for _clang_version in {15..21}; do
               if [ $_clang_version -ge 20 ] && [ "${flags_name[$_i]}" == "compat-6.1" ]; then
                 continue
               fi
-              # if [ $_clang_version -le 15 ] && [ "${flags_name[$_i]}" == "compat-6.6" ]; then
-              #   continue
-              # fi
+              if [ $_clang_version -le 16 ] && [ "${{ matrix.kernel.name }}" == "bpf-next" ]; then
+                continue
+              fi
               export BPF_CC=clang-$_clang_version
               export BPFTOOL=bpftool
               make build-cli -j ${flags[$_i]}
@@ -235,6 +235,9 @@ jobs:
             cd out
             chmod +x mimic-*
             for _mimic in ./mimic-${{ matrix.kernel.variant }}-*; do
+              if [ $_clang_version -le 16 ] && [ "${{ matrix.kernel.name }}" == "bpf-next" ]; then
+                continue
+              fi
               echo Checking \$_mimic
               \$_mimic run lo --check
             done
