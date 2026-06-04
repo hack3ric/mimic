@@ -197,6 +197,14 @@ jobs:
           cp _data/kernels/${{ matrix.kernel.name }}/tar-install/boot/vmlinuz lvh-kernel
           rm -r _data/kernels/${{ matrix.kernel.name }}/tar-install
           mv _data/kernels/${{ matrix.kernel.name }} lvh-kernel-tree
+      - name: Save built kernel to cache
+        if: steps.fetch-cached-kernel.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            lvh-kernel
+            lvh-kernel-tree
+          key: mimic-lvh-kernel-${{ matrix.arch }}-${{ matrix.kernel.name }}-${{ steps.prepare-kernel-tree-metadata.outputs.lvh_kernel_rev }}
       - name: Build mimic.ko
         run: |
           cd kmod
