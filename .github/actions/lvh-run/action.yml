@@ -1,73 +1,73 @@
-name: 'lvh-run'
-description: 'Runs LVH VMs for Mimic CI testing'
+name: "lvh-run"
+description: "Runs LVH VMs for Mimic CI testing"
 inputs:
   test-name:
-    description: 'Unique test name'
+    description: "Unique test name"
     required: true
   lvh-version:
-    description: 'LVH cli version (Docker tag)'
+    description: "LVH cli version (Docker tag)"
     required: true
-    default: 'v0.0.28'
+    default: "v0.0.28"
   cmd:
     description: 'Commands to run in a VM (any occurance of "$" within "cmd" must be escaped)'
     required: true
   ssh-port:
-    description: 'SSH port for VM on a host'
+    description: "SSH port for VM on a host"
     required: true
-    default: '2222'
+    default: "2222"
   ssh-connect-wait-retries:
-    description: 'Number of retries to connect to the SSH server'
+    description: "Number of retries to connect to the SSH server"
     required: true
-    default: '300'
+    default: "300"
   ssh-connect-wait-timeout:
-    description: 'Timeout in seconds between retries to connect to the SSH server'
+    description: "Timeout in seconds between retries to connect to the SSH server"
     required: true
-    default: '1'
+    default: "1"
   host-mount:
-    description: 'Host dir path to mount in /host dir of a VM'
+    description: "Host dir path to mount in /host dir of a VM"
     required: true
   provision:
-    description: 'Provision VM (if set to false, only given test cmd is going to be run)'
+    description: "Provision VM (if set to false, only given test cmd is going to be run)"
     required: true
-    default: 'true'
+    default: "true"
   install-dependencies:
-    description: 'Install QEMU dependencies (Debian/Ubuntu)'
-    default: 'false'
+    description: "Install QEMU dependencies (Debian/Ubuntu)"
+    default: "false"
   serial-port:
-    description: 'Serial port to access VM'
+    description: "Serial port to access VM"
     required: true
-    default: '0'
+    default: "0"
   cpu:
-    description: 'CPU count'
+    description: "CPU count"
     required: false
   mem:
-    description: 'RAM size'
+    description: "RAM size"
     required: false
   cpu-kind:
-    description: 'CPU kind to use'
+    description: "CPU kind to use"
     required: true
-    default: 'host'
+    default: "host"
   image-path:
-    description: 'Path to root image to boot with'
+    description: "Path to root image to boot with"
     required: true
   kernel-path:
-    description: 'Path to kernel image to boot with'
+    description: "Path to kernel image to boot with"
     required: false
   verbose:
-    description: 'Run in verbose mode'
+    description: "Run in verbose mode"
     required: true
-    default: 'false'
+    default: "false"
   port-forward:
-    description: 'Additional to SSH comma-separated port forwards ($LOCAL:$VM_PORT)'
+    description: "Additional to SSH comma-separated port forwards ($LOCAL:$VM_PORT)"
     required: false
   arch:
-    description: 'VM architecture (amd64 (default) or arm64)'
-    default: 'amd64'
+    description: "VM architecture (amd64 (default) or arm64)"
+    default: "amd64"
     required: false
   kernel-version:
-    description: 'Kernel version (if empty, a kernel from the image will be used)'
+    description: "Kernel version (if empty, a kernel from the image will be used)"
     required: false
-    default: ''
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -80,7 +80,7 @@ runs:
         lvh-version: ${{ inputs.lvh-version }}
     - name: Load install packages from GitHub cache
       if: ${{ inputs.provision == 'true' && inputs.install-dependencies == 'true' }}
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      uses: actions/cache@v5
       id: package-cache
       with:
         path: /tmp/.ubuntu-pkgs

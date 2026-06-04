@@ -128,7 +128,7 @@ jobs:
           arch: ${{ matrix.arch }}
       - name: Fetch cached root image
         id: fetch-cached-root-image
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: lvh-image.qcow2
           key: mimic-lvh-root-image-${{ matrix.arch }}-${{ env.root-image-version }}
@@ -139,7 +139,7 @@ jobs:
           cp _data/images/kind.qcow2 lvh-image.qcow2
       - name: Save root image to cache
         if: steps.fetch-cached-root-image.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: lvh-image.qcow2
           key: mimic-lvh-root-image-${{ matrix.arch }}-${{ env.root-image-version }}
@@ -164,7 +164,7 @@ jobs:
           echo lvh_kernel_rev=$(git ls-remote "$git_url" | grep "$git_branch" | awk '{print $1}') >> $GITHUB_OUTPUT
       - name: Fetch cached LVH kernel
         id: fetch-cached-kernel
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             lvh-kernel
@@ -199,7 +199,7 @@ jobs:
           mv _data/kernels/${{ matrix.kernel.name }} lvh-kernel-tree
       - name: Save built kernel to cache
         if: steps.fetch-cached-kernel.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             lvh-kernel
