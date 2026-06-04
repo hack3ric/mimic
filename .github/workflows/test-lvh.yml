@@ -93,7 +93,7 @@ jobs:
     needs: build-exe
     runs-on: ubuntu-24.04
     env:
-      lvh-version: v0.0.28
+      lvh-version: v0.0.30
       root-image-version: 20251113.115124-sid
     strategy:
       fail-fast: false
@@ -148,7 +148,7 @@ jobs:
         id: prepare-kernel-tree-metadata
         run: |
           mkdir -p _data/kernels
-          wget -O _data/kernels.json https://raw.githubusercontent.com/cilium/little-vm-helper-images/c19813941658d998100cf7caaeaf6670763c8e2c/_data/kernels.json
+          wget -O _data/kernels.json https://raw.githubusercontent.com/cilium/little-vm-helper-images/df80feda67886c5b6916afe3fbb8e727b2c7fa2f/_data/kernels.json
           sed -i 's/\?depth=1/?depth=128/g' _data/kernels.json
           git_url_with_branch="$(jq -r '.kernels.[] | select(.name=="${{ matrix.kernel.name }}") | .url' < _data/kernels.json | sed -E 's/\?depth=[0-9]+//')"
           git_url="$(echo $git_url_with_branch | sed 's/#.*//')"
