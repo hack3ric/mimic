@@ -65,8 +65,12 @@
 #define fallthrough
 #endif
 
+#ifndef unlikely
 #define unlikely(expr) __builtin_expect(!!(expr), 0)
+#endif
+#ifndef likely
 #define likely(expr) __builtin_expect(!!(expr), 1)
+#endif
 
 #if __clang_major__ >= 17
 #if __has_c_attribute(clang::unlikely)
