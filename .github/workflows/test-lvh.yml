@@ -39,6 +39,30 @@ jobs:
           sudo apt install clang-{15..21} pahole \
             linux-tools-common linux-tools-$(uname -r) linux-cloud-tools-$(uname -r) \
             libbpf-dev libffi-dev libelf-dev libxdp-dev
+      - name: Install bpftool
+        env:
+          BPFTOOL_VERSION: v7.7.0
+        run: |
+          set -euxo pipefail
+
+          archive="bpftool-${BPFTOOL_VERSION}-${{ matrix.arch }}.tar.gz"
+          base="https://github.com/libbpf/bpftool/releases/download/${BPFTOOL_VERSION}"
+
+          curl --fail --location --retry 3 \
+            --output "${archive}" \
+            "${base}/${archive}"
+
+          curl --fail --location --retry 3 \
+            --output "${archive}.sha256sum" \
+            "${base}/${archive}.sha256sum"
+
+          sha256sum --check "${archive}.sha256sum"
+          tar -xzf "${archive}"
+
+          sudo install -m 0755 bpftool /usr/local/bin/bpftool
+
+          type -a bpftool
+          bpftool version
       - name: Build CLI
         shell: bash
         run: |
@@ -50,6 +74,7 @@ jobs:
                 continue
               fi
               export BPF_CC=clang-$_clang_version
+              export BPFTOOL=bpftool
               make build-cli -j ${flags[$_i]}
               mv out/mimic out/mimic-${flags_name[$_i]}-clang-$_clang_version
             done
