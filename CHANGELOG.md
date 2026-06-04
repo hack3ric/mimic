@@ -1,6 +1,6 @@
 # Changelog for Mimic
 
-## 0.7.1 (2025-??-??)
+## 0.7.1 (2026-06-04)
 
 - Allow unaligned memory access in BPF, fixing running on riscv64, etc.
 - Fix BPF verifier failure on clang 20 and kernel 6.15 (@hrimfaxi)
