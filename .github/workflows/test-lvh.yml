@@ -106,6 +106,8 @@ jobs:
             variant: compat-6.6
           - name: "6.12"
             variant: generic
+          - name: "6.18"
+            variant: generic
           - name: bpf-next
             variant: generic
     steps:
