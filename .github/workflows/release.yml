@@ -38,7 +38,7 @@ jobs:
               sed -i 's/clang,/clang, llvm,/' debian/control
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Run pre-building script
         run: |
           ${{ matrix.distro.extra-cmd }}

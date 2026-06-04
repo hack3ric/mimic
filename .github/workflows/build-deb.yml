@@ -52,7 +52,7 @@ jobs:
               sed -i 's/clang,/clang, llvm,/' debian/control
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Run pre-building script
         run: |
           ${{ matrix.distro.extra-cmd }}
@@ -66,7 +66,7 @@ jobs:
             ${{ matrix.distro.extra-repos }}
             ${{ matrix.arch == 'arm64' && matrix.distro.extra-repos-arm64 || matrix.distro.extra-repos-amd64 }}
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: packages-${{ matrix.distro.codename }}-${{ matrix.arch }}
           path: |
@@ -83,7 +83,7 @@ jobs:
         arch: [amd64, arm64]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
@@ -95,7 +95,7 @@ jobs:
           sudo modprobe mimic
       - name: Upload log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dkms-make-log
           path: /var/lib/dkms/mimic/*/build/make.log
