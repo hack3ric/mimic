@@ -22,7 +22,7 @@ Normally with most Linux distros (Debian, Fedora, Arch, etc.), `kfunc` should be
 
 When the two conditions below both matches, checksum hack is not necessary.
 
-1. Driver does not use `csum_offset`, or checksum offload is maunally disabled.
+1. Driver does not use `csum_offset`, or checksum offload is manually disabled.
 
     You can check if your NIC's driver source code contains `csum_offset` by simple searching either inside Linux kernel source code or out-of-tree somewhere. Realtek and Mediatek's Ethernet driver does not use it, while Intel and many others uses it.
 
