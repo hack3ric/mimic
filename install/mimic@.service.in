@@ -8,13 +8,11 @@ Type = notify
 ExecStart = @@MIMIC_EXEC@@ run %i -F @@MIMIC_CONFIG_PATH@@/%i.conf
 Restart = on-failure
 
-User = mimic
 RuntimeDirectory = @@MIMIC_RUNTIME_DIR@@
 RuntimeDirectoryMode = 0750
 RuntimeDirectoryPreserve = yes
 
 CapabilityBoundingSet = CAP_SYS_ADMIN CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
-AmbientCapabilities = CAP_SYS_ADMIN CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
 ProtectSystem = strict
 
 [Install]
