@@ -55,6 +55,7 @@ jobs:
             image: ubuntu:resolute
             extra-cmd: |
               sed -i 's/clang,/clang, llvm,/' debian/control
+              sed -i 's/linux-source,/linux-source, libssl-dev,/' debian/control
     steps:
       - name: Checkout
         uses: actions/checkout@v6
