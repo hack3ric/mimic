@@ -307,7 +307,7 @@ int parse_config_file(FILE* file, struct run_args* args) {
   return 0;
 }
 
-int parse_lock_file(FILE* file, struct lock_content* c) {
+int parse_lock_file(FILE* file, struct lock_content* c, bool strict) {
   char* line raii(freestrp) = NULL;
   size_t len = 0;
   ssize_t read;
@@ -322,9 +322,13 @@ int parse_lock_file(FILE* file, struct lock_content* c) {
     try(parse_kv(line, &k, &v));
 
     if (strcmp(k, "version") == 0) {
-      if (strcmp(v, argp_program_version) != 0)
-        ret(-EINVAL, _("current Mimic version is %s, but lock file's is '%s'"),
-            argp_program_version, v);
+      if (strcmp(v, argp_program_version) != 0) {
+        const char* s = _("current Mimic version is %s, but lock file's is '%s'");
+        if (strict)
+          ret(-EINVAL, s, argp_program_version, v);
+        else
+          log_warn(s, argp_program_version, v);
+      }
       version_checked = true;
     } else if (strcmp(k, "pid") == 0)
       try(parse_int_any(v, &c->pid));
@@ -341,7 +345,13 @@ int parse_lock_file(FILE* file, struct lock_content* c) {
     else if (!try(parse_setting(k, v, &c->settings)))
       ret(-EINVAL, _("unknown key '%s'"), k);
   }
-  if (!version_checked) ret(-EINVAL, _("no version found in lock file"));
+  if (!version_checked) {
+    const char* s = _("no version found in lock file");
+    if (strict)
+      ret(-EINVAL, s);
+    else
+      log_warn(s);
+  }
   return 0;
 }
 

@@ -140,7 +140,7 @@ int subcmd_show(struct show_args* args) {
   {
     FILE* lock_file raii(fclosep) =
       try_p(fopen(lock_path, "r"), _("failed to open lock file at %s: %s"), lock_path, strret);
-    try(parse_lock_file(lock_file, &lock_content));
+    try(parse_lock_file(lock_file, &lock_content, false));
   }
 
   char proc_path[32];

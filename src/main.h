@@ -72,7 +72,7 @@ int parse_padding(const char* str, __s16* padding);
 int parse_filter(char* filter_str, struct filter_list* list, unsigned int* wildcard_count);
 int parse_xdp_mode(const char* mode);
 int parse_config_file(FILE* file, struct run_args* args);
-int parse_lock_file(FILE* file, struct lock_content* c);
+int parse_lock_file(FILE* file, struct lock_content* c, bool strict);
 int write_lock_file(int fd, const struct lock_content* c);
 
 struct queue {

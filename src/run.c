@@ -733,7 +733,7 @@ static inline int _lock(const char* restrict lock_path, const char* restrict ifn
   if (errno == EEXIST) {
     FILE* lock_file raii(fclosep) = fopen(lock_path, "r");
     if (lock_file) {
-      if (parse_lock_file(lock_file, &lock_content) == 0) {
+      if (parse_lock_file(lock_file, &lock_content, true) == 0) {
         char proc_path[32];
         sprintf(proc_path, "/proc/%d", lock_content.pid);
         if (access(proc_path, F_OK) < 0) {
