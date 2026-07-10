@@ -50,10 +50,12 @@ static inline int mangle_data(struct __sk_buff* skb, __u16 offset, __be32* csum_
   return TC_ACT_OK;
 }
 
-static inline void update_tcp_header(struct tcphdr* tcp, __u16 tcp_payload_len, __u32 seq,
-                                     __u32 ack_seq, __u16 window) {
+static __always_inline void update_tcp_header(struct tcphdr* tcp, __u16 tcp_payload_len, __u32 seq,
+                                              __u32 ack_seq, __u16 window, __u32 ack_jitter) {
   tcp->seq = htonl(seq);
-  tcp->ack_seq = htonl(ack_seq);
+  // ack_jitter defeats Linux TCP-GRO coalescing: tcp_gro_receive flushes on
+  // any wire-ack_seq mismatch between consecutive same-flow packets.
+  tcp->ack_seq = htonl(ack_seq + ack_jitter);
   tcp_flag_word(tcp) = 0;
   tcp->doff = 5;
   tcp->window = htons(window);
@@ -230,7 +232,8 @@ int egress_handler(struct __sk_buff* skb) {
   __be32 csum_diff = 0;
   try_tc(mangle_data(skb, ip_end + sizeof(*udp), &csum_diff, padding));
   decl_shot(struct tcphdr, tcp, ip_end, skb);
-  update_tcp_header(tcp, payload_len, seq, ack_seq, window);
+  __u32 ack_jitter = conn->settings.anti_gro ? bpf_get_prandom_u32() : 0;
+  update_tcp_header(tcp, payload_len, seq, ack_seq, window, ack_jitter);
 
   __u32 csum_off = ip_end + offsetof(struct tcphdr, check);
   redecl_shot(struct tcphdr, tcp, ip_end, skb);

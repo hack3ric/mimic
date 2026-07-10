@@ -284,8 +284,9 @@ struct filter_settings {
       } keepalive, k; };
       __s16 padding;
       __s16 max_window;
+      __s16 anti_gro;
     };
-    __s16 array[8];
+    __s16 array[9];
   };
 };
 // clang-format on
@@ -304,10 +305,11 @@ static const struct filter_settings DEFAULT_SETTINGS = {
   .keepalive.array = {180, 10, 3, 600},
   .padding = 0,
   .max_window = false,
+  .anti_gro = false,
 };
 
 static const struct filter_settings FALLBACK_SETTINGS = {
-  .array = {-1, -1, -1, -1, -1, -1, -1, -1},
+  .array = {-1, -1, -1, -1, -1, -1, -1, -1, -1},
 };
 
 static inline void filter_settings_apply(struct filter_settings* local,
@@ -394,8 +396,10 @@ static __always_inline __u32 conn_cooldown_display(struct connection* conn) {
 }
 
 static __always_inline __u32 conn_padding(struct connection* conn, __u32 seq, __u32 ack_seq) {
-  return conn->settings.padding == PADDING_RANDOM ? (seq + ack_seq) % 11
-                                                  : (__u32)conn->settings.padding;
+  if (conn->settings.padding != PADDING_RANDOM) return (__u32)conn->settings.padding;
+  // When anti_gro is on, the wire ack_seq is jittered per packet and isn't recoverable
+  // by the receiver, so drop it from the entropy mix to keep padding symmetric.
+  return (seq + (conn->settings.anti_gro ? 0 : ack_seq)) % 11;
 }
 
 static __always_inline __be32 conn_max_window(struct connection* conn) {
