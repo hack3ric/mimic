@@ -1,0 +1,26 @@
+# Mimic obfuscates UDP traffic (e.g. WireGuard) as TCP using eBPF.
+#
+# Each `config mimic` section runs one mimic instance against an OpenWrt
+# logical network interface (an entry in /etc/config/network — e.g.
+# 'wan', 'lan', 'vpn'). mimic resolves the logical name to the underlying
+# netdev (e.g. 'wan' on PPPoE → 'pppoe-wan'), attaches its eBPF programs,
+# and is automatically restarted when the interface state changes.
+#
+# To enable: set `enabled '1'`, ensure `interface` matches a section in
+# /etc/config/network, edit the referenced `config_file` with at least
+# one `filter` line, then `service mimic restart`.
+#
+# Optional WireGuard egress kill switch: when `killswitch '1'`, the init
+# script scans the referenced `config_file` for `filter = …` entries and
+# drops the matching unmasked UDP egress, so a stopped or crashed mimic
+# can't leak a bare WG handshake. No separate endpoint list to maintain —
+# the kill switch protects exactly the flows mimic itself is configured
+# to handle. For `local=…` filters the IP is ignored (the source address
+# may be DHCP/PPPoE/SLAAC assigned and not stable) and only the port is
+# matched, covering both IPv4 and IPv6.
+
+config mimic 'wan'
+	option enabled '0'
+	option interface 'wan'
+	option config_file '/etc/mimic/wan.conf'
+	option killswitch '0'

@@ -1,0 +1,354 @@
+#!/bin/sh /etc/rc.common
+
+START=50
+USE_PROCD=1
+
+PROG=/usr/bin/mimic
+KMOD_NAME=mimic
+
+. /lib/functions/network.sh
+
+# WG-as-UDP egress kill switch. Filters live at TC pref 100..199 — they
+# run *after* mimic's bpf at pref 1, so once mimic rewrites UDP→TCP the
+# u32 match (proto=17) misses and masked traffic is unaffected. mimic
+# destroys the entire egress qdisc on exit (libbpf bpf_tc_hook_destroy
+# with attach_point=EGRESS is all-or-nothing on this kernel/libbpf), so
+# we re-apply on every start_instance and after stop.
+#
+# Per-section UCI option:
+#   option killswitch '1'    # master enable
+#
+# When enabled, the per-section `config_file` (the mimic config the
+# instance loads) is scanned for `filter = …` lines — i.e. the same
+# flows mimic itself protects — and a drop rule is installed per entry:
+#
+#   filter = remote=192.0.2.1:1234              → drop UDP egress to that v4 dst:port
+#   filter = remote=[2001:db8::cafe]:5678       → drop UDP egress to that v6 dst:port
+#   filter = local=192.0.2.1:1234               → drop UDP egress with sport=1234
+#                                                 (IP ignored; covers v4 and v6 since
+#                                                 the source IP can be DHCP/PPPoE/SLAAC
+#                                                 assigned and isn't stable)
+#   filter = remote=…,padding=random,max_window=true   → trailing ,key=val pairs are
+#                                                        ignored by the kill switch
+#
+# Range 100-199 on the managed netdev is reserved for this kill switch;
+# we wipe any existing filter in that range before re-installing. Each
+# remote filter consumes 1 prio slot, each local filter 2 (v4 + v6).
+
+_MIMIC_KS_IPV4_RE='[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}'
+_MIMIC_KS_IPV6_RE='\(\([0-9A-Fa-f]\{1,4\}:\)\{1,\}\)\(\([0-9A-Fa-f]\{1,4\}\)\{0,1\}\)\(\(:[0-9A-Fa-f]\{1,4\}\)\{1,\}\)'
+
+# ks_parse_endpoint <string>
+# On success: prints "<family> <ip> <port>" (family=4|6) to stdout, returns 0.
+# On parse/validation failure: returns 1.
+ks_parse_endpoint() {
+	local s="${1}" ip port family
+	case "${s}" in
+		\[*\]:*)
+			family=6
+			ip="${s#\[}"; ip="${ip%%\]:*}"
+			port="${s##*\]:}"
+			;;
+		*.*.*.*:*)
+			family=4
+			ip="${s%:*}"
+			port="${s##*:}"
+			;;
+		*)
+			return 1
+			;;
+	esac
+	[ -n "${ip}" ] && [ -n "${port}" ] || return 1
+	case "${port}" in
+		''|*[!0-9]*) return 1 ;;
+	esac
+	[ "${port}" -ge 1 ] && [ "${port}" -le 65535 ] || return 1
+	if [ "${family}" = 4 ]; then
+		printf '%s' "${ip}" | grep -q "^${_MIMIC_KS_IPV4_RE}$" || return 1
+	else
+		printf '%s' "${ip}" | grep -q "^${_MIMIC_KS_IPV6_RE}$" || return 1
+	fi
+	printf '%s %s %s\n' "${family}" "${ip}" "${port}"
+}
+
+# Wipe any filter in our managed prio range without touching pref 1 (mimic's bpf).
+ks_cleanup() {
+	local dev="${1}"
+	local prios p
+	prios=$(tc filter show dev "${dev}" egress 2>/dev/null | \
+		sed -n 's/^filter protocol [^ ]\+ pref \([0-9]\+\) .*/\1/p' | \
+		sort -un)
+	for p in ${prios}; do
+		if [ "${p}" -ge 100 ] && [ "${p}" -le 199 ]; then
+			tc filter del dev "${dev}" egress prio "${p}" 2>/dev/null
+		fi
+	done
+}
+
+# Install a drop rule for a remote filter (matches dst IP + dport).
+ks_add_remote_drop() {
+	local dev="${1}" prio="${2}" family="${3}" ip="${4}" port="${5}"
+	if [ "${family}" = 4 ]; then
+		tc filter add dev "${dev}" egress prio "${prio}" \
+			protocol ip u32 \
+			match ip protocol 17 0xff \
+			match ip dst "${ip}/32" \
+			match ip dport "${port}" 0xffff \
+			action drop
+	else
+		tc filter add dev "${dev}" egress prio "${prio}" \
+			protocol ipv6 u32 \
+			match ip6 protocol 17 0xff \
+			match ip6 dst "${ip}/128" \
+			match ip6 dport "${port}" 0xffff \
+			action drop
+	fi
+}
+
+# Install a drop rule for a local filter (matches sport only; IP is
+# intentionally ignored — the local address may be DHCP/PPPoE/SLAAC
+# assigned and isn't stable across reconnects).
+ks_add_local_drop() {
+	local dev="${1}" prio="${2}" family="${3}" port="${4}"
+	if [ "${family}" = 4 ]; then
+		tc filter add dev "${dev}" egress prio "${prio}" \
+			protocol ip u32 \
+			match ip protocol 17 0xff \
+			match ip sport "${port}" 0xffff \
+			action drop
+	else
+		tc filter add dev "${dev}" egress prio "${prio}" \
+			protocol ipv6 u32 \
+			match ip6 protocol 17 0xff \
+			match ip6 sport "${port}" 0xffff \
+			action drop
+	fi
+}
+
+# Read mimic's config file and emit the endpoint portion of each
+# `filter = …` line (one per stdout line):
+#   filter = local=192.0.2.1:1234        → local=192.0.2.1:1234
+#   filter = remote=[2001:db8::1]:5678,padding=random  → remote=[2001:db8::1]:5678
+ks_iter_filters() {
+	local cfg_file="${1}"
+	sed -n '
+		s/^[[:space:]]*//
+		s/[[:space:]]*$//
+		/^#/d
+		/^filter[[:space:]]*=[[:space:]]*/!d
+		s/^filter[[:space:]]*=[[:space:]]*//
+		s/,.*$//
+		p
+	' "${cfg_file}"
+}
+
+# Entry point. Always wipes the managed prio range first (so toggling
+# killswitch off actually tears down stale rules); only re-installs
+# filters if killswitch=1 for this section.
+killswitch_apply() {
+	local cfg="${1}" dev="${2}"
+	local enabled cfg_file interface filters
+
+	config_get_bool enabled "${cfg}" killswitch 0
+	ks_cleanup "${dev}"
+
+	[ "${enabled}" -eq 1 ] || return 0
+
+	config_get interface "${cfg}" interface
+	config_get cfg_file "${cfg}" config_file "/etc/mimic/${interface}.conf"
+	if [ ! -r "${cfg_file}" ]; then
+		logger -t mimic "killswitch (${cfg}): config '${cfg_file}' unreadable, no filters installed"
+		return 0
+	fi
+
+	filters=$(ks_iter_filters "${cfg_file}")
+	if [ -z "${filters}" ]; then
+		logger -t mimic "killswitch (${cfg}): no 'filter =' entries in ${cfg_file}, nothing to drop"
+		return 0
+	fi
+
+	tc qdisc add dev "${dev}" clsact 2>/dev/null || true
+
+	# Subshell isolates the prio counter; tc commands have real (kernel) side effects.
+	printf '%s\n' "${filters}" | (
+		prio=100
+		while IFS= read -r line; do
+			case "${line}" in
+				remote=*) side=remote; endpoint="${line#remote=}" ;;
+				local=*)  side=local;  endpoint="${line#local=}"  ;;
+				*)        continue ;;
+			esac
+			parsed=$(ks_parse_endpoint "${endpoint}") || {
+				logger -t mimic "killswitch (${cfg}): bad ${side} filter '${endpoint}' in ${cfg_file}"
+				continue
+			}
+			set -- ${parsed}
+			family="${1}"; ip="${2}"; port="${3}"
+			if [ "${side}" = remote ]; then
+				ks_add_remote_drop "${dev}" "${prio}" "${family}" "${ip}" "${port}"
+				prio=$((prio + 1))
+			else
+				ks_add_local_drop "${dev}" "${prio}"       4 "${port}"
+				ks_add_local_drop "${dev}" "$((prio + 1))" 6 "${port}"
+				prio=$((prio + 2))
+			fi
+			if [ "${prio}" -gt 199 ]; then
+				logger -t mimic "killswitch (${cfg}): prio range 100..199 exhausted, remaining filters skipped"
+				break
+			fi
+		done
+	)
+}
+
+killswitch_reapply_section() {
+	local cfg="${1}"
+	local enabled interface dev
+	config_get_bool enabled "${cfg}" enabled 0
+	[ "${enabled}" -eq 1 ] || return 0
+	config_get interface "${cfg}" interface
+	[ -n "${interface}" ] || return 0
+	# iface down → no netdev → nothing to leak; skip.
+	network_get_device dev "${interface}" || return 0
+	[ -n "${dev}" ] || return 0
+	killswitch_apply "${cfg}" "${dev}"
+}
+
+# Best-effort, never blocks startup: with CHECKSUM_HACK=kprobe the module
+# is optional.
+ensure_kmod_loaded() {
+	[ -d "/sys/module/${KMOD_NAME}" ] && return 0
+	if ! modprobe "${KMOD_NAME}" 2>/dev/null; then
+		if [ -z "${_kmod_load_warned}" ]; then
+			_kmod_load_warned=1
+			logger -t mimic "Kernel module '${KMOD_NAME}' not loadable, continuing without it"
+		fi
+	fi
+	return 0
+}
+
+start_instance() {
+	local cfg="${1}"
+	local enabled interface config_file dev
+
+	config_get_bool enabled "${cfg}" enabled 0
+	[ "${enabled}" -eq 1 ] || return 0
+
+	config_get interface "${cfg}" interface
+	[ -n "${interface}" ] || {
+		logger -t mimic "Section '${cfg}' missing 'interface', skipping"
+		return 0
+	}
+
+	config_get config_file "${cfg}" config_file "/etc/mimic/${interface}.conf"
+
+	# 'interface' is a logical OpenWrt network interface; resolve it to
+	# the underlying netdev. If the iface isn't up yet (typical at boot
+	# for pppoe-wan), skip silently — the procd interface trigger will
+	# fire once it does come up.
+	if ! network_get_device dev "${interface}" || [ -z "${dev}" ]; then
+		logger -t mimic "Logical interface '${interface}' not up, skipping (cfg=${cfg})"
+		return 0
+	fi
+
+	if [ ! -r "${config_file}" ]; then
+		logger -t mimic "Config '${config_file}' missing or unreadable, skipping (cfg=${cfg})"
+		return 0
+	fi
+
+	ensure_kmod_loaded
+
+	killswitch_apply "${cfg}" "${dev}"
+
+	procd_open_instance "${cfg}"
+	procd_set_param command "${PROG}" run "${dev}" -F "${config_file}"
+	procd_set_param respawn 3600 5 5
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_close_instance
+}
+
+# Watch each enabled section's logical interface and act on transitions
+# only: start the instance on `interface.up`, stop it on `interface.down`.
+# We deliberately don't subscribe to `interface.update` — mimic binds to a
+# netdev (resolved via network_get_device), not L3 state, so mid-life
+# IP/DNS/route updates would just cause needless stop+start churn.
+#
+# `start <cfg>` is idempotent under procd's "add" semantics: same params
+# is a no-op, changed params (e.g. PPPoE reassigned the netdev) trigger
+# an automatic restart with the new params.
+add_iface_trigger() {
+	local cfg="${1}"
+	local enabled interface
+
+	config_get_bool enabled "${cfg}" enabled 0
+	[ "${enabled}" -eq 1 ] || return 0
+
+	config_get interface "${cfg}" interface
+	[ -n "${interface}" ] || return 0
+
+	procd_add_interface_trigger "interface.*.up" "${interface}" \
+		/etc/init.d/mimic start "${cfg}"
+	procd_add_interface_trigger "interface.*.down" "${interface}" \
+		/etc/init.d/mimic stop "${cfg}"
+}
+
+service_triggers() {
+	procd_add_reload_trigger "mimic"
+	config_load mimic
+	config_foreach add_iface_trigger mimic
+}
+
+section_match() {
+	[ "${1}" = "${instance}" ] && instance_found=1
+}
+
+# `service mimic <action> [<name>]` — when <name> is given, only that UCI
+# section is touched. rc_procd uses procd's "add" semantics in that case
+# (won't disturb other instances); without a name it uses "set" (full
+# replace, removed instances stop). procd_kill (default stop) honours the
+# instance arg too.
+start_service() {
+	local instance="${1}"
+
+	config_load mimic
+
+	if [ -n "${instance}" ]; then
+		local instance_found=0
+		config_foreach section_match mimic
+		if [ "${instance_found}" -ne 1 ]; then
+			logger -t mimic "Section '${instance}' not found in /etc/config/mimic"
+			return 1
+		fi
+		start_instance "${instance}"
+	else
+		config_foreach start_instance mimic
+	fi
+}
+
+# Mimic loads its config at startup and has no SIGHUP handler, so reload
+# is implemented as stop+start. The instance arg propagates to both.
+reload_service() {
+	stop "${@}"
+	start "${@}"
+}
+
+# rc.common's stop() dispatch (when USE_PROCD=1) runs three phases:
+#   1. stop_service       — pre-kill hook  (we don't need this)
+#   2. procd_kill         — synchronous;   waits for actual exit
+#   3. service_stopped    — post-kill hook (we use this)
+#
+# mimic's libbpf cleanup destroys the egress qdisc — wiping our pref
+# 100..199 filters along with mimic's own pref 1 — so we re-apply
+# here, after procd_kill has confirmed mimic is gone.
+service_stopped() {
+	config_load mimic
+	config_foreach killswitch_reapply_section mimic
+}
+
+reapply_killswitch() {
+	config_load mimic
+	config_foreach killswitch_reapply_section mimic
+}
+
+EXTRA_COMMANDS="reapply_killswitch"
+EXTRA_HELP="    reapply_killswitch  Reapply WG kill switch for all enabled instances"
