@@ -79,16 +79,4 @@ cleanup:
   return retcode;
 }
 
-// Need to manually clear conn.pktbuf in eBPF
-int use_pktbuf(enum rb_item_type type, __u64 buf) {
-  if (unlikely(type != RB_ITEM_CONSUME_PKTBUF && type != RB_ITEM_FREE_PKTBUF)) return -1;
-  if (!buf) return 0;
-  struct rb_item* item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*item), 0);
-  if (unlikely(!item)) return -1;
-  item->type = type;
-  item->pktbuf = buf;
-  bpf_ringbuf_submit(item, 0);
-  return 0;
-}
-
 char _license[] SEC("license") = "GPL";

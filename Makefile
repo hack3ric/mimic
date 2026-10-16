@@ -171,7 +171,7 @@ generate-akms:
 	$(MAKE) -C kmod AKMBUILD
 
 .PHONY: test
-test: build-cli out/test-memory
+test: build-cli out/test-memory out/test-pktbuf-bpf
 	bats tests
 
 out/test-memory: tests/memory.c $(mimic_obj) $(mimic_headers)
@@ -180,6 +180,10 @@ out/test-memory: tests/memory.c $(mimic_obj) $(mimic_headers)
 		-Wl,--wrap=malloc,--wrap=calloc,--wrap=free \
 		-Wl,--wrap=bpf_map__lookup_elem,--wrap=bpf_map__update_elem \
 		-Wl,--wrap=bpf_map_get_next_key,--wrap=bpf_map_lookup_elem_flags,--wrap=bpf_map_delete_elem
+
+out/test-pktbuf-bpf: tests/pktbuf-bpf.c $(mimic_headers) $(check_options)
+	$(mkdir_p)
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
 .PHONY: bench
 bench: build-cli
