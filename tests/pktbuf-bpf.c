@@ -83,11 +83,14 @@ int main(void) {
   };
 
   for (size_t c = 0; c < sizeof(cases) / sizeof(cases[0]); c++) {
+    // Access the flag word through an aligned header, then copy it into the packed packet.
+    struct tcphdr tcp = pkt.tcp;
     struct connection conn = conn_init(&info.settings, 0);
     conn.state = CONN_SYN_SENT;
     conn.seq = 200;
-    tcp_flag_word(&pkt.tcp) = TCP_FLAG_SYN | TCP_FLAG_ACK;
-    pkt.tcp.doff = 5;
+    tcp_flag_word(&tcp) = TCP_FLAG_SYN | TCP_FLAG_ACK;
+    tcp.doff = 5;
+    pkt.tcp = tcp;
     // Fill the ring with control packet events, without consuming them.
     for (int i = 0; i < 100; i++) {
       assert(bpf_map_update_elem(conns_fd, &key, &conn, BPF_ANY) == 0);
@@ -96,8 +99,9 @@ int main(void) {
 
     conn.state = cases[c].before;
     conn.pktbuf = TEST_PKTBUF;
-    tcp_flag_word(&pkt.tcp) = cases[c].flags;
-    pkt.tcp.doff = 5;
+    tcp_flag_word(&tcp) = cases[c].flags;
+    tcp.doff = 5;
+    pkt.tcp = tcp;
     assert(bpf_map_update_elem(conns_fd, &key, &conn, BPF_ANY) == 0);
     assert(bpf_prog_test_run_opts(prog_fd, &opts) == 0);
     assert(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK) == 0);
