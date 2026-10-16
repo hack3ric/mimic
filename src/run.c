@@ -326,11 +326,23 @@ static ffi_type* _handle_rb_event_args[] = {
 struct handle_rb_event_ctx {
   struct bpf_map* conns;
   const char* ifname;
+  bool stopping;
 };
+
+static int free_rb_packet_buffer(void* data) {
+  struct rb_item* item = data;
+  if (item->type == RB_ITEM_CONSUME_PKTBUF || item->type == RB_ITEM_FREE_PKTBUF)
+    packet_buf_free((struct packet_buf*)(uintptr_t)item->pktbuf);
+  return 0;
+}
 
 static void _handle_rb_event_binding(ffi_cif* cif, void* ret, void** args, void* _ctx) {
   UNUSED(cif);
   struct handle_rb_event_ctx* ctx = (typeof(ctx))_ctx;
+  if (ctx->stopping) {
+    *(int*)ret = free_rb_packet_buffer(*(void**)args[1]);
+    return;
+  }
   *(int*)ret = _handle_rb_event(ctx->conns, ctx->ifname, *(void**)args[0], *(void**)args[1],
                                 *(size_t*)args[2]);
 }
@@ -339,9 +351,15 @@ static ring_buffer_sample_fn handle_rb_event(struct handle_rb_event_ctx* ctx, ff
                                              ffi_closure** closure) {
   ring_buffer_sample_fn fn;
   *closure = ffi_closure_alloc(sizeof(ffi_closure), (void**)&fn);
-  if (!closure) return NULL;
+  if (!*closure) {
+    errno = ENOMEM;
+    return NULL;
+  }
   if (ffi_prep_cif(cif, FFI_DEFAULT_ABI, 3, &ffi_type_sint, _handle_rb_event_args) != FFI_OK ||
       ffi_prep_closure_loc(*closure, cif, _handle_rb_event_binding, ctx, fn) != FFI_OK) {
+    ffi_closure_free(*closure);
+    *closure = NULL;
+    errno = EINVAL;
     return NULL;
   }
   return fn;
@@ -491,6 +509,21 @@ static inline int terminate_all_conns(int mimic_conns_fd, const char* ifname) {
   return 0;
 }
 
+// Call after detaching BPF and draining its release events. Remaining buffers
+// still belong to the map and will otherwise be lost when it is destroyed.
+static int free_conn_packet_buffers(int conns_fd) {
+  if (conns_fd < 0) return 0;
+  struct conn_tuple key;
+  struct connection conn;
+  struct bpf_map_iter iter = {.map_fd = conns_fd, .map_name = "mimic_conns"};
+  while (try(bpf_map_iter_next(&iter, &key))) {
+    try(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK),
+        _("failed to get value from map '%s': %s"), "mimic_conns", strret);
+    packet_buf_free((struct packet_buf*)(uintptr_t)conn.pktbuf);
+  }
+  return 0;
+}
+
 static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname, int ifindex) {
   int retcode;
   struct mimic_bpf* skel = NULL;
@@ -519,6 +552,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
 #endif
 
   struct ring_buffer* rb = NULL;
+  struct handle_rb_event_ctx ctx = {.ifname = ifname};
   ffi_closure* closure = NULL;
   ffi_cif cif;
 
@@ -586,8 +620,11 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
   struct bpf_map_info map_info = {};
   __u32 prog_len = sizeof(prog_info), map_len = sizeof(map_info);
   _get_map_id(mimic_rb);
-  struct handle_rb_event_ctx ctx = {.conns = skel->maps.mimic_conns, .ifname = ifname};
-  rb = try2_p(ring_buffer__new(mimic_rb_fd, handle_rb_event(&ctx, &cif, &closure), NULL, NULL),
+  ctx.conns = skel->maps.mimic_conns;
+  ring_buffer_sample_fn rb_handler =
+    try2_p(handle_rb_event(&ctx, &cif, &closure), _("failed to create ring buffer handler: %s"),
+           strret);
+  rb = try2_p(ring_buffer__new(mimic_rb_fd, rb_handler, NULL, NULL),
               _("failed to attach BPF ring buffer '%s': %s"), "mimic_rb", strret);
 
   // Save state to lock file
@@ -638,7 +675,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
 
   struct epoll_event ev;
   struct epoll_event events[EPOLL_MAX_EVENTS];
-  epfd = try_e(epoll_create1(0), _("failed to create epoll: %s"), strret);
+  epfd = try2_e(epoll_create1(0), _("failed to create epoll: %s"), strret);
 
   // BPF log handler / packet sending handler
   int rb_epfd = ring_buffer__epoll_fd(rb);
@@ -727,7 +764,12 @@ cleanup:
   {
     if (xdp_attached) bpf_xdp_detach(ifindex, args->xdp_mode, NULL);
   }
-  if (rb) ring_buffer__free(rb);
+  if (rb) {
+    ctx.stopping = true;
+    ring_buffer__consume(rb);
+    ring_buffer__free(rb);
+  }
+  free_conn_packet_buffers(mimic_conns_fd);
   if (closure) ffi_closure_free(closure);
   if (skel) mimic_bpf__destroy(skel);
   return retcode;

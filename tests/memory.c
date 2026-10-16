@@ -43,6 +43,43 @@ void __wrap_free(void* ptr) {
   __real_free(ptr);
 }
 
+void* __real_ffi_closure_alloc(size_t size, void** code);
+void __real_ffi_closure_free(void* closure);
+ffi_status __real_ffi_prep_cif(ffi_cif* cif, ffi_abi abi, unsigned int nargs, ffi_type* rtype,
+                               ffi_type** atypes);
+ffi_status __real_ffi_prep_closure_loc(ffi_closure* closure, ffi_cif* cif,
+                                       void (*fun)(ffi_cif*, void*, void**, void*), void* data,
+                                       void* code);
+
+static int closure_failure;
+static unsigned int closures;
+
+void* __wrap_ffi_closure_alloc(size_t size, void** code) {
+  if (closure_failure == 1) return NULL;
+  void* closure = __real_ffi_closure_alloc(size, code);
+  if (closure) closures++;
+  return closure;
+}
+
+void __wrap_ffi_closure_free(void* closure) {
+  assert(closure && closures > 0);
+  closures--;
+  __real_ffi_closure_free(closure);
+}
+
+ffi_status __wrap_ffi_prep_cif(ffi_cif* cif, ffi_abi abi, unsigned int nargs, ffi_type* rtype,
+                               ffi_type** atypes) {
+  if (closure_failure == 2) return FFI_BAD_ABI;
+  return __real_ffi_prep_cif(cif, abi, nargs, rtype, atypes);
+}
+
+ffi_status __wrap_ffi_prep_closure_loc(ffi_closure* closure, ffi_cif* cif,
+                                       void (*fun)(ffi_cif*, void*, void**, void*), void* data,
+                                       void* code) {
+  if (closure_failure == 3) return FFI_BAD_ABI;
+  return __real_ffi_prep_closure_loc(closure, cif, fun, data, code);
+}
+
 static struct connection map_conns[2];
 static bool present[2];
 static int update_error;
@@ -175,11 +212,29 @@ static void test_routine_allocations(void) {
   }
 }
 
+static void test_closure_allocations(void) {
+  struct handle_rb_event_ctx ctx = {};
+  ffi_cif cif;
+  ffi_closure* closure = NULL;
+  for (closure_failure = 1; closure_failure <= 3; closure_failure++) {
+    assert(handle_rb_event(&ctx, &cif, &closure) == NULL);
+    assert(closure == NULL && closures == 0);
+    assert(errno == (closure_failure == 1 ? ENOMEM : EINVAL));
+  }
+  closure_failure = 0;
+  ring_buffer_sample_fn handler = handle_rb_event(&ctx, &cif, &closure);
+  assert(handler && closure && closures == 1);
+
+  ffi_closure_free(closure);
+  assert(allocations == 0 && closures == 0);
+}
+
 int main(void) {
   log_verbosity = -1;
   test_packet_allocations();
   test_store_packet();
   test_routine_allocations();
+  test_closure_allocations();
   puts("memory allocation tests passed");
   return 0;
 }

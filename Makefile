@@ -171,7 +171,7 @@ generate-akms:
 	$(MAKE) -C kmod AKMBUILD
 
 .PHONY: test
-test: build-cli out/test-memory out/test-pktbuf-bpf
+test: build-cli out/test-memory out/test-pktbuf-bpf out/test-epoll-failure
 	bats tests
 
 out/test-memory: tests/memory.c $(mimic_obj) $(mimic_headers)
@@ -179,11 +179,16 @@ out/test-memory: tests/memory.c $(mimic_obj) $(mimic_headers)
 	$(CC) $(CFLAGS) $< $(filter-out src/main.o src/run.o,$(mimic_obj)) -o $@ $(LDFLAGS) \
 		-Wl,--wrap=malloc,--wrap=calloc,--wrap=free \
 		-Wl,--wrap=bpf_map__lookup_elem,--wrap=bpf_map__update_elem \
-		-Wl,--wrap=bpf_map_get_next_key,--wrap=bpf_map_lookup_elem_flags,--wrap=bpf_map_delete_elem
+		-Wl,--wrap=bpf_map_get_next_key,--wrap=bpf_map_lookup_elem_flags,--wrap=bpf_map_delete_elem \
+		-Wl,--wrap=ffi_closure_alloc,--wrap=ffi_closure_free,--wrap=ffi_prep_cif,--wrap=ffi_prep_closure_loc
 
 out/test-pktbuf-bpf: tests/pktbuf-bpf.c $(mimic_headers) $(check_options)
 	$(mkdir_p)
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+out/test-epoll-failure: tests/epoll-failure.c $(mimic_obj)
+	$(mkdir_p)
+	$(CC) $(CFLAGS) $< $(mimic_obj) -o $@ $(LDFLAGS) -Wl,--wrap=epoll_create1
 
 .PHONY: bench
 bench: build-cli

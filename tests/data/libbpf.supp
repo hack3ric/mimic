@@ -39,3 +39,13 @@
   obj:*/libbpf.so*
   ...
 }
+
+# BPF_MAP_GET_NEXT_KEY does not use attr.flags.
+{
+  libbpf_get_next_key_unused_flags
+  Memcheck:Param
+  bpf(attr->flags)
+  fun:syscall
+  fun:bpf_map_get_next_key
+  ...
+}
