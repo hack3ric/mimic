@@ -240,6 +240,7 @@ static int store_packet(struct bpf_map* conns, struct conn_tuple* conn_key, cons
                         __u16 len, bool l4_csum_partial) {
   int retcode;
   struct connection conn = {};
+  struct packet_buf* new_buf = NULL;
   try2(bpf_map__lookup_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn), BPF_F_LOCK));
 
   if (conn.state != CONN_SYN_SENT && conn.state != CONN_SYN_RECV) {
@@ -249,10 +250,14 @@ static int store_packet(struct bpf_map* conns, struct conn_tuple* conn_key, cons
     return 0;
   }
 
-  if (!conn.pktbuf) conn.pktbuf = (__u64)(uintptr_t)try2_p(packet_buf_new(conn_key));
-  try2_e(packet_buf_push((struct packet_buf*)(uintptr_t)conn.pktbuf, data, len, l4_csum_partial));
-  try2(bpf_map__update_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn),
-                            BPF_EXIST | BPF_F_LOCK));
+  if (!conn.pktbuf) {
+    new_buf = try2_p(packet_buf_new(conn_key));
+    conn.pktbuf = (__u64)(uintptr_t)new_buf;
+  }
+  try2(packet_buf_push((struct packet_buf*)(uintptr_t)conn.pktbuf, data, len, l4_csum_partial));
+  if (new_buf)
+    try2(bpf_map__update_elem(conns, conn_key, sizeof(*conn_key), &conn, sizeof(conn),
+                              BPF_EXIST | BPF_F_LOCK));
   return 0;
 cleanup:
   if (retcode == -ENOENT) {
@@ -260,7 +265,8 @@ cleanup:
              _("connection released when attempting to store packet; freeing packet buffer"));
     retcode = 0;
   }
-  if (conn.pktbuf) packet_buf_free((struct packet_buf*)(uintptr_t)conn.pktbuf);
+  // Existing buffers still belong to the map or a pending ring buffer event.
+  packet_buf_free(new_buf);
   return retcode;
 }
 
@@ -423,10 +429,14 @@ static int do_routine(int conns_fd, const char* ifname) {
       send_ctrl_packet(&key, TCP_FLAG_RST, conn.seq, 0, 0, ifname);
     }
     if (remove) {
-      struct _conn_to_free* item = malloc(sizeof(*item));
+      struct _conn_to_free* item = try2_p(malloc(sizeof(*item)));
       item->key = key;
       item->buf = (struct packet_buf*)(uintptr_t)conn.pktbuf;
-      queue_push(&free_queue, item, free);
+      retcode = queue_push(&free_queue, item, free);
+      if (retcode < 0) {
+        free(item);
+        goto cleanup;
+      }
       log_conn(LOG_DEBUG, &key, _("connection removed"));
     }
   }

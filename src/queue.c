@@ -57,6 +57,10 @@ static inline struct packet* packet_new(const char* data, size_t len, bool l4_cs
   struct packet* result = malloc(sizeof(*result));
   if (!result) return NULL;
   result->data = malloc(len);
+  if (!result->data) {
+    free(result);
+    return NULL;
+  }
   result->len = len;
   memcpy(result->data, data, len);
   if (l4_csum_partial) {
@@ -82,7 +86,11 @@ struct packet_buf* packet_buf_new(struct conn_tuple* conn) {
 
 int packet_buf_push(struct packet_buf* buf, const char* data, size_t len, bool l4_csum_partial) {
   struct packet* pkt = try_p(packet_new(data, len, l4_csum_partial));
-  queue_push(&buf->queue, pkt, _packet_free_void);
+  int ret = queue_push(&buf->queue, pkt, _packet_free_void);
+  if (ret < 0) {
+    packet_free(pkt);
+    return ret;
+  }
   buf->size += len;
   return 0;
 }
