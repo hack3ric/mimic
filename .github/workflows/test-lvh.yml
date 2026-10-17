@@ -46,8 +46,8 @@ jobs:
       fail-fast: false
       matrix:
         arch: [amd64]
-        kernel: ["6.1", "6.12", "6.18"]
-        # Disabled pending compatibility fixes: "6.6", bpf-next
+        kernel: ["6.1", "6.6", "6.12", "6.18"]
+        # Disabled pending compatibility fixes: bpf-next
     steps:
       - name: Checkout
         uses: actions/checkout@v6
