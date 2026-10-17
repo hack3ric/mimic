@@ -63,9 +63,10 @@ struct tcp_options {
 
 static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32 ip_end,
                                    struct tcp_options* opt) {
-  __u8 opt_buf[80] = {};
+  // The TCP header is at most 60 bytes, including its 20-byte fixed part.
+  __u8 opt_buf[40] = {};
   __u32 len = (tcp->doff << 2) - sizeof(*tcp);
-  if (unlikely(len > 80))  // TCP options too large
+  if (unlikely(len > sizeof(opt_buf)))  // TCP options too large
     return XDP_DROP;
   else if (len == 0)  // prevent zero-sized read
     return XDP_PASS;
@@ -76,13 +77,14 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
 
   for (__u32 i = 0; i < len; i++) {
     barrier_var(i);
-    if (unlikely(i > 80 - 1)) return XDP_DROP;
+    if (unlikely(i > sizeof(opt_buf) - 1)) return XDP_DROP;
     switch (opt_buf[i]) {
       case 0:  // end of option list
       case 1:  // no-op
         break;
       case 3:  // window scale
-        if (unlikely(i > 80 - 3 || opt_buf[i + 1] != 3 || opt_buf[i + 2] > 14)) return XDP_DROP;
+        if (unlikely(i > sizeof(opt_buf) - 3 || opt_buf[i + 1] != 3 || opt_buf[i + 2] > 14))
+          return XDP_DROP;
         opt->wscale = opt_buf[i + 2];
         i += 2;
         break;
@@ -91,15 +93,18 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
       // enabled, since it struggles to unroll the loop properly. They are not necessary to Mimic
       // and can be ignored.
       case 2:  // MSS
-        if (unlikely(i > 80 - 4 || opt_buf[i + 1] != 4)) return XDP_DROP;
+        if (unlikely(i > sizeof(opt_buf) - 4 || opt_buf[i + 1] != 4)) return XDP_DROP;
         opt->mss = (opt_buf[i + 2] << 8) + opt_buf[i + 3];
         i += 3;
         break;
 #endif
       default:
-        // HACK: `80 - 2` -> `80 - 3`
-        // mimic.bpf.o compiled with LLVM 18 failed eBPF verifier in Linux 6.6 or lower.
-        if (unlikely(i > 80 - 3)) return XDP_DROP;
+#if defined(MIMIC_COMPAT_LINUX_6_1) || defined(MIMIC_COMPAT_LINUX_6_6)
+        // Keep a range check: LLVM can otherwise reduce it to i == 39,
+        // which older verifiers do not use to tighten the upper bound.
+        barrier_var(i);
+#endif
+        if (unlikely(i > sizeof(opt_buf) - 2)) return XDP_DROP;
         __u8 l = opt_buf[i + 1];
         if (l < 2 || i + l > len) return XDP_DROP;
         i += l - 1;
