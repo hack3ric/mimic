@@ -186,8 +186,9 @@ int ingress_handler(struct xdp_md* xdp) {
     if (conn) {
       __u32 cooldown;
       struct rb_item* pktbuf_item = reserve_pktbuf(conn);
+      bool have_pktbuf_item = ringbuf_reserved(pktbuf_item);
       bpf_spin_lock(&conn->lock);
-      if (unlikely(conn->pktbuf && !pktbuf_item)) {
+      if (unlikely(conn->pktbuf && !have_pktbuf_item)) {
         bpf_spin_unlock(&conn->lock);
         return XDP_DROP;
       }
@@ -195,7 +196,7 @@ int ingress_handler(struct xdp_md* xdp) {
       conn_reset(conn, tstamp);
       cooldown = conn_cooldown_display(conn);
       bpf_spin_unlock(&conn->lock);
-      use_pktbuf(pktbuf_item, RB_ITEM_FREE_PKTBUF, pktbuf);
+      if (have_pktbuf_item) use_pktbuf(pktbuf_item, RB_ITEM_FREE_PKTBUF, pktbuf);
       if (tcp->rst) {
         log_destroy(&conn_key, DESTROY_RECV_RST, cooldown);
       } else {
@@ -225,21 +226,24 @@ int ingress_handler(struct xdp_md* xdp) {
   __u32 random = bpf_get_prandom_u32();
 
   struct rb_item *ctrl_item = NULL, *pktbuf_item = NULL;
+  bool have_ctrl_item = false, have_pktbuf_item = false;
   if (conn->pktbuf) {
     // The handshake ACK must reach userspace before buffered packets are sent.
     ctrl_item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*ctrl_item), 0);
-    if (ctrl_item) {
+    have_ctrl_item = ringbuf_reserved(ctrl_item);
+    if (have_ctrl_item) {
       pktbuf_item = bpf_ringbuf_reserve(&mimic_rb, sizeof(*pktbuf_item), 0);
-      if (!pktbuf_item) {
+      have_pktbuf_item = ringbuf_reserved(pktbuf_item);
+      if (!have_pktbuf_item) {
         bpf_ringbuf_discard(ctrl_item, 0);
-        ctrl_item = NULL;
+        have_ctrl_item = false;
       }
     }
   }
   bpf_spin_lock(&conn->lock);
   // Recheck under the lock: userspace may have installed a buffer after the
   // reservation check. Leave it attached until a release event can be queued.
-  if (unlikely(conn->pktbuf && !pktbuf_item)) {
+  if (unlikely(conn->pktbuf && !have_pktbuf_item)) {
     bpf_spin_unlock(&conn->lock);
     return XDP_DROP;
   }
@@ -375,7 +379,7 @@ int ingress_handler(struct xdp_md* xdp) {
   if (flags & TCP_FLAG_SYN && flags & TCP_FLAG_ACK) log_conn(LOG_CONN_ACCEPT, &conn_key);
   if (will_send_ctrl_packet) {
     if (flags & TCP_FLAG_RST) window = 0;
-    if (ctrl_item) {
+    if (have_ctrl_item) {
       ctrl_item->type = RB_ITEM_SEND_OPTIONS;
       ctrl_item->send_options = (struct send_options){
         .conn = conn_key, .flags = flags, .seq = seq, .ack_seq = ack_seq, .window = window};
@@ -383,7 +387,7 @@ int ingress_handler(struct xdp_md* xdp) {
     } else {
       send_ctrl_packet(&conn_key, flags, seq, ack_seq, window);
     }
-  } else if (ctrl_item) {
+  } else if (have_ctrl_item) {
     bpf_ringbuf_discard(ctrl_item, 0);
   }
   if (unlikely(flags & TCP_FLAG_RST)) {
@@ -391,7 +395,8 @@ int ingress_handler(struct xdp_md* xdp) {
   } else if (newly_estab) {
     log_conn(LOG_CONN_ESTABLISH, &conn_key);
   }
-  use_pktbuf(pktbuf_item, newly_estab ? RB_ITEM_CONSUME_PKTBUF : RB_ITEM_FREE_PKTBUF, pktbuf);
+  if (have_pktbuf_item)
+    use_pktbuf(pktbuf_item, newly_estab ? RB_ITEM_CONSUME_PKTBUF : RB_ITEM_FREE_PKTBUF, pktbuf);
   if (will_drop) return XDP_DROP;
 
   __u32 padding = conn_padding(conn, ntohl(tcp->seq), ntohl(tcp->ack_seq));

@@ -116,8 +116,19 @@ static __always_inline struct rb_item* reserve_pktbuf(struct connection* conn) {
   return conn->pktbuf ? bpf_ringbuf_reserve(&mimic_rb, sizeof(struct rb_item), 0) : NULL;
 }
 
+static __always_inline bool ringbuf_reserved(struct rb_item* item) {
+  bool reserved = item != NULL;
+#ifdef MIMIC_COMPAT_LINUX_6_1
+  // Linux 6.1 explores both sides of a repeated null check on PTR_TO_MEM,
+  // even after the first check proved the reservation non-null. Keep that
+  // first result as a scalar so later ownership checks cannot leak a reference.
+  barrier_var(reserved);
+#endif
+  return reserved;
+}
+
+// The caller must have checked the reservation with ringbuf_reserved().
 static __always_inline void use_pktbuf(struct rb_item* item, enum rb_item_type type, __u64 buf) {
-  if (!item) return;
   if (!buf) {
     bpf_ringbuf_discard(item, 0);
     return;
