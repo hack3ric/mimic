@@ -32,7 +32,7 @@ Options:
   --help                Show this help
 
 Requires Linux amd64 and Docker or podman-docker. Builds and LVH/QEMU use containers.
-Compilers: 16 through 21. Explicit selections are not subject to CI exclusions.
+Compilers: 16 through 21 for every kernel variant.
 Results: out/vm/RUN_ID/; reusable assets: .cache/vm/; binaries: out/vm-binaries/.
 EOF
 }
@@ -327,10 +327,6 @@ build_binaries() {
 
   for variant in "${variant_list[@]}"; do
     for compiler in "${compiler_list[@]}"; do
-      if $ci_matrix && [[ $variant == compat-6.1 ]] && ((compiler >= 20)); then
-        continue
-      fi
-
       name="mimic-$variant-clang-$compiler"
       snapshot "$cache/build/$name"
       container cli "/work/build/$name" "$variant" "$compiler" "$jobs" 2>&1 | tee "$output/vm-build/$name.log"
