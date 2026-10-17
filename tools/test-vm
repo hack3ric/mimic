@@ -1,0 +1,502 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$repo"
+
+# shellcheck source=tools/vm/defaults.sh
+source "$repo/tools/vm/defaults.sh"
+
+cache="$repo/.cache/vm"
+output="$repo/out"
+
+usage() {
+  cat << 'EOF'
+Usage:
+  tools/test-vm run --kernel VERSION --clang VERSION[,VERSION...] [--keep-vm]
+  tools/test-vm run --kernel VERSION --binaries-dir DIR [--keep-vm]
+  tools/test-vm build --clang VERSION[,VERSION...] --variant VARIANT[,VARIANT...]
+  tools/test-vm build --ci-matrix
+  tools/test-vm prepare --kernel VERSION [--resolve-only]
+  tools/test-vm stop RUN_ID
+
+Options:
+  --kernel-revision SHA  Use an exact kernel commit instead of resolving its branch
+  --variant VARIANTS     generic, compat-6.1, compat-6.6 (build only)
+  --jobs N              Container build parallelism (default: 2)
+  --cpus N              Guest CPUs (default: 2)
+  --mem SIZE            Guest RAM, e.g. 4G or 1024M (default: 4G)
+  --ssh-port PORT       Host SSH forwarding port (default: 2222)
+  --keep-vm             Retain the VM after checks, including failed checks
+  --resolve-only        Print JSON with kernel revision and Actions cache keys/paths
+  --help                Show this help
+
+Requires Linux amd64. Builds use Docker; LVH and QEMU run on the host.
+Compilers: 16 through 21. Explicit selections are not subject to CI exclusions.
+Results: out/vm/RUN_ID/; reusable assets: .cache/vm/; binaries: out/vm-binaries/.
+EOF
+}
+
+die() {
+  echo "test-vm: $*" >&2
+  exit 2
+}
+
+need() {
+  local tool
+
+  for tool in "$@"; do
+    command -v "$tool" > /dev/null || die "missing $tool (see docs/vm-tests.md)"
+  done
+}
+
+command=${1:-help}
+if (($#)); then
+  shift
+fi
+
+kernel=''
+revision=''
+compilers=''
+variants=''
+binaries_dir=''
+
+jobs=2
+cpus=2
+memory=4G
+port=2222
+
+ci_matrix=false
+resolve_only=false
+keep_vm=false
+
+if [[ $command == help || $command == --help ]]; then
+  usage
+  exit
+fi
+
+# Match the process start time, host boot, and disk argument before signalling a saved PID.
+owned_vm() {
+  [[ -f $run_dir/vm.json ]] || return 1
+  vm_pid=$(jq -r .pid "$run_dir/vm.json")
+  [[ $vm_pid =~ ^[0-9]+$ && -r /proc/$vm_pid/stat ]] || return 1
+  [[ $(cat /proc/sys/kernel/random/boot_id) == "$(jq -r .boot_id "$run_dir/vm.json")" ]] || return 1
+  [[ $(awk '{print $22}' "/proc/$vm_pid/stat" 2> /dev/null) == "$(jq -r .start_time "$run_dir/vm.json")" ]] || return 1
+
+  # QEMU may exit between these reads, especially while stop_vm is waiting.
+  grep -Fzxq -- "file=$run_dir/root.qcow2,if=virtio,index=0,media=disk" "/proc/$vm_pid/cmdline" 2> /dev/null
+}
+
+stop_vm() {
+  local attempt
+
+  if owned_vm; then
+    kill -TERM "$vm_pid"
+
+    for ((attempt = 0; attempt < 50; attempt++)); do
+      if ! owned_vm; then
+        break
+      fi
+      sleep 0.1
+    done
+
+    if owned_vm; then
+      kill -KILL "$vm_pid"
+    fi
+    wait "$vm_pid" 2> /dev/null || true
+  fi
+
+  rm -f "$run_dir/root.qcow2"
+}
+
+if [[ $command == stop ]]; then
+  need jq
+  [[ $# == 1 && $1 =~ ^[0-9]{8}T[0-9]{6}-[0-9]+$ ]] || die 'stop requires a RUN_ID printed by run'
+  run_dir="$output/vm/$1"
+  [[ -f $run_dir/vm.json ]] || die "no saved VM for $1"
+
+  stop_vm
+  echo "Stopped $1 (logs retained in $run_dir)"
+  exit
+fi
+
+case "$command" in
+build | prepare | run) ;;
+*) die "unknown command: $command" ;;
+esac
+
+while (($#)); do
+  case "$1" in
+  --kernel | --kernel-revision | --clang | --variant | --binaries-dir | --jobs | --cpus | --mem | --ssh-port)
+    (($# >= 2)) && [[ $2 != --* ]] || die "missing value for $1"
+
+    case "$1" in
+    --kernel) kernel=$2 ;;
+    --kernel-revision) revision=$2 ;;
+    --clang) compilers=$2 ;;
+    --variant) variants=$2 ;;
+    --binaries-dir) binaries_dir=$2 ;;
+    --jobs) jobs=$2 ;;
+    --cpus) cpus=$2 ;;
+    --mem) memory=$2 ;;
+    --ssh-port) port=$2 ;;
+    esac
+    shift 2
+    ;;
+  --ci-matrix)
+    ci_matrix=true
+    shift
+    ;;
+  --resolve-only)
+    resolve_only=true
+    shift
+    ;;
+  --keep-vm)
+    keep_vm=true
+    shift
+    ;;
+  --help)
+    usage
+    exit
+    ;;
+  *) die "unknown option: $1" ;;
+  esac
+done
+
+[[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || die 'only Linux amd64 is supported'
+[[ $jobs =~ ^[1-9][0-9]*$ && $cpus =~ ^[1-9][0-9]*$ ]] || die 'jobs/cpus must be positive integers'
+[[ $memory =~ ^[1-9][0-9]*[MG]$ ]] || die 'memory must be a positive size such as 4G or 1024M'
+if [[ ! $port =~ ^[1-9][0-9]{0,4}$ ]] || ((port > 65535)); then
+  die 'invalid SSH port'
+fi
+
+[[ -z $revision || $revision =~ ^[0-9a-f]{40}$ ]] || die 'kernel revision must be a full commit SHA'
+[[ -z $compilers || $compilers =~ ^(1[6-9]|2[01])(,(1[6-9]|2[01]))*$ ]] ||
+  die 'select Clang versions 16 through 21'
+[[ -z $variants || $variants =~ ^(generic|compat-6\.[16])(,(generic|compat-6\.[16]))*$ ]] ||
+  die 'invalid variant list'
+
+if [[ $command != build ]]; then
+  [[ $kernel =~ ^(6\.(1|6|12|18)|bpf-next)$ ]] || die 'select kernel 6.1, 6.6, 6.12, 6.18, or bpf-next'
+  [[ -z $variants && $ci_matrix == false ]] || die '--variant and --ci-matrix are build options'
+
+  case "$kernel" in
+  6.1 | 6.6) variants="compat-$kernel" ;;
+  *) variants=generic ;;
+  esac
+else
+  [[ -z $kernel && -z $revision && -z $binaries_dir ]] || die 'build accepts --clang/--variant or --ci-matrix'
+
+  if $ci_matrix; then
+    [[ -z $compilers && -z $variants ]] || die '--ci-matrix cannot be combined with --clang/--variant'
+    compilers=16,17,18,19,20,21
+    variants=generic,compat-6.1,compat-6.6
+  fi
+
+  [[ -n $compilers && -n $variants ]] || die 'build requires --clang and --variant, or --ci-matrix'
+fi
+
+if [[ $command == run ]]; then
+  [[ -n $compilers && -z $binaries_dir || -z $compilers && -n $binaries_dir ]] ||
+    die 'run requires either --clang or --binaries-dir'
+else
+  [[ $keep_vm == false ]] || die '--keep-vm requires run'
+fi
+
+if [[ $command == prepare ]]; then
+  [[ -z $compilers && -z $binaries_dir ]] || die 'prepare does not select binaries'
+elif $resolve_only; then
+  die '--resolve-only requires prepare'
+fi
+
+need jq curl git sha256sum flock
+mkdir -p "$cache" "$output"
+
+exec 9> "$cache/prepare.lock"
+flock -n 9 || die 'another runner is preparing assets in this checkout'
+
+recipe=$(cd "$repo/tools/vm" && sha256sum Dockerfile defaults.sh container.sh | sha256sum | cut -c1-16)
+image="mimic-vm-build:$recipe"
+root_key="mimic-vm-root-amd64-$LVH_VERSION-$ROOT_IMAGE_VERSION"
+root_path=".cache/vm/roots/$root_key.qcow2"
+metadata="$cache/kernels-$KERNEL_METADATA_REV.json"
+
+resolve_kernel() {
+  if [[ ! -s $metadata ]]; then
+    curl -fL --retry 3 "https://raw.githubusercontent.com/cilium/little-vm-helper-images/$KERNEL_METADATA_REV/_data/kernels.json" \
+      -o "$metadata.tmp"
+    jq -e . "$metadata.tmp" > /dev/null
+    mv "$metadata.tmp" "$metadata"
+  fi
+
+  local url branch
+  url=$(jq -er --arg name "$kernel" '.kernels[] | select(.name == $name) | .url' "$metadata")
+  repository=${url%%\?*}
+  repository=${repository%%#*}
+  repository=${repository/git:\/\//https:\/\/}
+
+  if [[ $url == *'#'* ]]; then
+    branch="refs/heads/${url##*#}"
+  else
+    branch=HEAD
+  fi
+
+  if [[ -z $revision ]]; then
+    revision=$(git ls-remote "$repository" "$branch" | awk 'NR == 1 {print $1}')
+  fi
+  [[ $revision =~ ^[0-9a-f]{40}$ ]] || die "cannot resolve $kernel"
+
+  kernel_key="mimic-vm-kernel-amd64-$kernel-$revision-$recipe"
+  kernel_path=".cache/vm/kernels/$kernel_key"
+  resolved=$(jq -n --arg kernel "$kernel" --arg revision "$revision" \
+    --arg kernel_key "$kernel_key" --arg kernel_path "$kernel_path" \
+    --arg root_key "$root_key" --arg root_path "$root_path" \
+    --arg image "$image" --arg lvh "$LVH_VERSION" \
+    '{kernel:$kernel, revision:$revision, kernel_key:$kernel_key, kernel_path:$kernel_path,
+      root_key:$root_key, root_path:$root_path, image:$image, lvh:$lvh}')
+}
+
+if [[ $command != build ]]; then
+  resolve_kernel
+  if $resolve_only; then
+    printf '%s\n' "$resolved"
+    exit
+  fi
+fi
+
+selected=()
+if [[ $command == run && -n $binaries_dir ]]; then
+  [[ -d $binaries_dir ]] || die "binary directory does not exist: $binaries_dir"
+  binaries_dir=$(realpath "$binaries_dir")
+  shopt -s nullglob
+
+  for binary in "$binaries_dir"/mimic-"$variants"-clang-*; do
+    if [[ ${binary##*/} =~ ^mimic-$variants-clang-[0-9]+$ ]]; then
+      selected+=("$binary")
+    fi
+  done
+
+  ((${#selected[@]})) || die "no $variants binaries in $binaries_dir"
+fi
+
+need docker rsync
+docker info > /dev/null 2>&1 || die 'Docker daemon is unavailable'
+
+if [[ $command != build ]]; then
+  need lvh
+fi
+
+if [[ $command == run ]]; then
+  need lvh qemu-system-x86_64 qemu-img ssh ss timeout
+  [[ -r /dev/kvm && -w /dev/kvm ]] || die 'read/write access to /dev/kvm is required'
+  [[ -z $(ss -H -ltn "sport = :$port") ]] || die "SSH port $port is already in use"
+fi
+
+ensure_image() {
+  if ! docker image inspect "$image" > /dev/null 2>&1; then
+    docker build --build-arg "LVH_VERSION=$LVH_VERSION" --build-arg "BPFTOOL_VERSION=$BPFTOOL_VERSION" \
+      -t "$image" "$repo/tools/vm"
+  fi
+}
+
+container() {
+  # Preserve host ownership when docker is provided by rootless podman-docker.
+  PODMAN_USERNS=keep-id docker run --rm --user "$(id -u):$(id -g)" \
+    -v "$repo:/src:ro" -v "$cache:/work" -v "$output:/output" \
+    "$image" bash /src/tools/vm/container.sh "$@"
+}
+
+snapshot() {
+  local destination=$1
+
+  mkdir -p "$destination"
+  rsync -a --delete --delete-excluded --exclude=.git --exclude=.cache --exclude=out \
+    --exclude='*.o' --exclude='*.ko' --exclude='*.cmd' --exclude='*.mod*' \
+    --exclude=Module.symvers --exclude=modules.order --exclude=src/bpf_skel.h \
+    --exclude=bpf/vmlinux/system.h --exclude=kmod/overlay \
+    "$repo/" "$destination/"
+}
+
+build_binaries() {
+  local compiler variant name
+  local -a compiler_list variant_list
+
+  IFS=, read -r -a compiler_list <<< "$compilers"
+  IFS=, read -r -a variant_list <<< "$variants"
+  mkdir -p "$output/vm-binaries" "$output/vm-build"
+
+  # This directory is the artifact set for this invocation, including its sidecars.
+  rm -f "$output"/vm-binaries/mimic-*
+
+  for variant in "${variant_list[@]}"; do
+    for compiler in "${compiler_list[@]}"; do
+      if $ci_matrix && [[ $variant == compat-6.1 ]] && ((compiler >= 20)); then
+        continue
+      fi
+
+      name="mimic-$variant-clang-$compiler"
+      snapshot "$cache/build/$name"
+      container cli "/work/build/$name" "$variant" "$compiler" "$jobs" 2>&1 | tee "$output/vm-build/$name.log"
+      git rev-parse HEAD >> "$output/vm-binaries/$name.build.txt"
+      git status --short >> "$output/vm-binaries/$name.build.txt"
+    done
+  done
+}
+
+prepare_assets() {
+  local staging
+
+  mkdir -p "$cache/roots" "$cache/kernels" "$output/vm-build"
+
+  if [[ ! -s $repo/$root_path ]]; then
+    # LVH image pulling uses the host Docker daemon, just like the existing CI job.
+    staging="$repo/$root_path.partial"
+    rm -rf "$staging"
+    lvh images pull --dir "$staging" "quay.io/lvh-images/root-images:$ROOT_IMAGE_VERSION" \
+      2>&1 | tee "$output/vm-build/root.log"
+    mv "$staging/images/kind.qcow2" "$repo/$root_path"
+    rm -rf "$staging"
+  fi
+
+  if [[ ! -f $repo/$kernel_path/ready ]]; then
+    container kernel "/work/kernels/$kernel_key" "$kernel" "$revision" "$repository" \
+      "/work/${metadata##*/}" "$jobs" 2>&1 | tee "$output/vm-build/kernel-$kernel.log"
+  fi
+
+  printf '%s\n' "$resolved" > "$repo/$kernel_path/metadata.json"
+}
+
+ensure_image
+case "$command" in
+build)
+  build_binaries
+  exit
+  ;;
+prepare)
+  prepare_assets
+  printf '%s\n' "$resolved"
+  exit
+  ;;
+esac
+
+if [[ -n $compilers ]]; then
+  build_binaries
+  IFS=, read -r -a compiler_list <<< "$compilers"
+  for compiler in "${compiler_list[@]}"; do
+    selected+=("$output/vm-binaries/mimic-$variants-clang-$compiler")
+  done
+fi
+
+prepare_assets
+
+run_id="$(date -u +%Y%m%dT%H%M%S)-$$"
+run_dir="$output/vm/$run_id"
+mkdir -p "$run_dir/bin"
+printf '%s\n' "$resolved" > "$run_dir/environment.json"
+
+snapshot "$cache/build/module-$kernel_key"
+container module "/work/build/module-$kernel_key" "/work/kernels/$kernel_key" \
+  "/output/vm/$run_id/mimic.ko" "$jobs" 2>&1 | tee "$run_dir/module-build.log"
+
+for binary in "${selected[@]}"; do
+  cp "$binary" "$run_dir/bin/"
+  if [[ -f $binary.build.txt ]]; then
+    cp "$binary.build.txt" "$run_dir/"
+  fi
+done
+
+chmod +x "$run_dir"/bin/*
+(cd "$run_dir" && sha256sum bin/* mimic.ko > checksums.txt)
+
+{
+  uname -a
+  printf 'Expected LVH version: %s\n' "$LVH_VERSION"
+  lvh version
+  sha256sum "$(command -v lvh)"
+  qemu-system-x86_64 --version
+  docker image inspect --format '{{.Id}}' "$image"
+} > "$run_dir/host.txt"
+
+qemu-img create -f qcow2 -F qcow2 -b "$repo/$root_path" "$run_dir/root.qcow2"
+flock -u 9
+
+ssh_args=(
+  -F /dev/null -p "$port"
+  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+  -o BatchMode=yes -o ConnectTimeout=2 -o ConnectionAttempts=1 -o LogLevel=ERROR
+  -o ServerAliveInterval=5 -o ServerAliveCountMax=3
+)
+
+vm_pid=''
+ready=false
+interrupted=false
+
+cleanup() {
+  local status=$?
+
+  trap - EXIT INT TERM
+  set +e
+
+  if $ready; then
+    timeout 15 ssh "${ssh_args[@]}" root@localhost dmesg > "$run_dir/dmesg.log" 2> "$run_dir/dmesg-error.log"
+  fi
+
+  if $keep_vm && ! $interrupted && owned_vm; then
+    echo "VM retained: $run_id"
+    printf 'SSH: ssh -p %s -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost\n' "$port"
+    printf 'Stop: %q stop %q\n' "$repo/tools/test-vm" "$run_id"
+  else
+    stop_vm
+  fi
+
+  echo "Results: $run_dir"
+  exit "$status"
+}
+
+trap cleanup EXIT
+trap 'interrupted=true; exit 130' INT
+trap 'interrupted=true; exit 143' TERM
+
+# LVH's forwarding syntax has no bind address; restrict SSH to loopback.
+mkdir -p "$run_dir/host-bin"
+cp "$repo/tools/vm/qemu-local" "$run_dir/host-bin/qemu-system-x86_64"
+ln -s "$(command -v qemu-system-x86_64)" "$run_dir/host-bin/qemu-real"
+
+# LVH execs QEMU in this mode: $! stays the VM PID. Do not inherit the cache lock.
+PATH="$run_dir/host-bin:$PATH" lvh run --image "$run_dir/root.qcow2" --kernel "$repo/$kernel_path/vmlinuz" \
+  --host-mount "$repo" --cpu "$cpus" --mem "$memory" --qemu-arch amd64 \
+  --console-log-file "$run_dir/console.log" -p "$port:22" \
+  < /dev/null > "$run_dir/lvh.log" 2>&1 9>&- &
+vm_pid=$!
+if [[ ! -r /proc/$vm_pid/stat ]]; then
+  cat "$run_dir/lvh.log" >&2
+  exit 1
+fi
+
+jq -n --argjson pid "$vm_pid" --arg start_time "$(awk '{print $22}' "/proc/$vm_pid/stat")" \
+  --arg boot_id "$(cat /proc/sys/kernel/random/boot_id)" --argjson ssh_port "$port" \
+  '{pid:$pid,start_time:$start_time,boot_id:$boot_id,ssh_port:$ssh_port}' > "$run_dir/vm.json"
+
+deadline=$((SECONDS + 300))
+while ((SECONDS < deadline)); do
+  if ! kill -0 "$vm_pid" 2> /dev/null; then
+    cat "$run_dir/lvh.log" >&2
+    exit 1
+  fi
+
+  if owned_vm && ssh "${ssh_args[@]}" root@localhost true 2> /dev/null; then
+    ready=true
+    break
+  fi
+  sleep 1
+done
+
+if ! $ready; then
+  cat "$run_dir/console.log" >&2
+  die 'guest SSH did not become ready within 300 seconds'
+fi
+
+# The only interpolated arguments contain runner-generated paths with no shell metacharacters.
+# shellcheck disable=SC2029
+ssh "${ssh_args[@]}" root@localhost "bash -s -- out/vm/$run_id $kernel_path" \
+  < "$repo/tools/vm/guest.sh" 2>&1 | tee "$run_dir/guest.log"

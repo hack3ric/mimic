@@ -4,18 +4,20 @@ on:
   push:
     paths:
       - .github/workflows/test-lvh.yml
+      - .github/actions/lvh-install-cli/**
       - "**.c"
       - "**.h"
       - "**/Makefile"
-      # - tests/**
       - "!tools/**"
+      - tools/test-vm
+      - tools/vm/**
   pull_request:
   workflow_dispatch:
 
 jobs:
   build-exe:
     name: Build Mimic CLI executable
-    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -23,231 +25,87 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      - name: Add LLVM apt repository
-        shell: bash
-        run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          # Ubuntu 24.04 officially packages LLVM 15 and 16
-          for _clang_version in {17..21}; do
-            sudo ./llvm.sh $_clang_version
-          done
-          sudo apt update
-      - name: Install dependencies
-        shell: bash
-        run: |
-          sudo apt install clang-{15..21} pahole \
-            linux-tools-common linux-tools-$(uname -r) linux-cloud-tools-$(uname -r) \
-            libbpf-dev libffi-dev libelf-dev libxdp-dev
-      - name: Install bpftool
-        env:
-          BPFTOOL_VERSION: v7.7.0
-        run: |
-          set -euxo pipefail
-
-          archive="bpftool-${BPFTOOL_VERSION}-${{ matrix.arch }}.tar.gz"
-          base="https://github.com/libbpf/bpftool/releases/download/${BPFTOOL_VERSION}"
-
-          curl --fail --location --retry 3 \
-            --output "${archive}" \
-            "${base}/${archive}"
-
-          curl --fail --location --retry 3 \
-            --output "${archive}.sha256sum" \
-            "${base}/${archive}.sha256sum"
-
-          sha256sum --check "${archive}.sha256sum"
-          tar -xzf "${archive}"
-
-          sudo install -m 0755 bpftool /usr/local/bin/bpftool
-
-          type -a bpftool
-          bpftool version
-      - name: Build CLI
-        shell: bash
-        run: |
-          flags_name=(generic compat-6.1 compat-6.6)
-          flags=("" "COMPAT_LINUX_6_1=1" "COMPAT_LINUX_6_6=1")
-          for _i in {0..2}; do
-            for _clang_version in {16..21}; do
-              if [ $_clang_version -ge 20 ] && [ "${flags_name[$_i]}" == "compat-6.1" ]; then
-                continue
-              fi
-              # if [ $_clang_version -le 15 ] && [ "${flags_name[$_i]}" == "compat-6.6" ]; then
-              #   continue
-              # fi
-              export BPF_CC=clang-$_clang_version
-              export BPFTOOL=bpftool
-              make build-cli -j ${flags[$_i]}
-              mv out/mimic out/mimic-${flags_name[$_i]}-clang-$_clang_version
-            done
-          done
-          cd out
-      - name: Upload executable
+      - name: Build CLI matrix in container
+        run: tools/test-vm build --ci-matrix
+      - name: Upload executables
         uses: actions/upload-artifact@v7
         with:
           name: mimic-${{ matrix.arch }}
-          path: |
-            out/mimic-*
-            out/expect-fail/mimic-*
+          path: out/vm-binaries/
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-${{ matrix.arch }}
+          path: out/vm-build/
 
   test-lvh:
     name: Test LVH
     needs: build-exe
     runs-on: ubuntu-24.04
-    env:
-      lvh-version: v0.0.30
-      root-image-version: 20251113.115124-sid
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64] # TODO: arm64 (see build-exe)
-        kernel:
-          - name: "6.1"
-            variant: compat-6.1
-          # - name: "6.6"
-          #   variant: compat-6.6
-          - name: "6.12"
-            variant: generic
-          - name: "6.18"
-            variant: generic
-          # - name: bpf-next
-          #   variant: generic
+        arch: [amd64]
+        kernel: ["6.1", "6.12", "6.18"]
+        # Disabled pending compatibility fixes: "6.6", bpf-next
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      - name: Download artifact
+      - name: Download executables
         uses: actions/download-artifact@v4
         with:
           name: mimic-${{ matrix.arch }}
-          path: out
-      - name: Install LVH CLI
+          path: out/vm-binaries
+      - name: Install host VM dependencies
         uses: ./.github/actions/lvh-install-cli
-        with:
-          lvh-version: ${{ env.lvh-version }}
-          arch: ${{ matrix.arch }}
-      - name: Fetch cached root image
-        id: fetch-cached-root-image
+      - name: Resolve kernel and cache keys
+        id: assets
+        env:
+          KERNEL: ${{ matrix.kernel }}
+        run: |
+          tools/test-vm prepare --kernel "$KERNEL" --resolve-only > /tmp/vm-assets.json
+          jq -r 'to_entries[] | "\(.key)=\(.value)"' /tmp/vm-assets.json >> "$GITHUB_OUTPUT"
+      - name: Cache root image
+        id: root-cache
         uses: actions/cache/restore@v5
         with:
-          path: lvh-image.qcow2
-          key: mimic-lvh-root-image-${{ matrix.arch }}-${{ env.root-image-version }}
-      - name: Fetch root image
-        if: steps.fetch-cached-root-image.outputs.cache-hit != 'true'
-        run: |
-          lvh images pull quay.io/lvh-images/root-images:${{ env.root-image-version }}
-          cp _data/images/kind.qcow2 lvh-image.qcow2
-      - name: Save root image to cache
-        if: steps.fetch-cached-root-image.outputs.cache-hit != 'true'
+          path: ${{ steps.assets.outputs.root_path }}
+          key: ${{ steps.assets.outputs.root_key }}
+      - name: Cache kernel
+        id: kernel-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ steps.assets.outputs.kernel_path }}
+          key: ${{ steps.assets.outputs.kernel_key }}
+      - name: Prepare VM assets
+        env:
+          KERNEL: ${{ matrix.kernel }}
+          REVISION: ${{ steps.assets.outputs.revision }}
+        run: tools/test-vm prepare --kernel "$KERNEL" --kernel-revision "$REVISION"
+      # Save prepared assets even when Mimic subsequently fails verification.
+      - name: Save root image
+        if: steps.root-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
-          path: lvh-image.qcow2
-          key: mimic-lvh-root-image-${{ matrix.arch }}-${{ env.root-image-version }}
-      - name: Install pahole
-        run: |
-          sudo apt update
-          sudo apt install pahole
-      - name: Prepare LVH kernel tree metadata
-        id: prepare-kernel-tree-metadata
-        run: |
-          mkdir -p _data/kernels
-          wget -O _data/kernels.json https://raw.githubusercontent.com/cilium/little-vm-helper-images/df80feda67886c5b6916afe3fbb8e727b2c7fa2f/_data/kernels.json
-          sed -i 's/\?depth=1/?depth=128/g' _data/kernels.json
-          git_url_with_branch="$(jq -r '.kernels.[] | select(.name=="${{ matrix.kernel.name }}") | .url' < _data/kernels.json | sed -E 's/\?depth=[0-9]+//')"
-          git_url="$(echo $git_url_with_branch | sed 's/#.*//')"
-          git_branch="$(echo $git_url_with_branch | sed -n 's/.*#\(.*\)/\1/p')"
-          if [ -z "$git_branch" ]; then
-            git_branch=HEAD
-          else
-            git_branch="refs/heads/$git_branch"
-          fi
-          echo lvh_kernel_rev=$(git ls-remote "$git_url" | grep "$git_branch" | awk '{print $1}') >> $GITHUB_OUTPUT
-      - name: Fetch cached LVH kernel
-        id: fetch-cached-kernel
-        uses: actions/cache@v5
-        with:
-          path: |
-            lvh-kernel
-            lvh-kernel-tree
-          key: mimic-lvh-kernel-${{ matrix.arch }}-${{ matrix.kernel.name }}-${{ steps.prepare-kernel-tree-metadata.outputs.lvh_kernel_rev }}
-      - name: Build LVH kernel
-        if: steps.fetch-cached-kernel.outputs.cache-hit != 'true'
-        run: |
-          sudo apt update
-          sudo apt install libncurses-dev gawk flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf llvm
-          if [ "${{ matrix.arch }}" == "arm64" ]; then
-            sudo apt install gcc-aarch64-linux-gnu
-          fi
-          lvh kernels --dir _data fetch ${{ matrix.kernel.name }}
-
-          cd _data/kernels/${{ matrix.kernel.name }}
-          git checkout ${{ steps.prepare-kernel-tree-metadata.outputs.lvh_kernel_rev }}
-          cd ${{ github.workspace }}
-
-          lvh kernels --dir _data build ${{ matrix.kernel.name }}
-
-          cd _data/kernels/${{ matrix.kernel.name }}/tar-install/boot
-          mv vmlinuz-* vmlinuz
-          cd ../..
-          make -C tools/bpf/resolve_btfids -j$(nproc)
-          rm -rf drivers/gpu arch/*/boot tools/perf .git *.tar Documentation vmlinux.unstripped .tmp*
-          find . -type f -name '*.o' -delete
-          cd ${{ github.workspace }}
-
-          cp _data/kernels/${{ matrix.kernel.name }}/tar-install/boot/vmlinuz lvh-kernel
-          rm -r _data/kernels/${{ matrix.kernel.name }}/tar-install
-          mv _data/kernels/${{ matrix.kernel.name }} lvh-kernel-tree
-      - name: Save built kernel to cache
-        if: steps.fetch-cached-kernel.outputs.cache-hit != 'true'
+          path: ${{ steps.assets.outputs.root_path }}
+          key: ${{ steps.assets.outputs.root_key }}
+      - name: Save kernel
+        if: steps.kernel-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
-          path: |
-            lvh-kernel
-            lvh-kernel-tree
-          key: mimic-lvh-kernel-${{ matrix.arch }}-${{ matrix.kernel.name }}-${{ steps.prepare-kernel-tree-metadata.outputs.lvh_kernel_rev }}
-      - name: Build mimic.ko
-        run: |
-          cd kmod
-          if [ "${{ matrix.arch }}" == "arm64" ]; then
-            export ARCH=arm64
-            export CROSS_COMPILE=aarch64-linux-gnu-
-          fi
-          make SYSTEM_BUILD_DIR=../lvh-kernel-tree
-      - name: Provision LVH VMs
-        uses: ./.github/actions/lvh-run
-        with:
-          lvh-version: ${{ env.lvh-version }}
-          mem: 4G
-          cpu: 2
-          cpu-kind: ""
-          test-name: mimic-test
-          image-path: lvh-image.qcow2
-          kernel-path: lvh-kernel
-          arch: ${{ matrix.arch }}
-          install-dependencies: true
-          host-mount: ./
-          cmd: |
-            cd /host/lvh-kernel-tree
-            make modules_install
-            uname -a
-            cd /host
-            insmod kmod/mimic.ko
-            cd out
-            chmod +x mimic-*
-            for _mimic in ./mimic-${{ matrix.kernel.variant }}-*; do
-              echo Checking \$_mimic
-              \$_mimic run lo --check
-            done
-      - name: Extract kernel log
-        if: always()
-        uses: ./.github/actions/lvh-run
-        with:
-          provision: "false"
-          cmd: |
-            dmesg > /host/dmesg.log
-      - name: Upload kernel log
+          path: ${{ steps.assets.outputs.kernel_path }}
+          key: ${{ steps.assets.outputs.kernel_key }}
+      - name: Check Mimic in VM
+        env:
+          KERNEL: ${{ matrix.kernel }}
+          REVISION: ${{ steps.assets.outputs.revision }}
+        run: tools/test-vm run --kernel "$KERNEL" --kernel-revision "$REVISION" --binaries-dir out/vm-binaries
+      - name: Upload VM results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: dmesg-${{ matrix.arch }}-${{ matrix.kernel.name }}.log
-          path: dmesg.log
+          name: vm-${{ matrix.arch }}-${{ matrix.kernel }}
+          path: |
+            out/vm/
+            out/vm-build/

@@ -87,3 +87,7 @@ If you want to pass extra arguments to test frameworks, use:
 ```
 
 First argument of `tests/bench.bash` allows users to also benchmark against virtual ETH interface and raw WireGuard. `mimic` (default if not specified) benchmarks against WireGuard through Mimic.
+
+## Kernel and Clang checks in a VM
+
+See [VM compatibility tests](vm-tests.md) for local and CI checks with specific kernel and Clang versions.

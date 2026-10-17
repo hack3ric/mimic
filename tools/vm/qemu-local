@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# LVH v0.0.30 cannot select a forwarding bind address. Keep the test guest local.
+# The runner places this next to a qemu-real symlink and exposes it only to LVH.
+set -euo pipefail
+
+args=("$@")
+for ((i = 1; i < ${#args[@]}; i++)); do
+  if [[ ${args[i - 1]} == -netdev ]]; then
+    args[i]=${args[i]//hostfwd=tcp::/hostfwd=tcp:127.0.0.1:}
+  fi
+done
+
+exec "$(dirname -- "${BASH_SOURCE[0]}")/qemu-real" "${args[@]}"
