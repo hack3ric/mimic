@@ -65,11 +65,18 @@ int store_packet(struct __sk_buff* skb, __u32 pkt_off, struct conn_tuple* key, i
 #else
     __u32 copy_len = data_len % SEGMENT_SIZE;
 #endif
-    if (copy_len > 0 && copy_len < SEGMENT_SIZE) {
-      bpf_gt0_hack2(copy_len);
-      packet = bpf_dynptr_data(&ptr, sizeof(*item) + offset, SEGMENT_SIZE);
-      if (!packet) cleanup(TC_ACT_SHOT);
-      if (bpf_skb_load_bytes(skb, pkt_off + offset, packet, copy_len) < 0) cleanup(TC_ACT_SHOT);
+    if (copy_len > 0) {
+#if defined(MIMIC_COMPAT_LINUX_6_1) && __clang_major__ >= 20
+      // Keep the upper-bound check and nonzero clamp separate. Clang 20+
+      // otherwise folds them into a range check Linux 6.1 cannot propagate.
+      barrier_var(copy_len);
+#endif
+      if (copy_len < SEGMENT_SIZE) {
+        bpf_gt0_hack2(copy_len);
+        packet = bpf_dynptr_data(&ptr, sizeof(*item) + offset, SEGMENT_SIZE);
+        if (!packet) cleanup(TC_ACT_SHOT);
+        if (bpf_skb_load_bytes(skb, pkt_off + offset, packet, copy_len) < 0) cleanup(TC_ACT_SHOT);
+      }
     }
   }
   bpf_ringbuf_submit_dynptr(&ptr, 0);
