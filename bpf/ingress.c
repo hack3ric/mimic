@@ -61,56 +61,68 @@ struct tcp_options {
   // more fields may be added in the future
 };
 
+struct tcp_options_ctx {
+  __u8 buf[40];
+  __u32 len, offset;
+  struct tcp_options opt;
+  int ret;
+};
+
+static long read_tcp_option(__u32 index, void* data) {
+  UNUSED(index);
+  struct tcp_options_ctx* ctx = data;
+  __u32 i = ctx->offset;
+  if (i >= ctx->len) return 1;
+  if (unlikely(i > sizeof(ctx->buf) - 1)) goto invalid;
+
+  __u8 kind = ctx->buf[i];
+  if (kind == 0) return 1;  // end of option list
+  if (kind == 1) {          // no-op
+    ctx->offset = i + 1;
+    return 0;
+  }
+
+  // Keep range checks intact for older verifiers.
+  barrier_var(i);
+  if (unlikely(i > sizeof(ctx->buf) - 2)) goto invalid;
+  __u8 len = ctx->buf[i + 1];
+  if (len < 2 || i + len > ctx->len) goto invalid;
+
+  barrier_var(i);
+  switch (kind) {
+    case 2:  // MSS
+      if (unlikely(i > sizeof(ctx->buf) - 4 || len != 4)) goto invalid;
+      ctx->opt.mss = (ctx->buf[i + 2] << 8) + ctx->buf[i + 3];
+      break;
+    case 3:  // window scale
+      if (unlikely(i > sizeof(ctx->buf) - 3 || len != 3 || ctx->buf[i + 2] > 14)) goto invalid;
+      ctx->opt.wscale = ctx->buf[i + 2];
+      break;
+  }
+  ctx->offset = i + len;
+  return 0;
+
+invalid:
+  ctx->ret = XDP_DROP;
+  return 1;
+}
+
 static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32 ip_end,
                                    struct tcp_options* opt) {
   // The TCP header is at most 60 bytes, including its 20-byte fixed part.
-  __u8 opt_buf[40] = {};
+  struct tcp_options_ctx ctx = {.ret = XDP_PASS};
   __u32 len = (tcp->doff << 2) - sizeof(*tcp);
-  if (unlikely(len > sizeof(opt_buf)))  // TCP options too large
+  if (unlikely(len > sizeof(ctx.buf)))  // TCP options too large
     return XDP_DROP;
   else if (len == 0)  // prevent zero-sized read
     return XDP_PASS;
-  else {
-    bpf_gt0_hack1(len);
-    try_drop(bpf_xdp_load_bytes(xdp, ip_end + sizeof(*tcp), opt_buf, len));
-  }
 
-  for (__u32 i = 0; i < len; i++) {
-    barrier_var(i);
-    if (unlikely(i > sizeof(opt_buf) - 1)) return XDP_DROP;
-    switch (opt_buf[i]) {
-      case 0:  // end of option list
-      case 1:  // no-op
-        break;
-      case 3:  // window scale
-        if (unlikely(i > sizeof(opt_buf) - 3 || opt_buf[i + 1] != 3 || opt_buf[i + 2] > 14))
-          return XDP_DROP;
-        opt->wscale = opt_buf[i + 2];
-        i += 2;
-        break;
-#if !defined(MIMIC_COMPAT_LINUX_6_1) && !defined(MIMIC_COMPAT_LINUX_6_6)
-      // On Linux 6.1/6.6 eBPF verifier will fail with "program too big" with these branches
-      // enabled, since it struggles to unroll the loop properly. They are not necessary to Mimic
-      // and can be ignored.
-      case 2:  // MSS
-        if (unlikely(i > sizeof(opt_buf) - 4 || opt_buf[i + 1] != 4)) return XDP_DROP;
-        opt->mss = (opt_buf[i + 2] << 8) + opt_buf[i + 3];
-        i += 3;
-        break;
-#endif
-      default:
-        // Keep a range check: LLVM can otherwise reduce it to i == 39,
-        // which older verifiers do not use to tighten the upper bound.
-        barrier_var(i);
-        if (unlikely(i > sizeof(opt_buf) - 2)) return XDP_DROP;
-        __u8 l = opt_buf[i + 1];
-        if (l < 2 || i + l > len) return XDP_DROP;
-        i += l - 1;
-        break;
-    }
-  }
-
-  return XDP_PASS;
+  ctx.len = len;
+  bpf_gt0_hack1(len);
+  try_drop(bpf_xdp_load_bytes(xdp, ip_end + sizeof(*tcp), ctx.buf, len));
+  try_drop(bpf_loop(sizeof(ctx.buf), read_tcp_option, &ctx, 0));
+  *opt = ctx.opt;
+  return ctx.ret;
 }
 
 SEC("xdp.frags")

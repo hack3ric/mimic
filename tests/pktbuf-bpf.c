@@ -45,6 +45,7 @@ int main(void) {
     struct ethhdr eth;
     struct iphdr ip;
     struct tcphdr tcp;
+    __u8 options[40];
   } __attribute__((packed)) pkt = {
     .eth.h_proto = htons(ETH_P_IP),
     .ip = {.ihl = 5,
@@ -69,7 +70,8 @@ int main(void) {
   int prog_fd = bpf_program__fd(skel->progs.ingress_handler);
   assert(bpf_map__update_elem(skel->maps.mimic_whitelist, &f, sizeof(f), &info, sizeof(info),
                               BPF_ANY) == 0);
-  LIBBPF_OPTS(bpf_test_run_opts, opts, .data_in = &pkt, .data_size_in = sizeof(pkt));
+  LIBBPF_OPTS(bpf_test_run_opts, opts, .data_in = &pkt,
+              .data_size_in = offsetof(typeof(pkt), options));
   const struct {
     enum conn_state before, after;
     __be32 flags;
@@ -118,9 +120,53 @@ int main(void) {
     assert(ring_buffer__consume(rb) >= 0);
     assert(releases == c + 1 && release_type == cases[c].event);
   }
+  puts("BPF packet buffer ownership tests passed");
+
+  const struct {
+    __u8 len, bytes[40];
+    __u16 mss;
+    __u8 wscale;
+    bool drop;
+  } options[] = {
+    {.len = 8, .bytes = {2, 4, 5, 180, 1, 3, 3, 7}, .mss = 1460, .wscale = 7},
+    {.len = 8, .bytes = {30, 4, 0, 0, 2, 4, 5, 180}, .mss = 1460},
+    {.len = 40, .bytes = {[0 ... 35] = 1, [36] = 2, 4, 5, 180}, .mss = 1460},
+    {.len = 40, .bytes = {[0 ... 36] = 1, [37] = 3, 3, 14}, .wscale = 14},
+    {.len = 40, .bytes = {[0 ... 39] = 1}},
+    {.len = 4, .bytes = {0, 30, 0, 0}},  // Ignore padding after end-of-list.
+    {.len = 4, .bytes = {2, 3, 0, 0}, .drop = true},
+    {.len = 4, .bytes = {1, 2, 4, 5}, .drop = true},  // Truncated MSS.
+    {.len = 4, .bytes = {1, 1, 3, 3}, .drop = true},  // Truncated window scale.
+    {.len = 4, .bytes = {3, 3, 15, 0}, .drop = true},
+    {.len = 4, .bytes = {30, 0, 0, 0}, .drop = true},
+    {.len = 4, .bytes = {30, 5, 0, 0}, .drop = true},
+    {.len = 40, .bytes = {[0 ... 38] = 1, [39] = 30}, .drop = true},
+  };
+
+  for (size_t c = 0; c < sizeof(options) / sizeof(options[0]); c++) {
+    struct connection conn = conn_init(&info.settings, 0);
+    conn.state = CONN_SYN_SENT;
+    conn.seq = 200;
+    assert(bpf_map_update_elem(conns_fd, &key, &conn, BPF_ANY) == 0);
+
+    struct tcphdr tcp = pkt.tcp;
+    tcp_flag_word(&tcp) = TCP_FLAG_SYN | TCP_FLAG_ACK;
+    tcp.doff = 5 + options[c].len / 4;
+    pkt.tcp = tcp;
+    pkt.ip.tot_len = htons(40 + options[c].len);
+    memcpy(pkt.options, options[c].bytes, sizeof(pkt.options));
+    opts.data_size_in = offsetof(typeof(pkt), options) + options[c].len;
+    opts.data_size_out = 0;
+    assert(bpf_prog_test_run_opts(prog_fd, &opts) == 0);
+    assert(opts.retval == XDP_DROP);
+    assert(bpf_map_lookup_elem_flags(conns_fd, &key, &conn, BPF_F_LOCK) == 0);
+    assert(conn.state == (options[c].drop ? CONN_SYN_SENT : CONN_ESTABLISHED));
+    assert(conn.peer_mss == options[c].mss && conn.peer_wscale == options[c].wscale);
+    assert(ring_buffer__consume(rb) >= 0);
+  }
+  puts("BPF TCP option parsing tests passed");
 
   ring_buffer__free(rb);
   mimic_bpf__destroy(skel);
-  puts("BPF packet buffer ownership tests passed");
   return 0;
 }

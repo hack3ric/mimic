@@ -8,7 +8,7 @@
   "${memcheck[@]}" "$BATS_TEST_DIRNAME/../out/test-memory"
 }
 
-@test "packet buffer ownership survives a full BPF ring buffer" {
+@test "BPF packet buffer ownership and TCP option parsing" {
   [ "$UID" -eq 0 ] || skip
   "$BATS_TEST_DIRNAME/../out/test-pktbuf-bpf"
 }
