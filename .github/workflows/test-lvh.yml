@@ -4,7 +4,6 @@ on:
   push:
     paths:
       - .github/workflows/test-lvh.yml
-      - .github/actions/lvh-install-cli/**
       - "**.c"
       - "**.h"
       - "**/Makefile"
@@ -58,7 +57,12 @@ jobs:
           name: mimic-${{ matrix.arch }}
           path: out/vm-binaries
       - name: Install host VM dependencies
-        uses: ./.github/actions/lvh-install-cli
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            openssh-client curl git jq rsync util-linux iproute2
+          sudo chown "$(id -u):$(id -g)" /dev/kvm
       - name: Resolve kernel and cache keys
         id: assets
         env:

@@ -1,7 +1,7 @@
 # VM compatibility tests
 
-`tools/test-vm` builds Mimic and the kernel in a container, then runs
-`mimic run lo --check` in an LVH/QEMU guest. CI uses the same runner.
+`tools/test-vm` builds Mimic and the kernel, then launches LVH/QEMU in a
+container. The guest runs `mimic run lo --check`. CI uses the same runner.
 For traffic tests, see [Tests & Benchmark](building.md#tests--benchmark).
 
 ## Setup
@@ -11,29 +11,18 @@ access to `/dev/kvm`. Install the remaining host tools:
 
 ```console
 # Debian/Ubuntu
-sudo apt-get install qemu-system-x86 qemu-utils openssh-client curl git jq rsync util-linux iproute2
+sudo apt-get install openssh-client curl git jq rsync util-linux iproute2
 # Arch Linux
-sudo pacman -S qemu-system-x86 qemu-img openssh curl git jq rsync util-linux iproute2
+sudo pacman -S openssh curl git jq rsync util-linux iproute2
 ```
 
-For rootless Podman, enable its [Docker-compatible API](https://docs.podman.io/en/latest/markdown/podman-system-service.1.html)
-so LVH can download images:
+LVH and QEMU are included in the container image. Rootless Podman also needs
+crun to preserve KVM group access. If Podman uses another runtime, set this in
+`~/.config/containers/containers.conf`:
 
-```bash
-systemctl --user start podman.socket
-export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock"
-```
-
-Install the pinned LVH version from the repository root:
-
-```bash
-source tools/vm/defaults.sh
-lvh_container_id=$(docker create "quay.io/lvh-images/lvh:$LVH_VERSION")
-lvh_install_dir=$(mktemp -d)
-docker cp "$lvh_container_id:/usr/bin/lvh" "$lvh_install_dir/lvh"
-sudo install -m 0755 "$lvh_install_dir/lvh" /usr/local/bin/lvh
-docker rm "$lvh_container_id"
-rm -rf "$lvh_install_dir"
+```toml
+[engine]
+runtime = "crun"
 ```
 
 ## Run
@@ -71,7 +60,7 @@ they fail, and prints an SSH command. Stop it with:
 tools/test-vm stop <run-id>
 ```
 
-This removes the VM's disk overlay and keeps its logs. Keep the cached root
+This removes the container and disk overlay, keeping the logs. Keep the cached root
 image until the VM has stopped.
 
 ## Separate builds and CI artifacts
