@@ -36,7 +36,7 @@ tools/test-vm run --kernel 6.6 --clang 18,20 --keep-vm
 ```
 
 Kernels: `6.1`, `6.6`, `6.12`, `6.18`, `bpf-next`. Clang: `16` through `21`.
-The runner selects compatibility flags for 6.1 and 6.6 automatically.
+Builds are shared across kernels.
 
 Builds include uncommitted changes. The first run downloads images and builds a
 kernel; later runs reuse `.cache/vm/`. Use `--kernel-revision <full-commit-SHA>`
@@ -65,7 +65,7 @@ image until the VM has stopped.
 ## Separate builds and CI artifacts
 
 ```bash
-tools/test-vm build --clang 19,20 --variant generic,compat-6.6
+tools/test-vm build --clang 19,20
 tools/test-vm prepare --kernel 6.6
 tools/test-vm run --kernel 6.6 --binaries-dir out/vm-binaries
 ```
@@ -74,7 +74,7 @@ Each build replaces `out/vm-binaries/` with executables, BPF objects, disassembl
 and build metadata. Pass downloaded CI executables with `--binaries-dir` to use
 them instead of rebuilding Mimic.
 
-`build --ci-matrix` builds all 18 compiler and compatibility combinations.
+`build --ci-matrix` builds once with each of the six Clang versions.
 `prepare --resolve-only` prints kernel revisions and cache metadata as JSON.
 The [CI workflow](../.github/workflows/test-lvh.yml) checks Linux 6.1, 6.6, 6.12,
 and 6.18 with Clang 16–21. The bpf-next kernel remains disabled in CI.

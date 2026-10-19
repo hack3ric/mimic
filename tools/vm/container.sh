@@ -41,23 +41,14 @@ vm)
   ;;
 cli)
   workspace=$2
-  variant=$3
-  compiler=$4
-  jobs=$5
+  compiler=$3
+  jobs=$4
 
   cd "$workspace"
 
-  flags=()
-  case "$variant" in
-  compat-6.1) flags+=(COMPAT_LINUX_6_1=1) ;;
-  compat-6.6) flags+=(COMPAT_LINUX_6_6=1) ;;
-  generic) ;;
-  *) exit 2 ;;
-  esac
-
-  name="mimic-$variant-clang-$compiler"
+  name="mimic-clang-$compiler"
   make -j"$jobs" build-cli BPF_CC="clang-$compiler" BPFTOOL=bpftool \
-    USE_LIBXDP=1 CHECKSUM_HACK=kfunc "${flags[@]}"
+    USE_LIBXDP=1 CHECKSUM_HACK=kfunc
 
   mkdir -p /output/vm-binaries
   cp out/mimic "/output/vm-binaries/$name"
@@ -69,7 +60,6 @@ cli)
     gcc --version
     bpftool version
     pkg-config --modversion libbpf libffi libxdp
-    printf 'variant=%s\n' "$variant"
   } > "/output/vm-binaries/$name.build.txt"
   ;;
 kernel)

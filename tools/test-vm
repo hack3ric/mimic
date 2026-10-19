@@ -15,14 +15,13 @@ usage() {
 Usage:
   tools/test-vm run --kernel VERSION --clang VERSION[,VERSION...] [--keep-vm]
   tools/test-vm run --kernel VERSION --binaries-dir DIR [--keep-vm]
-  tools/test-vm build --clang VERSION[,VERSION...] --variant VARIANT[,VARIANT...]
+  tools/test-vm build --clang VERSION[,VERSION...]
   tools/test-vm build --ci-matrix
   tools/test-vm prepare --kernel VERSION [--resolve-only]
   tools/test-vm stop RUN_ID
 
 Options:
   --kernel-revision SHA  Use an exact kernel commit instead of resolving its branch
-  --variant VARIANTS     generic, compat-6.1, compat-6.6 (build only)
   --jobs N              Container build parallelism (default: 2)
   --cpus N              Guest CPUs (default: 2)
   --mem SIZE            Guest RAM, e.g. 4G or 1024M (default: 4G)
@@ -32,7 +31,7 @@ Options:
   --help                Show this help
 
 Requires Linux amd64 and Docker or podman-docker. Builds and LVH/QEMU use containers.
-Compilers: 16 through 21 for every kernel variant.
+Compilers: 16 through 21. Builds are shared across kernels.
 Results: out/vm/RUN_ID/; reusable assets: .cache/vm/; binaries: out/vm-binaries/.
 EOF
 }
@@ -58,7 +57,6 @@ fi
 kernel=''
 revision=''
 compilers=''
-variants=''
 binaries_dir=''
 
 jobs=2
@@ -121,14 +119,13 @@ esac
 
 while (($#)); do
   case "$1" in
-  --kernel | --kernel-revision | --clang | --variant | --binaries-dir | --jobs | --cpus | --mem | --ssh-port)
+  --kernel | --kernel-revision | --clang | --binaries-dir | --jobs | --cpus | --mem | --ssh-port)
     (($# >= 2)) && [[ $2 != --* ]] || die "missing value for $1"
 
     case "$1" in
     --kernel) kernel=$2 ;;
     --kernel-revision) revision=$2 ;;
     --clang) compilers=$2 ;;
-    --variant) variants=$2 ;;
     --binaries-dir) binaries_dir=$2 ;;
     --jobs) jobs=$2 ;;
     --cpus) cpus=$2 ;;
@@ -167,27 +164,19 @@ fi
 [[ -z $revision || $revision =~ ^[0-9a-f]{40}$ ]] || die 'kernel revision must be a full commit SHA'
 [[ -z $compilers || $compilers =~ ^(1[6-9]|2[01])(,(1[6-9]|2[01]))*$ ]] ||
   die 'select Clang versions 16 through 21'
-[[ -z $variants || $variants =~ ^(generic|compat-6\.[16])(,(generic|compat-6\.[16]))*$ ]] ||
-  die 'invalid variant list'
 
 if [[ $command != build ]]; then
   [[ $kernel =~ ^(6\.(1|6|12|18)|bpf-next)$ ]] || die 'select kernel 6.1, 6.6, 6.12, 6.18, or bpf-next'
-  [[ -z $variants && $ci_matrix == false ]] || die '--variant and --ci-matrix are build options'
-
-  case "$kernel" in
-  6.1 | 6.6) variants="compat-$kernel" ;;
-  *) variants=generic ;;
-  esac
+  [[ $ci_matrix == false ]] || die '--ci-matrix is a build option'
 else
-  [[ -z $kernel && -z $revision && -z $binaries_dir ]] || die 'build accepts --clang/--variant or --ci-matrix'
+  [[ -z $kernel && -z $revision && -z $binaries_dir ]] || die 'build accepts --clang or --ci-matrix'
 
   if $ci_matrix; then
-    [[ -z $compilers && -z $variants ]] || die '--ci-matrix cannot be combined with --clang/--variant'
+    [[ -z $compilers ]] || die '--ci-matrix cannot be combined with --clang'
     compilers=16,17,18,19,20,21
-    variants=generic,compat-6.1,compat-6.6
   fi
 
-  [[ -n $compilers && -n $variants ]] || die 'build requires --clang and --variant, or --ci-matrix'
+  [[ -n $compilers ]] || die 'build requires --clang or --ci-matrix'
 fi
 
 if [[ $command == run ]]; then
@@ -264,13 +253,13 @@ if [[ $command == run && -n $binaries_dir ]]; then
   binaries_dir=$(realpath "$binaries_dir")
   shopt -s nullglob
 
-  for binary in "$binaries_dir"/mimic-"$variants"-clang-*; do
-    if [[ ${binary##*/} =~ ^mimic-$variants-clang-[0-9]+$ ]]; then
+  for binary in "$binaries_dir"/mimic-clang-*; do
+    if [[ ${binary##*/} =~ ^mimic-clang-[0-9]+$ ]]; then
       selected+=("$binary")
     fi
   done
 
-  ((${#selected[@]})) || die "no $variants binaries in $binaries_dir"
+  ((${#selected[@]})) || die "no Mimic binaries in $binaries_dir"
 fi
 
 need docker rsync
@@ -315,24 +304,21 @@ snapshot() {
 }
 
 build_binaries() {
-  local compiler variant name
-  local -a compiler_list variant_list
+  local compiler name
+  local -a compiler_list
 
   IFS=, read -r -a compiler_list <<< "$compilers"
-  IFS=, read -r -a variant_list <<< "$variants"
   mkdir -p "$output/vm-binaries" "$output/vm-build"
 
   # This directory is the artifact set for this invocation, including its sidecars.
   rm -f "$output"/vm-binaries/mimic-*
 
-  for variant in "${variant_list[@]}"; do
-    for compiler in "${compiler_list[@]}"; do
-      name="mimic-$variant-clang-$compiler"
-      snapshot "$cache/build/$name"
-      container cli "/work/build/$name" "$variant" "$compiler" "$jobs" 2>&1 | tee "$output/vm-build/$name.log"
-      git rev-parse HEAD >> "$output/vm-binaries/$name.build.txt"
-      git status --short >> "$output/vm-binaries/$name.build.txt"
-    done
+  for compiler in "${compiler_list[@]}"; do
+    name="mimic-clang-$compiler"
+    snapshot "$cache/build/$name"
+    container cli "/work/build/$name" "$compiler" "$jobs" 2>&1 | tee "$output/vm-build/$name.log"
+    git rev-parse HEAD >> "$output/vm-binaries/$name.build.txt"
+    git status --short >> "$output/vm-binaries/$name.build.txt"
   done
 }
 
@@ -392,7 +378,7 @@ if [[ -n $compilers ]]; then
   build_binaries
   IFS=, read -r -a compiler_list <<< "$compilers"
   for compiler in "${compiler_list[@]}"; do
-    selected+=("$output/vm-binaries/mimic-$variants-clang-$compiler")
+    selected+=("$output/vm-binaries/mimic-clang-$compiler")
   done
 fi
 
