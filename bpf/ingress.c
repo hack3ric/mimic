@@ -99,11 +99,9 @@ static inline int read_tcp_options(struct xdp_md* xdp, struct tcphdr* tcp, __u32
         break;
 #endif
       default:
-#if defined(MIMIC_COMPAT_LINUX_6_1) || defined(MIMIC_COMPAT_LINUX_6_6)
         // Keep a range check: LLVM can otherwise reduce it to i == 39,
         // which older verifiers do not use to tighten the upper bound.
         barrier_var(i);
-#endif
         if (unlikely(i > sizeof(opt_buf) - 2)) return XDP_DROP;
         __u8 l = opt_buf[i + 1];
         if (l < 2 || i + l > len) return XDP_DROP;

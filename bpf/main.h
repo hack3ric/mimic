@@ -118,12 +118,10 @@ static __always_inline struct rb_item* reserve_pktbuf(struct connection* conn) {
 
 static __always_inline bool ringbuf_reserved(struct rb_item* item) {
   bool reserved = item != NULL;
-#ifdef MIMIC_COMPAT_LINUX_6_1
   // Linux 6.1 explores both sides of a repeated null check on PTR_TO_MEM,
   // even after the first check proved the reservation non-null. Keep that
   // first result as a scalar so later ownership checks cannot leak a reference.
   barrier_var(reserved);
-#endif
   return reserved;
 }
 
