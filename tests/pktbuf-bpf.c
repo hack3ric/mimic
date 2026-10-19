@@ -5,6 +5,7 @@
 #include <linux/ip.h>
 #include <linux/tcp.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "common/defs.h"
 #include "src/bpf_skel.h"
@@ -31,7 +32,11 @@ static int handle_event(void* ctx, void* data, size_t len) {
 }
 
 int main(void) {
-  struct mimic_bpf* skel = mimic_bpf__open();
+  // An invalid CO-RE target makes NO_CORE tests fail if relocations remain.
+  const char* btf_path = getenv("MIMIC_TEST_BTF");
+  LIBBPF_OPTS(bpf_object_open_opts, open_opts,
+              .btf_custom_path = btf_path && *btf_path ? btf_path : NULL);
+  struct mimic_bpf* skel = mimic_bpf__open_opts(&open_opts);
   assert(skel);
   skel->bss->link_type = LINK_ETH;
   skel->bss->log_verbosity = -1;

@@ -164,7 +164,7 @@ generate-akms:
 
 .PHONY: test
 test: build-cli out/test-memory out/test-pktbuf-bpf out/test-epoll-failure
-	bats tests
+	MIMIC_TEST_BTF="$(if $(NO_CORE),/dev/null)" bats tests
 
 out/test-memory: tests/memory.c $(mimic_obj) $(mimic_headers)
 	$(mkdir_p)
