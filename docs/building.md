@@ -29,8 +29,12 @@ Additionally, [checksum hacks](checksum-hacks.md) can be specified:
 ```console
 $ make CHECKSUM_HACK=kfunc  # This is the default
 $ make CHECKSUM_HACK=kprobe
-$ make CHECKSUM_HACK=kprobe STRIP_BTF_EXT=1
+$ make CHECKSUM_HACK=kprobe NO_CORE=1  # For kernels without BTF
 ```
+
+`NO_CORE=1` disables CO-RE relocations while retaining the program's BTF function
+metadata required by `bpf_loop()` callbacks. `STRIP_BTF_EXT=1` remains a legacy
+alias for `NO_CORE=1`; it no longer removes `.BTF.ext`.
 
 ## Building Distro Packages
 

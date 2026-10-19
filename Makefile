@@ -15,7 +15,6 @@ mimic_tools := $(patsubst tools/%.c,%,$(wildcard tools/*.c))
 
 BPF_CC ?= clang
 BPFTOOL ?= /usr/sbin/bpftool
-LLVM_STRIP ?= llvm-strip
 
 # -g is required (by Clang) to generate BTF
 # for bpf-gcc, use -mcpu=v3 -gbtf -mco-re -O2
@@ -121,11 +120,14 @@ endif
 BPF_CFLAGS += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
 CFLAGS += -DMIMIC_CHECKSUM_HACK_$(CHECKSUM_HACK)
 
-# Whether to strip .BTF.ext section from BPF object
-#
-# Removing the section removes dependency on kernel BTF and improves
-# compatibility, but also makes the program lose CO-RE functionality.
+# Disable CO-RE relocations for kernels without BTF. Keep the program's own
+# BTF and .BTF.ext function info, which bpf_loop callbacks require.
+# STRIP_BTF_EXT is a legacy alias; stripping the whole section breaks callbacks.
 STRIP_BTF_EXT ?=
+NO_CORE ?= $(STRIP_BTF_EXT)
+ifneq ($(NO_CORE),)
+BPF_CFLAGS += -DBPF_NO_PRESERVE_ACCESS_INDEX
+endif
 
 # Rules
 
@@ -207,9 +209,6 @@ $(mimic_bpf_obj): bpf/%.o: bpf/%.c $(mimic_bpf_headers) $(use_system_vmlinux_req
 out/mimic.bpf.o: $(mimic_bpf_obj)
 	$(mkdir_p)
 	$(BPFTOOL) gen object $@ $(mimic_bpf_obj)
-ifneq ($(STRIP_BTF_EXT),)
-	$(LLVM_STRIP) --remove-section=.BTF.ext --no-strip-all $@
-endif
 
 src/bpf_skel.h: out/mimic.bpf.o
 	$(BPFTOOL) gen skeleton out/mimic.bpf.o >$@
