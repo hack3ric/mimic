@@ -1,8 +1,44 @@
 #!/usr/bin/env bash
-# Internal build commands. /src is read-only; /work and /output belong to the caller.
+# Build commands use /src, /work and /output. VMs use the checkout at /repo.
 set -euo pipefail
 
 case "$1" in
+root)
+  staging=$2
+  destination=$3
+
+  if [[ -f $staging/kind.qcow2.zst ]]; then
+    zstd -d "$staging/kind.qcow2.zst" -o "$staging/kind.qcow2"
+  fi
+
+  test -s "$staging/kind.qcow2"
+  mv "$staging/kind.qcow2" "$destination"
+  ;;
+vm)
+  root_image="/repo/$2"
+  kernel_dir="/repo/$3"
+  run_dir="/repo/$4"
+  cpus=$5
+  memory=$6
+
+  # LVH silently falls back to emulation when it cannot open KVM.
+  if ! { exec 3<> /dev/kvm; }; then
+    echo 'Read/write access to /dev/kvm is required inside the container' >&2
+    exit 1
+  fi
+  exec 3>&-
+
+  {
+    lvh version
+    sha256sum "$(command -v lvh)"
+    qemu-system-x86_64 --version
+  } > "$run_dir/runtime.txt"
+
+  qemu-img create -f qcow2 -F qcow2 -b "$root_image" "$run_dir/root.qcow2"
+  exec lvh run --image "$run_dir/root.qcow2" --kernel "$kernel_dir/vmlinuz" \
+    --host-mount /repo --cpu "$cpus" --mem "$memory" --qemu-arch amd64 \
+    --console-log-file "$run_dir/console.log" --pull-image=false -p 2222:22
+  ;;
 cli)
   workspace=$2
   variant=$3

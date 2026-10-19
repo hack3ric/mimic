@@ -31,7 +31,7 @@ Options:
   --resolve-only        Print JSON with kernel revision and Actions cache keys/paths
   --help                Show this help
 
-Requires Linux amd64. Builds use Docker; LVH and QEMU run on the host.
+Requires Linux amd64 and Docker or podman-docker. Builds and LVH/QEMU use containers.
 Compilers: 16 through 21. Explicit selections are not subject to CI exclusions.
 Results: out/vm/RUN_ID/; reusable assets: .cache/vm/; binaries: out/vm-binaries/.
 EOF
@@ -75,45 +75,39 @@ if [[ $command == help || $command == --help ]]; then
   exit
 fi
 
-# Match the process start time, host boot, and disk argument before signalling a saved PID.
+# The name also lets cleanup find a container if creation was interrupted.
 owned_vm() {
-  [[ -f $run_dir/vm.json ]] || return 1
-  vm_pid=$(jq -r .pid "$run_dir/vm.json")
-  [[ $vm_pid =~ ^[0-9]+$ && -r /proc/$vm_pid/stat ]] || return 1
-  [[ $(cat /proc/sys/kernel/random/boot_id) == "$(jq -r .boot_id "$run_dir/vm.json")" ]] || return 1
-  [[ $(awk '{print $22}' "/proc/$vm_pid/stat" 2> /dev/null) == "$(jq -r .start_time "$run_dir/vm.json")" ]] || return 1
+  local reference=${vm_id:-mimic-vm-${run_dir##*/}}
 
-  # QEMU may exit between these reads, especially while stop_vm is waiting.
-  grep -Fzxq -- "file=$run_dir/root.qcow2,if=virtio,index=0,media=disk" "/proc/$vm_pid/cmdline" 2> /dev/null
+  vm_info=$(docker container inspect "$reference" 2> /dev/null) || return 1
+  [[ $(jq -r '.[0].Config.Labels["mimic.vm-run"]' <<< "$vm_info") == "$run_dir" ]] ||
+    die "container $reference does not belong to $run_dir"
+  vm_id=$(jq -r '.[0].Id' <<< "$vm_info")
+}
+
+running_vm() {
+  owned_vm && jq -e '.[0].State.Running' <<< "$vm_info" > /dev/null
 }
 
 stop_vm() {
-  local attempt
-
+  # Keep the disk if the engine is unavailable or the container cannot be removed.
+  docker info > /dev/null 2>&1 || return 1
   if owned_vm; then
-    kill -TERM "$vm_pid"
-
-    for ((attempt = 0; attempt < 50; attempt++)); do
-      if ! owned_vm; then
-        break
-      fi
-      sleep 0.1
-    done
-
-    if owned_vm; then
-      kill -KILL "$vm_pid"
-    fi
-    wait "$vm_pid" 2> /dev/null || true
+    docker stop --time 5 "$vm_id" > /dev/null || return 1
+    docker logs "$vm_id" > "$run_dir/lvh.log" 2>&1
+    docker rm "$vm_id" > /dev/null || return 1
   fi
 
   rm -f "$run_dir/root.qcow2"
 }
 
 if [[ $command == stop ]]; then
-  need jq
+  need docker jq
   [[ $# == 1 && $1 =~ ^[0-9]{8}T[0-9]{6}-[0-9]+$ ]] || die 'stop requires a RUN_ID printed by run'
   run_dir="$output/vm/$1"
   [[ -f $run_dir/vm.json ]] || die "no saved VM for $1"
+  vm_id=$(jq -r .container_id "$run_dir/vm.json")
+  [[ $vm_id =~ ^[0-9a-f]{64}$ ]] || die 'this VM must be stopped with the runner that created it'
 
   stop_vm
   echo "Stopped $1 (logs retained in $run_dir)"
@@ -280,16 +274,19 @@ if [[ $command == run && -n $binaries_dir ]]; then
 fi
 
 need docker rsync
-docker info > /dev/null 2>&1 || die 'Docker daemon is unavailable'
-
-if [[ $command != build ]]; then
-  need lvh
-fi
+engine_info=$(docker info --format '{{json .}}') || die 'container engine is unavailable'
 
 if [[ $command == run ]]; then
-  need lvh qemu-system-x86_64 qemu-img ssh ss timeout
+  need ssh ss timeout
   [[ -r /dev/kvm && -w /dev/kvm ]] || die 'read/write access to /dev/kvm is required'
   [[ -z $(ss -H -ltn "sport = :$port") ]] || die "SSH port $port is already in use"
+
+  vm_groups=(--group-add "$(stat -c %g /dev/kvm)")
+  if [[ $(jq -r '.host.security.rootless // false' <<< "$engine_info") == true ]]; then
+    [[ $(jq -r '.host.ociRuntime.name' <<< "$engine_info") == crun ]] ||
+      die 'rootless podman-docker requires crun (see docs/vm-tests.md)'
+    vm_groups=(--group-add keep-groups)
+  fi
 fi
 
 ensure_image() {
@@ -343,19 +340,35 @@ build_binaries() {
   done
 }
 
-prepare_assets() {
-  local staging
+pull_root() (
+  staging="$repo/$root_path.partial"
+  rm -rf "$staging"
+  mkdir -p "$staging"
 
+  # shellcheck disable=SC2329 # Called by the EXIT trap.
+  cleanup_root() {
+    if [[ -s $staging/container.id ]]; then
+      docker rm "$(cat "$staging/container.id")" > /dev/null
+    fi
+    rm -rf "$staging"
+  }
+
+  trap cleanup_root EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  docker pull "quay.io/lvh-images/root-images:$ROOT_IMAGE_VERSION"
+  docker create --cidfile "$staging/container.id" \
+    "quay.io/lvh-images/root-images:$ROOT_IMAGE_VERSION" true > /dev/null
+  docker cp "$(cat "$staging/container.id"):/data/images/." "$staging/"
+  container root "/work/roots/${root_path##*/}.partial" "/work/roots/${root_path##*/}"
+)
+
+prepare_assets() {
   mkdir -p "$cache/roots" "$cache/kernels" "$output/vm-build"
 
   if [[ ! -s $repo/$root_path ]]; then
-    # LVH image pulling uses the host Docker daemon, just like the existing CI job.
-    staging="$repo/$root_path.partial"
-    rm -rf "$staging"
-    lvh images pull --dir "$staging" "quay.io/lvh-images/root-images:$ROOT_IMAGE_VERSION" \
-      2>&1 | tee "$output/vm-build/root.log"
-    mv "$staging/images/kind.qcow2" "$repo/$root_path"
-    rm -rf "$staging"
+    pull_root 2>&1 | tee "$output/vm-build/root.log"
   fi
 
   if [[ ! -f $repo/$kernel_path/ready ]]; then
@@ -411,13 +424,9 @@ chmod +x "$run_dir"/bin/*
 {
   uname -a
   printf 'Expected LVH version: %s\n' "$LVH_VERSION"
-  lvh version
-  sha256sum "$(command -v lvh)"
-  qemu-system-x86_64 --version
   docker image inspect --format '{{.Id}}' "$image"
 } > "$run_dir/host.txt"
 
-qemu-img create -f qcow2 -F qcow2 -b "$repo/$root_path" "$run_dir/root.qcow2"
 flock -u 9
 
 ssh_args=(
@@ -427,7 +436,7 @@ ssh_args=(
   -o ServerAliveInterval=5 -o ServerAliveCountMax=3
 )
 
-vm_pid=''
+vm_id=''
 ready=false
 interrupted=false
 
@@ -441,12 +450,13 @@ cleanup() {
     timeout 15 ssh "${ssh_args[@]}" root@localhost dmesg > "$run_dir/dmesg.log" 2> "$run_dir/dmesg-error.log"
   fi
 
-  if $keep_vm && ! $interrupted && owned_vm; then
+  if $keep_vm && ! $interrupted && running_vm; then
+    docker logs "$vm_id" > "$run_dir/lvh.log" 2>&1
     echo "VM retained: $run_id"
     printf 'SSH: ssh -p %s -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost\n' "$port"
     printf 'Stop: %q stop %q\n' "$repo/tools/test-vm" "$run_id"
   else
-    stop_vm
+    stop_vm || status=1
   fi
 
   echo "Results: $run_dir"
@@ -457,34 +467,25 @@ trap cleanup EXIT
 trap 'interrupted=true; exit 130' INT
 trap 'interrupted=true; exit 143' TERM
 
-# LVH's forwarding syntax has no bind address; restrict SSH to loopback.
-mkdir -p "$run_dir/host-bin"
-cp "$repo/tools/vm/qemu-local" "$run_dir/host-bin/qemu-system-x86_64"
-ln -s "$(command -v qemu-system-x86_64)" "$run_dir/host-bin/qemu-real"
+# A bridge avoids sharing pasta's host addresses with QEMU's guest subnet.
+vm_id=$(PODMAN_USERNS=keep-id docker create --name "mimic-vm-$run_id" --network bridge \
+  --label "mimic.vm-run=$run_dir" --user "$(id -u):$(id -g)" \
+  --device /dev/kvm "${vm_groups[@]}" -v "$repo:/repo" -p "127.0.0.1:$port:2222" \
+  "$image" bash /repo/tools/vm/container.sh vm "$root_path" "$kernel_path" "out/vm/$run_id" \
+  "$cpus" "$memory")
 
-# LVH execs QEMU in this mode: $! stays the VM PID. Do not inherit the cache lock.
-PATH="$run_dir/host-bin:$PATH" lvh run --image "$run_dir/root.qcow2" --kernel "$repo/$kernel_path/vmlinuz" \
-  --host-mount "$repo" --cpu "$cpus" --mem "$memory" --qemu-arch amd64 \
-  --console-log-file "$run_dir/console.log" -p "$port:22" \
-  < /dev/null > "$run_dir/lvh.log" 2>&1 9>&- &
-vm_pid=$!
-if [[ ! -r /proc/$vm_pid/stat ]]; then
-  cat "$run_dir/lvh.log" >&2
-  exit 1
-fi
-
-jq -n --argjson pid "$vm_pid" --arg start_time "$(awk '{print $22}' "/proc/$vm_pid/stat")" \
-  --arg boot_id "$(cat /proc/sys/kernel/random/boot_id)" --argjson ssh_port "$port" \
-  '{pid:$pid,start_time:$start_time,boot_id:$boot_id,ssh_port:$ssh_port}' > "$run_dir/vm.json"
+jq -n --arg container_id "$vm_id" --argjson ssh_port "$port" \
+  '{container_id:$container_id,ssh_port:$ssh_port}' > "$run_dir/vm.json"
+docker start "$vm_id" > /dev/null
 
 deadline=$((SECONDS + 300))
 while ((SECONDS < deadline)); do
-  if ! kill -0 "$vm_pid" 2> /dev/null; then
-    cat "$run_dir/lvh.log" >&2
+  if ! running_vm; then
+    docker logs "$vm_id" >&2
     exit 1
   fi
 
-  if owned_vm && ssh "${ssh_args[@]}" root@localhost true 2> /dev/null; then
+  if ssh "${ssh_args[@]}" root@localhost true 2> /dev/null; then
     ready=true
     break
   fi

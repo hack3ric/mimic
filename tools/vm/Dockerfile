@@ -28,4 +28,7 @@ RUN cd /tmp && \
     tar -xzf "$archive" && install -m 0755 bpftool /usr/local/bin/bpftool && \
     rm -f bpftool "$archive" "${archive}.sha256sum"
 COPY --from=lvh /usr/bin/lvh /usr/local/bin/lvh
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      qemu-system-x86 qemu-utils && \
+    rm -rf /var/lib/apt/lists/*
 WORKDIR /work
