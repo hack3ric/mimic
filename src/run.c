@@ -739,7 +739,7 @@ static inline int run_bpf(struct run_args* args, int lock_fd, const char* ifname
       } else if (args->wildcard_count > 0 && events[i].data.fd == rtnl) {
         struct ip_delta_list* ips raii(ip_delta_list_destroy) = NULL;
         retcode = rtnl_recv_addr_change(rtnl, ifindex, &ips);
-        if (retcode < 0) {
+        if (retcode == 0) {
           retcode =
             ip_delta_list_apply(ips, skel->maps.mimic_whitelist, wildcards, args->wildcard_count);
         }
